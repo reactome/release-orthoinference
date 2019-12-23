@@ -2,21 +2,26 @@ package org.reactome.orthoinference;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.zip.GZIPInputStream;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
@@ -74,6 +79,11 @@ public class EventsInferrer
 		}
 		setDbAdaptors(dbAdaptor);
 
+		if (species.equals("cele")) {
+			URL wormbaseUrl = new URL(props.getProperty("wormbaseURL"));
+			Map<String,List<String>> wormbaseMappings = downloadAndProcessWormbaseFile(wormbaseUrl);
+			EWASInferrer.setWormbaseMappings(wormbaseMappings);
+		}
 		releaseVersion = props.getProperty("releaseNumber");
 		String pathToOrthopairs = Paths.get(props.getProperty("pathToOrthopairs") + releaseVersion).toString();
 		String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig");
@@ -333,5 +343,28 @@ public class EventsInferrer
 		OrthologousEntityGenerator.setInstanceEdit(instanceEditInst);
 		EWASInferrer.setInstanceEdit(instanceEditInst);
 		PathwaysInferrer.setInstanceEdit(instanceEditInst);
+	}
+	
+	private static Map<String, List<String>> downloadAndProcessWormbaseFile(URL wormbaseUrl) throws IOException {
+		File wormbaseFile = Paths.get(wormbaseUrl.toString()).getFileName().toFile();
+		Map<String, List<String>> wormbaseMappings = new HashMap<>();
+		if (!wormbaseFile.exists()) {
+			FileUtils.copyURLToFile(wormbaseUrl, wormbaseFile);
+		}
+		BufferedReader br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(wormbaseFile))));
+		String line = null;
+		while ((line = br.readLine()) != null) {
+			String wormbaseGeneId = line.split(",")[1];
+			String wormbaseGeneName = line.split(",")[2];
+			if (!wormbaseGeneId.isEmpty() && !wormbaseGeneName.isEmpty()) {
+				if (wormbaseMappings.get(wormbaseGeneId) != null) {
+					wormbaseMappings.get(wormbaseGeneId).add(wormbaseGeneName);
+				} else {
+					wormbaseMappings.put(wormbaseGeneId, new ArrayList<>(Arrays.asList(wormbaseGeneName)));
+				}
+			}
+		}
+		br.close();
+		return wormbaseMappings;
 	}
 }

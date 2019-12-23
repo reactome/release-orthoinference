@@ -34,6 +34,7 @@ public class EWASInferrer {
 	private static Map<String, GKInstance> referenceGeneProductIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> ewasIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> residueIdenticals = new HashMap<>();
+	private static Map<String, List<String>> wormbaseMappings = new HashMap<>();
 
 	// Creates an array of inferred EWAS instances from the homologue mappings file (hsap_species_mapping.txt).
 	@SuppressWarnings("unchecked")
@@ -50,7 +51,7 @@ public class EWASInferrer {
 				// Handles homologues formatted as either DB:ID or just ID
 				String homologueSource = homologue.contains(":") ? homologue.split(":")[0] : "";
 				String homologueId = homologue.contains(":") ? homologue.split(":")[1] : homologue;
-
+				
 				if (checkValidSpeciesProtein(homologueId)) {
 					GKInstance infReferenceGeneProductInst;
 					if (referenceGeneProductIdenticals.get(homologueId) == null) {
@@ -95,7 +96,15 @@ public class EWASInferrer {
 					} else {
 						infEWASInst.addAttributeValue(name, homologueId);
 					}
-
+					
+					String speciesName = speciesInst.getDisplayName();
+					List<String> geneNames;
+					if (speciesName.equals("Caenorhabditis elegans")) {
+						geneNames = getWormbaseGeneNames(homologueId);
+						for (String geneName : geneNames) {
+							infEWASInst.addAttributeValue(name, geneName);
+						}
+					}
 					String ewasDisplayName = infEWASInst.getAttributeValue(name) + " [" + ((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
 					infEWASInst.setAttributeValue(_displayName, ewasDisplayName);
 
@@ -205,6 +214,16 @@ public class EWASInferrer {
         }
 		logger.info("Total orthologous EWAS' created: " + infEWASInstances.size());
 		return infEWASInstances;
+	}
+
+	private static List<String> getWormbaseGeneNames(String homologueId) {
+		List<String> geneNames = new ArrayList<>();
+		for (String geneId : ensgMappings.get(homologueId)) {
+			if (wormbaseMappings.get(geneId) != null) {
+				geneNames.addAll(wormbaseMappings.get(geneId));
+			}
+		}
+		return geneNames;
 	}
 
 	// Homologous Protein IDs can exist in ${source}_${target}_mapping.txt but the corresponding Gene ID might not exist in ${target}_gene_protein_mapping.txt.
@@ -368,5 +387,9 @@ public class EWASInferrer {
 	public static void setSpeciesInstance(GKInstance speciesInstCopy)
 	{
 		speciesInst = speciesInstCopy;
+	}
+
+	public static void setWormbaseMappings(Map<String, List<String>> wormbaseMappingsCopy) {
+		wormbaseMappings = wormbaseMappingsCopy;
 	}
 }
