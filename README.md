@@ -8,7 +8,7 @@ Additionally, Orthoinference now generates orthologous Stable Identifiers and Pa
 
 In a nutshell, the inference process follows this workflow:
 
-![alt text](https://github.com/reactome/data-release-pipeline/blob/develop/assets/OrthoinferenceOverview.png)
+![alt text](https://github.com/reactome/release-orthoinference/blob/develop/OrthoinferenceOverview.png)
 
 For each species, we take all Human <b>ReactionlikeEvents</b> (RlE) instances (<i>Reaction, BlackBoxEvent, Polymerisation, Depolymerisation, FailedReaction</i>) in the `release_current` database that is a copy of the the `slice_current` database after <a href="https://github.com/reactome/release-update-stable-ids">updateStableIds</a> has been run. For each of these RlE instances, there are a few basic rules that must be followed for an inference to be attempted. It must pass a series of <a href="https://github.com/reactome/release-orthoinference/tree/develop/src/main/java/org/reactome/orthoinference/SkipInstanceChecker.java">filters</a> and have <b>at least 1</b> protein instance, determined using the <a href="https://github.com/reactome/release-orthoinference/tree/develop/src/main/java/org/reactome/orthoinference/ProteinCountUtility.java">ProteinCountUtility</a>. 
 
@@ -16,7 +16,7 @@ If the RlE passes all these tests, it is considered <i>eligible</i> for inferenc
   
 During inference, the attribute (input/output/catalyst/regulation) is broken down into its individual <b>PhysicalEntity</b> (PE) instances. These PE instances are each run through the <a href="https://github.com/reactome/release-orthoinference/tree/develop/src/main/java/org/reactome/orthoinference/OrthologousEntityGenerator.java">createOrthoEntity</a> method. This method infers according to PE type: <i>GenomeEncodedEntity/EntityWithAccessionedSequence, Complex/Polymer, EntitySet or SimpleEntity</i>. In cases where the PE itself contains multiple <i>GKInstance</i> attributes (eg: Complexes <i>hasComponent</i> attribute, EntitySets <i>hasMember</i> attribute), these too are run through the createOrthoEntity method and inferred. Through this system, PE instances will be recursively broken down until they reach the <b>EntityWithAccessionedSequence</b> (EWAS) level and are inferred in the <a href="https://github.com/reactome/release-orthoinference/tree/develop/src/main/java/org/reactome/orthoinference/EWASInferrer.java">inferEWAS</a> method.
 
-After all valid ReactionlikeEvents instances have been inferred for a species, the final step is to populate the <b>Pathway</b> instances these RlEs are found in. Pathway inference takes place in its entirety in the <a href="https://github.com/reactome/release-orthoinference/tree/develop/src/main/java/org/reactome/orthoinference/HumanEventsUpdater.java">HumanEventsUpdater</a> class, and involves creating the hierarchy structure from the Human Pathway equivalent (this will be further expanded at a future date).
+After all valid ReactionlikeEvents instances have been inferred for a species, the final step is to populate the <b>Pathway</b> instances these RlEs are found in. Pathway inference takes place in the <a href="https://github.com/reactome/release-orthoinference/tree/develop/src/main/java/org/reactome/orthoinference/PathwaysInferrer.java">PathwaysInferrer</a> class, and involves creating the hierarchy structure from the Human Pathway equivalent (this will be further expanded at a future date).
 
 Once the database has been updated with inferred Pathways, orthologous PathwayDiagram generation takes place. This generates the diagrams that are visible in Reactome's Pathway Browser for each species. These diagrams are based off the existing Human diagrams in the database.
 
@@ -26,7 +26,7 @@ Orthoinference can be run once the <a href="https://github.com/reactome/release-
 
 - <a href="https://github.com/reactome/release-orthopairs">Orthopair</a> file generation must have been completed.
 - The `slice_current` database will need to be dumped and restored to a new `release_current` database.
-- Set the `config.properties` file
+- Set all values in the `config.properties` file
 - `normal_event_skip_list.txt` needs to be placed in `src/main/resources/` folder.
 
 <h4> Setting config.properties </h4>
