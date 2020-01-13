@@ -8,7 +8,7 @@ Additionally, Orthoinference now generates orthologous Stable Identifiers and Pa
 
 In a nutshell, the inference process follows this workflow:
 
-![alt text](https://github.com/reactome/release-orthoinference/blob/develop/OrthoinferenceOverview.png)
+![Orthoinference Overview Image](https://github.com/reactome/release-orthoinference/blob/develop/OrthoinferenceOverview.png)
 
 For each species, we take all Human <b>ReactionlikeEvents</b> (RlE) instances (<i>Reaction, BlackBoxEvent, Polymerisation, Depolymerisation, FailedReaction</i>) in the `release_current` database that is a copy of the the `slice_current` database after <a href="https://github.com/reactome/release-update-stable-ids">updateStableIds</a> has been run. For each of these RlE instances, there are a few basic rules that must be followed for an inference to be attempted. It must pass a series of <a href="https://github.com/reactome/release-orthoinference/tree/develop/src/main/java/org/reactome/orthoinference/SkipInstanceChecker.java">filters</a> and have <b>at least 1</b> protein instance, determined using the <a href="https://github.com/reactome/release-orthoinference/tree/develop/src/main/java/org/reactome/orthoinference/ProteinCountUtility.java">ProteinCountUtility</a>. 
 
