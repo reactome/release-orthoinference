@@ -8,7 +8,10 @@
 	<packaging>jar</packaging>
 
 	<name>orthoinference</name>
-	<description>Orthology projection of human reactions and pathways to non-human species</description>
+	<description>
+		Orthology projection of human reactions and pathways to non-human species.  Protein homology data is retrieved
+		from PANTHER (see https://github.com/reactome/release-orthopairs)
+	</description>
 	<url>https://reactome.org</url>
 	<licenses>
 		<license>
