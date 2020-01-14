@@ -2,6 +2,9 @@
 logs/
 target/
 
+# Ignore skip list of events generated immediately before each release
+normal_event_skip_list.txt
+
 # Ignore output files tracking inference progress
 orthoinference*.out
 
