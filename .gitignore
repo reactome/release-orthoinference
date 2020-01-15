@@ -1,6 +1,16 @@
-logs
-orthoinference.out
-src/main/resources/*.txt
-src/main/resources/orthopairs/*
 *.txt
-target/*
+logs/
+target/
+
+# Ignore skip list of events generated immediately before each release
+normal_event_skip_list.txt
+
+# Ignore output files tracking inference progress
+orthoinference*.out
+
+# Ignore Orthopair files used as input for inference mapping
+src/main/resources/orthopairs/*
+
+# Ignore IntelliJ files
+.idea/
+orthoinference.iml
