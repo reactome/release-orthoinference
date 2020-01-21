@@ -55,10 +55,13 @@ public class EWASInferrer {
 				if (checkValidSpeciesProtein(homologueId)) {
 					// If the species is C. elegans, retrieve gene names from Wormbase file.
 					String speciesName = speciesInst.getDisplayName();
+					boolean isCelegans = false;
 					List<String> wormbaseGeneNames = new ArrayList<>();
 					if (speciesName.equals("Caenorhabditis elegans")) {
+						isCelegans = true;
 						wormbaseGeneNames = getWormbaseGeneNames(homologueId);
 					}
+
 
 					GKInstance infReferenceGeneProductInst;
 					if (referenceGeneProductIdenticals.get(homologueId) == null) {
@@ -79,7 +82,7 @@ public class EWASInferrer {
 						infReferenceGeneProductInst.setAttributeValue(_displayName, referenceGeneProductSource + homologueId);
 
 						// If the species is C. elegans, add each matching gene name to the 'geneName' attribute of the RGP.
-						if (speciesName.equals("Caenorhabditis elegans")) {
+						if (isCelegans) {
 							for (String wormbaseGeneName : wormbaseGeneNames) {
 								infReferenceGeneProductInst.addAttributeValue(geneName, wormbaseGeneName);
 							}
@@ -112,7 +115,7 @@ public class EWASInferrer {
 					}
 
 					// If the species is C. elegans, add each matching gene name to the 'name' attribute of the EWAS.
-					if (speciesName.equals("Caenorhabditis elegans")) {
+					if (isCelegans) {
 						for (String wormbaseGeneName : wormbaseGeneNames) {
 							infEWASInst.addAttributeValue(name, wormbaseGeneName);
 						}
