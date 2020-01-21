@@ -51,8 +51,9 @@ public class EWASInferrer {
 				// Handles homologues formatted as either DB:ID or just ID
 				String homologueSource = homologue.contains(":") ? homologue.split(":")[0] : "";
 				String homologueId = homologue.contains(":") ? homologue.split(":")[1] : homologue;
-				
+
 				if (checkValidSpeciesProtein(homologueId)) {
+					// If the species is C. elegans, retrieve gene names from Wormbase file.
 					String speciesName = speciesInst.getDisplayName();
 					List<String> wormbaseGeneNames = new ArrayList<>();
 					if (speciesName.equals("Caenorhabditis elegans")) {
@@ -77,6 +78,7 @@ public class EWASInferrer {
 						String referenceGeneProductSource = homologueSource.equals("ENSP") ? "ENSEMBL:" : "UniProt:";
 						infReferenceGeneProductInst.setAttributeValue(_displayName, referenceGeneProductSource + homologueId);
 
+						// If the species is C. elegans, add each matching gene name to the 'geneName' attribute of the RGP.
 						if (speciesName.equals("Caenorhabditis elegans")) {
 							for (String wormbaseGeneName : wormbaseGeneNames) {
 								infReferenceGeneProductInst.addAttributeValue(geneName, wormbaseGeneName);
@@ -109,6 +111,7 @@ public class EWASInferrer {
 						infEWASInst.addAttributeValue(name, homologueId);
 					}
 
+					// If the species is C. elegans, add each matching gene name to the 'name' attribute of the EWAS.
 					if (speciesName.equals("Caenorhabditis elegans")) {
 						for (String wormbaseGeneName : wormbaseGeneNames) {
 							infEWASInst.addAttributeValue(name, wormbaseGeneName);
@@ -225,6 +228,11 @@ public class EWASInferrer {
 		return infEWASInstances;
 	}
 
+	/**
+	 * Retrieve all Wormbase gene names that match the homologue Id.
+	 * @param homologueId -- String homologue ID value from Orthopair file.
+	 * @return -- List<String> of Wormbase gene names that correspond to the homologue ID.
+	 */
 	private static List<String> getWormbaseGeneNames(String homologueId) {
 		List<String> geneNames = new ArrayList<>();
 		for (String geneId : ensgMappings.get(homologueId)) {
@@ -398,6 +406,7 @@ public class EWASInferrer {
 		speciesInst = speciesInstCopy;
 	}
 
+	// Set the Wormbase gene names mapping file.
 	public static void setWormbaseMappings(Map<String, List<String>> wormbaseMappingsCopy) {
 		wormbaseMappings = wormbaseMappingsCopy;
 	}

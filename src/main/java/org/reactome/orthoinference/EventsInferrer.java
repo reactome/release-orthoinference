@@ -79,6 +79,7 @@ public class EventsInferrer
 		}
 		setDbAdaptors(dbAdaptor);
 
+		// Download Wormbase gene names file, create mapping and set it in the EWASInferrer class.
 		if (species.equals("cele")) {
 			URL wormbaseUrl = new URL(props.getProperty("wormbaseURL"));
 			Map<String,List<String>> wormbaseMappings = downloadAndProcessWormbaseFile(wormbaseUrl);
@@ -344,7 +345,13 @@ public class EventsInferrer
 		EWASInferrer.setInstanceEdit(instanceEditInst);
 		PathwaysInferrer.setInstanceEdit(instanceEditInst);
 	}
-	
+
+	/**
+	 * Download the Wormbase file that contains the WBGene IDs mapped to gene names, and then create a mapping of IDs to names.
+	 * @param wormbaseUrl -- URL to Wormbase file to be downloaded and processed.
+	 * @return -- Map<String, List,<String>> of WBGene IDs to gene names.
+	 * @throws IOException
+	 */
 	private static Map<String, List<String>> downloadAndProcessWormbaseFile(URL wormbaseUrl) throws IOException {
 		File wormbaseFile = Paths.get(wormbaseUrl.toString()).getFileName().toFile();
 		Map<String, List<String>> wormbaseMappings = new HashMap<>();
