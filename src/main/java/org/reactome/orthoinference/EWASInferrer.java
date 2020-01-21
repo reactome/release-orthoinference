@@ -53,6 +53,12 @@ public class EWASInferrer {
 				String homologueId = homologue.contains(":") ? homologue.split(":")[1] : homologue;
 				
 				if (checkValidSpeciesProtein(homologueId)) {
+					String speciesName = speciesInst.getDisplayName();
+					List<String> wormbaseGeneNames = new ArrayList<>();
+					if (speciesName.equals("Caenorhabditis elegans")) {
+						wormbaseGeneNames = getWormbaseGeneNames(homologueId);
+					}
+
 					GKInstance infReferenceGeneProductInst;
 					if (referenceGeneProductIdenticals.get(homologueId) == null) {
 						logger.info("Creating ReferenceGeneProduct for " + homologue);
@@ -70,6 +76,12 @@ public class EWASInferrer {
 						infReferenceGeneProductInst.addAttributeValue(species, speciesInst);
 						String referenceGeneProductSource = homologueSource.equals("ENSP") ? "ENSEMBL:" : "UniProt:";
 						infReferenceGeneProductInst.setAttributeValue(_displayName, referenceGeneProductSource + homologueId);
+
+						if (speciesName.equals("Caenorhabditis elegans")) {
+							for (String wormbaseGeneName : wormbaseGeneNames) {
+								infReferenceGeneProductInst.addAttributeValue(geneName, wormbaseGeneName);
+							}
+						}
 						logger.info("ReferenceGeneProduct instance created");
 						infReferenceGeneProductInst = InstanceUtilities.checkForIdenticalInstances(infReferenceGeneProductInst, null);
 						referenceGeneProductIdenticals.put(homologueId, infReferenceGeneProductInst);
@@ -96,13 +108,10 @@ public class EWASInferrer {
 					} else {
 						infEWASInst.addAttributeValue(name, homologueId);
 					}
-					
-					String speciesName = speciesInst.getDisplayName();
-					List<String> geneNames;
+
 					if (speciesName.equals("Caenorhabditis elegans")) {
-						geneNames = getWormbaseGeneNames(homologueId);
-						for (String geneName : geneNames) {
-							infEWASInst.addAttributeValue(name, geneName);
+						for (String wormbaseGeneName : wormbaseGeneNames) {
+							infEWASInst.addAttributeValue(name, wormbaseGeneName);
 						}
 					}
 					String ewasDisplayName = infEWASInst.getAttributeValue(name) + " [" + ((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
