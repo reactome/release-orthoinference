@@ -355,23 +355,22 @@ public class EventsInferrer
 	private static Map<String, List<String>> downloadAndProcessWormbaseFile(URL wormbaseUrl) throws IOException {
 		File wormbaseFile = Paths.get(wormbaseUrl.toString()).getFileName().toFile();
 		Map<String, List<String>> wormbaseMappings = new HashMap<>();
-		if (!wormbaseFile.exists()) {
-			FileUtils.copyURLToFile(wormbaseUrl, wormbaseFile);
-		}
+		FileUtils.copyURLToFile(wormbaseUrl, wormbaseFile);
 		BufferedReader br = new BufferedReader(new InputStreamReader(new GZIPInputStream(new FileInputStream(wormbaseFile))));
 		String line = null;
 		while ((line = br.readLine()) != null) {
 			String wormbaseGeneId = line.split(",")[1];
 			String wormbaseGeneName = line.split(",")[2];
 			if (!wormbaseGeneId.isEmpty() && !wormbaseGeneName.isEmpty()) {
-				if (wormbaseMappings.get(wormbaseGeneId) != null) {
+				if (wormbaseMappings.containsKey(wormbaseGeneId)) {
 					wormbaseMappings.get(wormbaseGeneId).add(wormbaseGeneName);
 				} else {
-					wormbaseMappings.put(wormbaseGeneId, new ArrayList<>(Arrays.asList(wormbaseGeneName)));
+					wormbaseMappings.computeIfAbsent(wormbaseGeneId, k -> new ArrayList<>()).add(wormbaseGeneName);
 				}
 			}
 		}
 		br.close();
+		wormbaseFile.delete();
 		return wormbaseMappings;
 	}
 }

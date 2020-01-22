@@ -239,7 +239,7 @@ public class EWASInferrer {
 	private static List<String> getWormbaseGeneNames(String homologueId) {
 		List<String> geneNames = new ArrayList<>();
 		for (String geneId : ensgMappings.get(homologueId)) {
-			if (wormbaseMappings.get(geneId) != null) {
+			if (wormbaseMappings.containsKey(geneId)) {
 				geneNames.addAll(wormbaseMappings.get(geneId));
 			}
 		}
