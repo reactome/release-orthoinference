@@ -34,6 +34,7 @@ public class EWASInferrer {
 	private static Map<String, GKInstance> referenceGeneProductIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> ewasIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> residueIdenticals = new HashMap<>();
+	private static Map<String, List<String>> wormbaseMappings = new HashMap<>();
 
 	// Creates an array of inferred EWAS instances from the homologue mappings file (hsap_species_mapping.txt).
 	@SuppressWarnings("unchecked")
@@ -52,6 +53,16 @@ public class EWASInferrer {
 				String homologueId = homologue.contains(":") ? homologue.split(":")[1] : homologue;
 
 				if (checkValidSpeciesProtein(homologueId)) {
+					// If the species is C. elegans, retrieve gene names from Wormbase file.
+					String speciesName = speciesInst.getDisplayName();
+					boolean isCelegans = false;
+					List<String> wormbaseGeneNames = new ArrayList<>();
+					if (speciesName.equals("Caenorhabditis elegans")) {
+						isCelegans = true;
+						wormbaseGeneNames = getWormbaseGeneNames(homologueId);
+					}
+
+
 					GKInstance infReferenceGeneProductInst;
 					if (referenceGeneProductIdenticals.get(homologueId) == null) {
 						logger.info("Creating ReferenceGeneProduct for " + homologue);
@@ -69,6 +80,13 @@ public class EWASInferrer {
 						infReferenceGeneProductInst.addAttributeValue(species, speciesInst);
 						String referenceGeneProductSource = homologueSource.equals("ENSP") ? "ENSEMBL:" : "UniProt:";
 						infReferenceGeneProductInst.setAttributeValue(_displayName, referenceGeneProductSource + homologueId);
+
+						// If the species is C. elegans, add each matching gene name to the 'geneName' attribute of the RGP.
+						if (isCelegans) {
+							for (String wormbaseGeneName : wormbaseGeneNames) {
+								infReferenceGeneProductInst.addAttributeValue(geneName, wormbaseGeneName);
+							}
+						}
 						logger.info("ReferenceGeneProduct instance created");
 						infReferenceGeneProductInst = InstanceUtilities.checkForIdenticalInstances(infReferenceGeneProductInst, null);
 						referenceGeneProductIdenticals.put(homologueId, infReferenceGeneProductInst);
@@ -96,6 +114,12 @@ public class EWASInferrer {
 						infEWASInst.addAttributeValue(name, homologueId);
 					}
 
+					// If the species is C. elegans, add each matching gene name to the 'name' attribute of the EWAS.
+					if (isCelegans) {
+						for (String wormbaseGeneName : wormbaseGeneNames) {
+							infEWASInst.addAttributeValue(name, wormbaseGeneName);
+						}
+					}
 					String ewasDisplayName = infEWASInst.getAttributeValue(name) + " [" + ((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
 					infEWASInst.setAttributeValue(_displayName, ewasDisplayName);
 
@@ -205,6 +229,21 @@ public class EWASInferrer {
         }
 		logger.info("Total orthologous EWAS' created: " + infEWASInstances.size());
 		return infEWASInstances;
+	}
+
+	/**
+	 * Retrieve all Wormbase gene names that match the homologue Id.
+	 * @param homologueId -- String homologue ID value from Orthopair file.
+	 * @return -- List<String> of Wormbase gene names that correspond to the homologue ID.
+	 */
+	private static List<String> getWormbaseGeneNames(String homologueId) {
+		List<String> geneNames = new ArrayList<>();
+		for (String geneId : ensgMappings.get(homologueId)) {
+			if (wormbaseMappings.containsKey(geneId)) {
+				geneNames.addAll(wormbaseMappings.get(geneId));
+			}
+		}
+		return geneNames;
 	}
 
 	// Homologous Protein IDs can exist in ${source}_${target}_mapping.txt but the corresponding Gene ID might not exist in ${target}_gene_protein_mapping.txt.
@@ -368,5 +407,10 @@ public class EWASInferrer {
 	public static void setSpeciesInstance(GKInstance speciesInstCopy)
 	{
 		speciesInst = speciesInstCopy;
+	}
+
+	// Set the Wormbase gene names mapping file.
+	public static void setWormbaseMappings(Map<String, List<String>> wormbaseMappingsCopy) {
+		wormbaseMappings = wormbaseMappingsCopy;
 	}
 }
