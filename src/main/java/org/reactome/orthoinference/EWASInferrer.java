@@ -10,6 +10,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+
+import org.gk.model.InstanceDisplayNameGenerator;
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.GKSchemaClass;
 import org.gk.schema.InvalidAttributeException;
@@ -35,6 +37,7 @@ public class EWASInferrer {
 	private static Map<String,GKInstance> ewasIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> residueIdenticals = new HashMap<>();
 	private static Map<String, List<String>> wormbaseMappings = new HashMap<>();
+	private static Map<String, String> geneNameMappings = new HashMap<>();
 
 	// Creates an array of inferred EWAS instances from the homologue mappings file (hsap_species_mapping.txt).
 	@SuppressWarnings("unchecked")
@@ -53,16 +56,6 @@ public class EWASInferrer {
 				String homologueId = homologue.contains(":") ? homologue.split(":")[1] : homologue;
 
 				if (checkValidSpeciesProtein(homologueId)) {
-					// If the species is C. elegans, retrieve gene names from Wormbase file.
-					String speciesName = speciesInst.getDisplayName();
-					boolean isCelegans = false;
-					List<String> wormbaseGeneNames = new ArrayList<>();
-					if (speciesName.equals("Caenorhabditis elegans")) {
-						isCelegans = true;
-						wormbaseGeneNames = getWormbaseGeneNames(homologueId);
-					}
-
-
 					GKInstance infReferenceGeneProductInst;
 					if (referenceGeneProductIdenticals.get(homologueId) == null) {
 						logger.info("Creating ReferenceGeneProduct for " + homologue);
@@ -81,12 +74,11 @@ public class EWASInferrer {
 						String referenceGeneProductSource = homologueSource.equals("ENSP") ? "ENSEMBL:" : "UniProt:";
 						infReferenceGeneProductInst.setAttributeValue(_displayName, referenceGeneProductSource + homologueId);
 
-						// If the species is C. elegans, add each matching gene name to the 'geneName' attribute of the RGP.
-						if (isCelegans) {
-							for (String wormbaseGeneName : wormbaseGeneNames) {
-								infReferenceGeneProductInst.addAttributeValue(geneName, wormbaseGeneName);
-							}
+						// GeneName value comes from UniProt's identifier mapping service.
+						if (geneNameMappings.containsKey(homologueId)) {
+							infReferenceGeneProductInst.addAttributeValue(geneName, geneNameMappings.get(homologueId));
 						}
+
 						logger.info("ReferenceGeneProduct instance created");
 						infReferenceGeneProductInst = InstanceUtilities.checkForIdenticalInstances(infReferenceGeneProductInst, null);
 						referenceGeneProductIdenticals.put(homologueId, infReferenceGeneProductInst);
@@ -114,14 +106,17 @@ public class EWASInferrer {
 						infEWASInst.addAttributeValue(name, homologueId);
 					}
 
-					// If the species is C. elegans, add each matching gene name to the 'name' attribute of the EWAS.
-					if (isCelegans) {
-						for (String wormbaseGeneName : wormbaseGeneNames) {
-							infEWASInst.addAttributeValue(name, wormbaseGeneName);
+					// If the species-specific gene name was retrieved from UniProt's mapping service, it is added
+					// as the primary name for the EWAS.
+					if (geneNameMappings.containsKey(homologueId)) {
+						List<String> ewasNames = infEWASInst.getAttributeValuesList(name);
+						infEWASInst.setAttributeValue(name, geneNameMappings.get(homologueId));
+						for (String ewasName : ewasNames) {
+							infEWASInst.addAttributeValue(name, ewasName);
 						}
 					}
-					String ewasDisplayName = infEWASInst.getAttributeValue(name) + " [" + ((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
-					infEWASInst.setAttributeValue(_displayName, ewasDisplayName);
+					// New display name is generated using the updated 'name' attribute
+					infEWASInst.setAttributeValue(_displayName, InstanceDisplayNameGenerator.generateDisplayName(infEWASInst));
 
 					// Infer residue modifications. This was another step where the name of an EWAS can change.
 					// For this, it is based on the existence of the string 'phospho' in the name of the psiMod attribute.
@@ -312,7 +307,7 @@ public class EWASInferrer {
 	// Read the species-specific ENSG gene-protein mappings, and create a Hashmap with the contents
 	public static void readENSGMappingFile(String toSpecies, String pathToOrthopairs) throws IOException
 	{
-		String mappingFileName = toSpecies + "_gene_protein_mapping.txt";
+		String mappingFileName = toSpecies + "_gene_protein_mapping.tsv";
 		String mappingFilePath = Paths.get(pathToOrthopairs, mappingFileName).toString();
 		logger.info("Reading in " + mappingFilePath);
 		FileReader fr = new FileReader(mappingFilePath);
@@ -412,5 +407,9 @@ public class EWASInferrer {
 	// Set the Wormbase gene names mapping file.
 	public static void setWormbaseMappings(Map<String, List<String>> wormbaseMappingsCopy) {
 		wormbaseMappings = wormbaseMappingsCopy;
+	}
+
+	public static void setGeneNameMappingFile(Map<String, String> geneNameMappingsCopy) {
+		geneNameMappings = geneNameMappingsCopy;
 	}
 }

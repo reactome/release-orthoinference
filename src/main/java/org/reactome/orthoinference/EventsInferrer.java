@@ -9,10 +9,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -79,12 +79,6 @@ public class EventsInferrer
 		}
 		setDbAdaptors(dbAdaptor);
 
-		// Download Wormbase gene names file, create mapping and set it in the EWASInferrer class.
-		if (species.equals("cele")) {
-			URL wormbaseUrl = new URL(props.getProperty("wormbaseURL"));
-			Map<String,List<String>> wormbaseMappings = downloadAndProcessWormbaseFile(wormbaseUrl);
-			EWASInferrer.setWormbaseMappings(wormbaseMappings);
-		}
 		releaseVersion = props.getProperty("releaseNumber");
 		String pathToOrthopairs = Paths.get(props.getProperty("pathToOrthopairs") + releaseVersion).toString();
 		String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig");
@@ -122,11 +116,10 @@ public class EventsInferrer
 		// Set static variables (DB/Species Instances, mapping files) that will be repeatedly used
 		setInstanceEdits(personId);
 		try {
-			Map<String,String[]> homologueMappings = readHomologueMappingFile(species, "hsap", pathToOrthopairs);
-			ProteinCountUtility.setHomologueMappingFile(homologueMappings);
-			EWASInferrer.setHomologueMappingFile(homologueMappings);
-		} catch (FileNotFoundException e) {
-			logger.fatal("Unable to locate " + speciesName +" mapping file: hsap_" + species + "_mapping.txt. Orthology prediction not possible.");
+			readAndSetHomologueMappingFile(species, "hsap", pathToOrthopairs);
+			readAndSetGeneNameMappingFile(species, pathToOrthopairs);
+		} catch (Exception e) {
+			logger.fatal("Unable to locate " + speciesName +" mapping file: hsap_" + species + "_mapping.tsv. Orthology prediction not possible.");
 			return;
 		}
 		EWASInferrer.readENSGMappingFile(species, pathToOrthopairs);
@@ -210,6 +203,40 @@ public class EventsInferrer
 		logger.info("Finished orthoinference of " + speciesName);
 	}
 
+	/**
+	 * Create mapping of UniProt accessions to species-specific gene names, and then set this mapping for use in EWASInferrer.
+	 * @param species String - 4-letter shortened version of species name (eg: Homo sapiens --> hsap).
+	 * @param pathToOrthopairs String - Path to directory containing orthopairs files.
+	 * @throws IOException - Thrown if file is not found.
+	 */
+	private static void readAndSetGeneNameMappingFile(String species, String pathToOrthopairs) throws IOException {
+		Map<String, String> geneNameMappings = readGeneNameMappingFile(species, pathToOrthopairs);
+
+		EWASInferrer.setGeneNameMappingFile(geneNameMappings);
+	}
+
+	/**
+	 * Read in the {species}_gene_name_mapping.tsv file and create a Map of UniProt identifiers to gene names.
+	 * @param species String - 4-letter shortened version of species name (eg: Homo sapiens --> hsap).
+	 * @param pathToOrthopairs
+	 * @return pathToOrthopairs String - Path to directory containing orthopairs files.
+	 * @throws IOException - Thrown if file is not found.
+	 */
+	private static Map<String, String> readGeneNameMappingFile(String species, String pathToOrthopairs) throws IOException {
+		Path geneNameMappingFilePath = Paths.get(pathToOrthopairs, species + "_gene_name_mapping.tsv");
+		Map<String, String> geneNameMappings = new HashMap<>();
+		for (String line : Files.readAllLines(geneNameMappingFilePath)) {
+			String[] tabSplit = line.split("\t");
+			if (tabSplit.length == 2) {
+				String uniprotId = tabSplit[0];
+				String geneName = tabSplit[1];
+				geneNameMappings.put(uniprotId, geneName);
+			}
+		}
+
+		return geneNameMappings;
+	}
+
 	private static void createNewFile(String filename) throws IOException {
 		File file = new File(filename);
 		if (file.exists()) {
@@ -270,10 +297,16 @@ public class EventsInferrer
 
 	}
 
+	private static void readAndSetHomologueMappingFile(String species, String hsap, String pathToOrthopairs) throws IOException {
+		Map<String,String[]> homologueMappings = readHomologueMappingFile(species, "hsap", pathToOrthopairs);
+		ProteinCountUtility.setHomologueMappingFile(homologueMappings);
+		EWASInferrer.setHomologueMappingFile(homologueMappings);
+	}
+
 	// Read the species-specific orthopair 'mapping' file, and create a HashMap with the contents
 	private static Map<String, String[]> readHomologueMappingFile(String toSpecies, String fromSpecies, String pathToOrthopairs) throws IOException
 	{
-		String orthopairsFileName = fromSpecies + "_" + toSpecies + "_mapping.txt";
+		String orthopairsFileName = fromSpecies + "_" + toSpecies + "_mapping.tsv";
 		String orthopairsFilePath = Paths.get(pathToOrthopairs, orthopairsFileName).toString();
 		logger.info("Reading in " + orthopairsFilePath);
 		FileReader fr = new FileReader(orthopairsFilePath);
