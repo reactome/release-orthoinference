@@ -49,7 +49,7 @@ pipeline{
 						stage("Main: Infer ${species}"){
 							script{
 								withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
-									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-${env.ORTHOINFERENCE_VERSION}-jar-with-dependencies.jar $ConfigFile ${species}"
+									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
 								}
 							}
 						}
