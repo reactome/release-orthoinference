@@ -120,6 +120,7 @@ public class EventsInferrer
 			readAndSetGeneNameMappingFile(species, pathToOrthopairs);
 		} catch (Exception e) {
 			logger.fatal("Unable to locate " + speciesName +" mapping file: hsap_" + species + "_mapping.tsv. Orthology prediction not possible.");
+			e.printStackTrace();
 			return;
 		}
 		EWASInferrer.readENSGMappingFile(species, pathToOrthopairs);
@@ -218,7 +219,7 @@ public class EventsInferrer
 	/**
 	 * Read in the {species}_gene_name_mapping.tsv file and create a Map of UniProt identifiers to gene names.
 	 * @param species String - 4-letter shortened version of species name (eg: Homo sapiens --> hsap).
-	 * @param pathToOrthopairs
+	 * @param pathToOrthopairs String - Path to directory containing orthopairs files.
 	 * @return pathToOrthopairs String - Path to directory containing orthopairs files.
 	 * @throws IOException - Thrown if file is not found.
 	 */
@@ -297,8 +298,8 @@ public class EventsInferrer
 
 	}
 
-	private static void readAndSetHomologueMappingFile(String species, String hsap, String pathToOrthopairs) throws IOException {
-		Map<String,String[]> homologueMappings = readHomologueMappingFile(species, "hsap", pathToOrthopairs);
+	private static void readAndSetHomologueMappingFile(String species, String fromSpecies, String pathToOrthopairs) throws IOException {
+		Map<String,String[]> homologueMappings = readHomologueMappingFile(species, fromSpecies, pathToOrthopairs);
 		ProteinCountUtility.setHomologueMappingFile(homologueMappings);
 		EWASInferrer.setHomologueMappingFile(homologueMappings);
 	}
