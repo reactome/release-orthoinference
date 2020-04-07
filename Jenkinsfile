@@ -23,12 +23,10 @@ pipeline{
 		stage('Setup: Backup release_current'){
 			steps{
 				script{
-					dir('orthoinference'){
-						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-							def release_current_before_orthoinference_dump = "${env.RELEASE_CURRENT}_${currentRelease}_before_orthoinference.dump"
-							sh "mysqldump -u$user -p$pass ${env.RELEASE_CURRENT} > $release_current_before_orthoinference_dump"
-							sh "gzip -f $release_current_before_orthoinference_dump"
-						}
+					withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
+						def release_current_before_orthoinference_dump = "${env.RELEASE_CURRENT}_${currentRelease}_before_orthoinference.dump"
+						sh "mysqldump -u$user -p$pass ${env.RELEASE_CURRENT} > $release_current_before_orthoinference_dump"
+						sh "gzip -f $release_current_before_orthoinference_dump"
 					}
 				}
 			}
@@ -39,9 +37,7 @@ pipeline{
 		stage('Setup: Build jar file'){
 			steps{
 				script{
-					dir('orthoinference'){
-						sh "mvn clean compile assembly:single"
-					}
+					sh "mvn clean compile assembly:single"
 				}
 				// This script block executes the main orthoinference code one species at a time.
 				// It takes all Human Reaction instances in the database and attempts to project each Reaction to each species by
@@ -52,10 +48,8 @@ pipeline{
 					for (species in speciesList) {
 						stage("Main: Infer ${species}"){
 							script{
-								dir('orthoinference'){
-									withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
-										sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-${env.ORTHOINFERENCE_VERSION}-jar-with-dependencies.jar $ConfigFile ${species}"
-									}
+								withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
+									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
 								}
 							}
 						}
@@ -67,12 +61,10 @@ pipeline{
 		stage('Post: Backup DB'){
 			steps{
 				script{
-					dir('orthoinference'){
-						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-							def release_current_after_orthoinference_dump = "${env.RELEASE_CURRENT}_${currentRelease}_after_orthoinference.dump"
-							sh "mysqldump -u$user -p$pass ${env.RELEASE_CURRENT} > $release_current_after_orthoinference_dump"
-							sh "gzip -f $release_current_after_orthoinference_dump"
-						}
+					withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
+						def release_current_after_orthoinference_dump = "${env.RELEASE_CURRENT}_${currentRelease}_after_orthoinference.dump"
+						sh "mysqldump -u$user -p$pass ${env.RELEASE_CURRENT} > $release_current_after_orthoinference_dump"
+						sh "gzip -f $release_current_after_orthoinference_dump"
 					}
 				}
 			}
@@ -81,15 +73,13 @@ pipeline{
 		stage('Archive logs and backups'){
 			steps{
 				script{
-					dir('orthoinference'){
-						sh "mkdir -p archive/${currentRelease}/logs"
-						sh "mv --backup=numbered *_${currentRelease}_*.dump.gz archive/${currentRelease}/"
-						sh "gzip logs/*"
-						sh "mv logs/* archive/${currentRelease}/logs/"
-						sh "mkdir -p ${currentRelease}"
-						sh "gzip -f *.txt"
-						sh "mv *.txt.gz ${currentRelease}/"
-					}
+					sh "mkdir -p archive/${currentRelease}/logs"
+					sh "mv --backup=numbered *_${currentRelease}_*.dump.gz archive/${currentRelease}/"
+					sh "gzip logs/*"
+					sh "mv logs/* archive/${currentRelease}/logs/"
+					sh "mkdir -p ${currentRelease}"
+					sh "gzip -f *.txt"
+					sh "mv *.txt.gz ${currentRelease}/"
 				}
 			}
 		}
