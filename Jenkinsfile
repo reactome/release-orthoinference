@@ -19,6 +19,7 @@ pipeline{
 				}
 			}
 		}
+		/*
 		// Orthoinference utilizes a skiplist of Reaction DbIds to prevent particular reactions from being inferred.
 		stage('User Input Required: Confirm skiplist uploaded'){
 			steps{
@@ -37,7 +38,6 @@ pipeline{
 				}
 			}
 		}
-		/*
 		stage('Setup: Download Orthopairs files from S3 bucket'){
 			steps{
 				script{
@@ -59,7 +59,6 @@ pipeline{
 				}
 			}
 		}
-		*/
 		// This stage builds the jar file using maven. It also runs the Main orthoinference process as a 'sub-stage'.
 		// This was due to a restriction in iterating over a list of species names. To iterate, you need to first have a 'stage > steps > script' hierarchy.
 		// At the script level, you can iterate over a list and then create new stages from this iteration. The choice was between an empty stage or to do a sub-stage.
@@ -89,6 +88,16 @@ pipeline{
 				}
 			}
 		}
+		*/
+		// This stage sorts the order of the species in the output report file and then symlinks it to the website_files_update directory.
+		stage('Post: Sort output report & create symlink'){
+			steps{
+				script{
+					sh "./formatOrthoinferenceReport.sh --release ${currentRelease}"
+					sh "ln -sf report_ortho_inference_test_reactome_${currentRelease}_sorted.txt ${env.WEBSITE_FILES_UPDATE_ABS_PATH}/report_ortho_inference.txt"
+				}
+			}
+		}
 		// This stage backs up the release_current database after it is modified.
 		stage('Post: Backup DB'){
 			steps{
@@ -101,6 +110,7 @@ pipeline{
 				}
 			}
 		}
+		/*
 		// This stage archives all logs and database backups produced by Orthoinference. It also archives the eligible/inferred files produced by orthoinference.
 		stage('Archive logs and backups'){
 			steps{
@@ -115,6 +125,7 @@ pipeline{
 				}
 			}
 		}
+		*/
 	}
 }
 
