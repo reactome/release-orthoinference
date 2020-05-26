@@ -72,7 +72,7 @@ pipeline{
 				// If enough proteins (>= 75%) are inferrable in a Reaction, then it is created and stored in the database for this release. This is done from scratch each time.
 				script{
 					withCredentials([file(credentialsId: 'orthoinferenceSkipList', variable: 'skipListFile')]) {
-						sh "cp $skipListFile normal_event_skip_list.txt"
+						sh "cp -f $skipListFile normal_event_skip_list.txt"
 						speciesList = ['mmus', 'rnor', 'cfam', 'btau', 'sscr', 'drer', 'xtro', 'ggal', 'dmel', 'cele', 'ddis', 'spom', 'scer', 'pfal']
 						for (species in speciesList) {
 							stage("Main: Infer ${species}"){
