@@ -3,7 +3,6 @@ package org.reactome.orthoinference;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -12,13 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.zip.GZIPInputStream;
 
 import org.apache.commons.io.FileUtils;
@@ -80,13 +73,17 @@ public class EventsInferrer
 		setDbAdaptors(dbAdaptor);
 
 		releaseVersion = props.getProperty("releaseNumber");
-		String pathToOrthopairs = Paths.get(props.getProperty("pathToOrthopairs") + releaseVersion).toString();
+		String pathToOrthopairs = props.getProperty("pathToOrthopairs");
 		String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig");
 		String dateOfRelease = props.getProperty("dateOfRelease");
 		int personId = Integer.valueOf(props.getProperty("personId"));
 		setReleaseDates(dateOfRelease);
 
 		String pathToSkipList = props.getProperty("pathToOrthoinferenceSkipList");
+		if (!Files.exists(Paths.get(pathToSkipList))) {
+			logger.fatal("Unable to locate skiplist file: " + pathToSkipList);
+			return;
+		}
 		SkipInstanceChecker.getSkipList(pathToSkipList);
 
 		JSONParser parser = new JSONParser();

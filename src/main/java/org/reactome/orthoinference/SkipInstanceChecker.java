@@ -25,7 +25,7 @@ public class SkipInstanceChecker {
 	private static Set<String> skipList = new HashSet<>();
 
 	// Skiplist was traditionally provided in a file, but since it's currently just 3 instances, I've just hard-coded them here.
-	public static void getSkipList(String pathToSkipList) throws NumberFormatException, Exception
+	public static void getSkipList(String pathToSkipList) throws Exception
 	{
 		String[] pathwayIdsToSkip = {"162906","168254","977225"};
 		for (String pathwayId : pathwayIdsToSkip)
