@@ -19,6 +19,15 @@ pipeline{
 				}
 			}
 		}
+		stage('Setup: Download Orthopairs files from S3 bucket'){
+			steps{
+				script{
+					sh "mkdir -p orthopairs"
+					sh "aws s3 --no-progress cp  --recursive ${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthopairs/data/orthopairs/ ./orthopairs/"
+					sh "gunzip orthopairs/*"
+				}
+			}
+		}
 		// This stage backs up the release current database before it is modified.
 		stage('Setup: Backup release_current'){
 			steps{
@@ -34,7 +43,8 @@ pipeline{
 		// This stage builds the jar file using maven. It also runs the Main orthoinference process as a 'sub-stage'.
 		// This was due to a restriction in iterating over a list of species names. To iterate, you need to first have a 'stage > steps > script' hierarchy.
 		// At the script level, you can iterate over a list and then create new stages from this iteration. The choice was between an empty stage or to do a sub-stage.
-		stage('Setup: Build jar file'){
+		
+		/*stage('Setup: Build jar file'){
 			steps{
 				script{
 					sh "mvn clean compile assembly:single"
@@ -83,6 +93,7 @@ pipeline{
 				}
 			}
 		}
+		*/
 	}
 }
 
