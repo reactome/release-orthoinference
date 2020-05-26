@@ -94,7 +94,8 @@ pipeline{
 			steps{
 				script{
 					sh "./formatOrthoinferenceReport.sh --release ${currentRelease}"
-					sh "ln -sf report_ortho_inference_test_reactome_${currentRelease}_sorted.txt ${env.WEBSITE_FILES_UPDATE_ABS_PATH}/report_ortho_inference.txt"
+					def cwd = pwd()
+					sh "ln -sf ${cwd}report_ortho_inference_test_reactome_${currentRelease}_sorted.txt ${env.WEBSITE_FILES_UPDATE_ABS_PATH}/report_ortho_inference.txt"
 				}
 			}
 		}
