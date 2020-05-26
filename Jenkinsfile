@@ -11,8 +11,8 @@ pipeline{
 		stage('Check if Orthopairs and UpdateStableIdentifiers builds succeeded'){
 			steps{
 				script{
-					currentRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1];
-					previousRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1].toInteger() - 1;
+					currentRelease = (pwd() =~ /(\d+)\//)[0][1];
+					previousRelease = (pwd() =~ /(\d+)\//)[0][1].toInteger() - 1;
 					// This queries the Jenkins API to confirm that the most recent builds of Orthopairs and UpdateStableIdentifiers were successful.
 					checkUpstreamBuildsSucceeded("Orthopairs", "$currentRelease")
 					checkUpstreamBuildsSucceeded("UpdateStableIdentifiers", "$currentRelease")
