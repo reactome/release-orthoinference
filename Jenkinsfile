@@ -19,7 +19,6 @@ pipeline{
 				}
 			}
 		}
-		/*
 		// Orthoinference utilizes a skiplist of Reaction DbIds to prevent particular reactions from being inferred.
 		stage('User Input Required: Confirm skiplist uploaded'){
 			steps{
@@ -88,7 +87,6 @@ pipeline{
 				}
 			}
 		}
-		*/
 		// This stage sorts the order of the species in the output report file and then symlinks it to the website_files_update directory.
 		stage('Post: Sort output report & create symlink'){
 			steps{
@@ -111,9 +109,8 @@ pipeline{
 				}
 			}
 		}
-		/*
 		// This stage archives all logs and database backups produced by Orthoinference. It also archives the eligible/inferred files produced by orthoinference.
-		stage('Archive logs and backups'){
+		stage('Post: Archive logs and backups'){
 			steps{
 				script{
 					sh "mkdir -p archive/${currentRelease}/logs"
@@ -126,7 +123,6 @@ pipeline{
 				}
 			}
 		}
-		*/
 	}
 }
 
