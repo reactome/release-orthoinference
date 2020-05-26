@@ -26,7 +26,7 @@ then
 fi
 
 ## Create new sorted report file.
-sortedReportName=report_ortho_inference_test_reactome_$releaseNumber_sorted.txt
+sortedReportName=report_ortho_inference_test_reactome_${releaseNumber}_sorted.txt
 rm -f $sortedReportName
 touch $sortedReportName
 ## Add header
