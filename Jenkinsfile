@@ -19,6 +19,25 @@ pipeline{
 				}
 			}
 		}
+		// Orthoinference utilizes a skiplist of Reaction DbIds to prevent particular reactions from being inferred.
+		stage('User Input Required: Confirm skiplist uploaded'){
+			steps{
+				script{
+					def userInput = input(
+						id: 'userInput', message: "Has the Orthoinference skiplist been uploaded as a locally scoped credential? (yes/no)",
+						parameters: [
+							[$class: 'TextParameterDefinition', defaultValue: '', description: 'Confirmation of orthoinference skiplist', name: 'response']
+						])
+
+					if (userInput.toLowerCase().startsWith("y")) {
+						echo("Proceeding with Orthoinference step.")
+					} else {
+						error("Please upload the skiplist to Jenkins>Releases>${currentRelease}>Credentials>orthoinferenceSkipList. You should have received this skiplist from Curation.")
+					}
+				}
+			}
+		}
+		/*
 		stage('Setup: Download Orthopairs files from S3 bucket'){
 			steps{
 				script{
@@ -40,11 +59,11 @@ pipeline{
 				}
 			}
 		}
+		*/
 		// This stage builds the jar file using maven. It also runs the Main orthoinference process as a 'sub-stage'.
 		// This was due to a restriction in iterating over a list of species names. To iterate, you need to first have a 'stage > steps > script' hierarchy.
 		// At the script level, you can iterate over a list and then create new stages from this iteration. The choice was between an empty stage or to do a sub-stage.
-		
-		/*stage('Setup: Build jar file'){
+		stage('Setup: Build jar file'){
 			steps{
 				script{
 					sh "mvn clean compile assembly:single"
@@ -54,12 +73,15 @@ pipeline{
 				// stripping them down to the reaction's constituent proteins, checks if the protein homolog exists for that species, and infers it in Reactome's data model.
 				// If enough proteins (>= 75%) are inferrable in a Reaction, then it is created and stored in the database for this release. This is done from scratch each time.
 				script{
-					speciesList = ['mmus', 'rnor', 'cfam', 'btau', 'sscr', 'drer', 'xtro', 'ggal', 'dmel', 'cele', 'ddis', 'spom', 'scer', 'pfal']
-					for (species in speciesList) {
-						stage("Main: Infer ${species}"){
-							script{
-								withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
-									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
+					withCredentials([file(credentialsId: 'orthoinferenceSkipList', variable: 'skipListFile')]) {
+						sh "cp $skipListFile normal_event_skip_list.txt"
+						speciesList = ['mmus', 'rnor', 'cfam', 'btau', 'sscr', 'drer', 'xtro', 'ggal', 'dmel', 'cele', 'ddis', 'spom', 'scer', 'pfal']
+						for (species in speciesList) {
+							stage("Main: Infer ${species}"){
+								script{
+									withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
+										sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
+									}
 								}
 							}
 						}
@@ -93,7 +115,6 @@ pipeline{
 				}
 			}
 		}
-		*/
 	}
 }
 
