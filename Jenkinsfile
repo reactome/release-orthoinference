@@ -109,6 +109,7 @@ pipeline{
 				}
 			}
 		}
+		/*
 		// This stage archives all logs and database backups produced by Orthoinference. It also archives the eligible/inferred files produced by orthoinference.
 		stage('Post: Archive logs and backups'){
 			steps{
@@ -123,6 +124,7 @@ pipeline{
 				}
 			}
 		}
+		*/
 	}
 }
 
