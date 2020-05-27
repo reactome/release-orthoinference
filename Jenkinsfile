@@ -19,6 +19,7 @@ pipeline{
 				}
 			}
 		}
+		/*
 		// Orthoinference utilizes a skiplist of Reaction DbIds to prevent particular reactions from being inferred.
 		stage('User Input Required: Confirm skiplist uploaded'){
 			steps{
@@ -108,6 +109,20 @@ pipeline{
 					}
 				}
 			}
+		}
+		*/
+		stage('Post: Generate Graph Database'){
+			steps{
+				script{
+					sh "git clone https://github.com/reactome/graph-importer"
+					dir("graph-importer"){
+						sh "mvn clean compile assembly:single"
+						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
+							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass"
+						}
+					}
+				}
+			}			
 		}
 		/*
 		// This stage archives all logs and database backups produced by Orthoinference. It also archives the eligible/inferred files produced by orthoinference.
