@@ -118,8 +118,8 @@ pipeline{
 					dir("graph-importer"){
 						sh "mvn clean compile assembly:single"
 						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-							sh "sudo su neo4j"
-							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j /tmp/${currentRelease}.graph.db"
+							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j /tmp/graph.db"
+							sh "sudo bash /var/lib/jenkins/changeNewGraphDBPermissions.sh"
 						}
 					}
 				}
