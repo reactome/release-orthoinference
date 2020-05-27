@@ -119,7 +119,7 @@ pipeline{
 						sh "mvn clean compile assembly:single"
 						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
 							sh "sudo su neo4j"
-							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j ${env.NEO4J_DIR}/${releaseCurrent}.graph.db"
+							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j ${env.NEO4J_DIR}/${currentRelease}.graph.db"
 						}
 					}
 				}
