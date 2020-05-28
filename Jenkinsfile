@@ -110,15 +110,14 @@ pipeline{
 				}
 			}
 		}
-		*/
 		stage('Post: Generate Graph Database'){
 			steps{
 				script{
 					sh "git clone https://github.com/reactome/graph-importer"
 					dir("graph-importer"){
-						//sh "mvn clean compile assembly:single"
+						sh "mvn clean compile assembly:single"
 						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-						//	sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j /tmp/graph.db"
+							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j /tmp/graph.db"
 							sh "sudo service tomcat7 stop"
 							sh "sudo service neo4j stop"
 							sh "sudo bash /var/lib/jenkins/changeGraphDatabase.sh"
@@ -128,6 +127,20 @@ pipeline{
 					}
 				}
 			}			
+		}
+		*/
+		stage('Post: Run graph-qa'){
+			steps{
+				script{
+					sh "git clone https://github.com/reactome/graph-qa"
+					dir("graph-qa"){
+						sh "mvn clean compile assembly:single"
+						withCredentials([usernamePassword(credentialsId: 'neo4jUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
+							sh "java -jar target/graph-qa-jar-with-dependencies.jar -u $user -p  $pass --verbose"
+						}
+					}
+				}
+			}
 		}
 		/*
 		// This stage archives all logs and database backups produced by Orthoinference. It also archives the eligible/inferred files produced by orthoinference.
