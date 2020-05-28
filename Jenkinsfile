@@ -164,7 +164,7 @@ pipeline{
 					def s3Path = "${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthoinference"
 					sh "mkdir -p databases/ data/ reports/"
 					sh "mv --backup=numbered *_${currentRelease}_*.dump.gz databases/"
-					sh "mv graph-qa/logs/* logs/
+					sh "mv graph-qa/logs/* logs/"
 					sh "mv *.txt data/"
 					// Keep this in orthoinference directory for symlink
 					sh "mv data/report*sorted.txt ."
