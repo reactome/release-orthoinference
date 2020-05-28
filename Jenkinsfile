@@ -215,12 +215,12 @@ def checkUpstreamBuildsSucceeded(String stepName, String currentRelease) {
 def cloneGitRepo(String repoName) {
 	if(!fileExists($repoName)) {
 		script {
-			sh "git clone ${env.REACTOME_GITHUB_BASE_URL}/$repoName"
+			sh "git clone ${env.REACTOME_GITHUB_BASE_URL}/${repoName}"
 		}
 	} else {
 		script {
-			sh "echo $repoName already exists"
-			sh "cd $repoName; git pull"
+			sh "echo ${repoName} already exists"
+			sh "cd ${repoName}; git pull"
 		}
 	}
 }
