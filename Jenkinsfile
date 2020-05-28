@@ -19,6 +19,33 @@ pipeline{
 				}
 			}
 		}
+		// Orthoinference utilizes a skiplist of Reaction DbIds to prevent particular reactions from being inferred.
+		stage('User Input Required: Confirm skiplist uploaded'){
+			steps{
+				script{
+					def userInput = input(
+						id: 'userInput', message: "Has the Orthoinference skiplist been uploaded as a locally scoped credential? (yes/no)",
+						parameters: [
+							[$class: 'TextParameterDefinition', defaultValue: '', description: 'Confirmation of orthoinference skiplist', name: 'response']
+						])
+
+					if (userInput.toLowerCase().startsWith("y")) {
+						echo("Proceeding with Orthoinference step.")
+					} else {
+						error("Please upload the skiplist to Jenkins>Releases>${currentRelease}>Credentials>orthoinferenceSkipList. You should have received this skiplist from Curation.")
+					}
+				}
+			}
+		}
+		stage('Setup: Download Orthopairs files from S3 bucket'){
+			steps{
+				script{
+					sh "mkdir -p orthopairs"
+					sh "aws s3 --no-progress cp  --recursive ${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthopairs/data/orthopairs/ ./orthopairs/"
+					sh "gunzip orthopairs/*"
+				}
+			}
+		}
 		// This stage backs up the release current database before it is modified.
 		stage('Setup: Backup release_current'){
 			steps{
@@ -44,16 +71,29 @@ pipeline{
 				// stripping them down to the reaction's constituent proteins, checks if the protein homolog exists for that species, and infers it in Reactome's data model.
 				// If enough proteins (>= 75%) are inferrable in a Reaction, then it is created and stored in the database for this release. This is done from scratch each time.
 				script{
-					speciesList = ['mmus', 'rnor', 'cfam', 'btau', 'sscr', 'drer', 'xtro', 'ggal', 'dmel', 'cele', 'ddis', 'spom', 'scer', 'pfal']
-					for (species in speciesList) {
-						stage("Main: Infer ${species}"){
-							script{
-								withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
-									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
+					withCredentials([file(credentialsId: 'orthoinferenceSkipList', variable: 'skipListFile')]) {
+						sh "cp -f $skipListFile normal_event_skip_list.txt"
+						speciesList = ['mmus', 'rnor', 'cfam', 'btau', 'sscr', 'drer', 'xtro', 'ggal', 'dmel', 'cele', 'ddis', 'spom', 'scer', 'pfal']
+						for (species in speciesList) {
+							stage("Main: Infer ${species}"){
+								script{
+									withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
+										sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
+									}
 								}
 							}
 						}
 					}
+				}
+			}
+		}
+		// This stage sorts the order of the species in the output report file and then symlinks it to the website_files_update directory.
+		stage('Post: Sort output report & create symlink'){
+			steps{
+				script{
+					sh "./formatOrthoinferenceReport.sh --release ${currentRelease}"
+					def cwd = pwd()
+					sh "ln -sf ${cwd}/report_ortho_inference_test_reactome_${currentRelease}_sorted.txt ${env.WEBSITE_FILES_UPDATE_ABS_PATH}/report_ortho_inference.txt"
 				}
 			}
 		}
@@ -69,17 +109,81 @@ pipeline{
 				}
 			}
 		}
-		// This stage archives all logs and database backups produced by Orthoinference. It also archives the eligible/inferred files produced by orthoinference.
-		stage('Archive logs and backups'){
+		// This stage generates the graph database using the graph-importer module, and replaces the current graph db with it.
+		stage('Post: Generate Graph Database'){
 			steps{
 				script{
-					sh "mkdir -p archive/${currentRelease}/logs"
-					sh "mv --backup=numbered *_${currentRelease}_*.dump.gz archive/${currentRelease}/"
-					sh "gzip logs/*"
-					sh "mv logs/* archive/${currentRelease}/logs/"
-					sh "mkdir -p ${currentRelease}"
-					sh "gzip -f *.txt"
-					sh "mv *.txt.gz ${currentRelease}/"
+					cloneOrPullGitRepo("release-jenkins-utils")
+					sh "cp -f release-jenkins-utils/scripts/changeGraphDatabase.sh ${env.JENKINS_HOME_PATH}"
+					sh "chmod 700 ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
+					cloneOrPullGitRepo("graph-importer")
+					dir("graph-importer"){
+						sh "mvn clean compile assembly:single"
+						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
+							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j /tmp/graph.db"
+							sh "sudo service tomcat7 stop"
+							sh "sudo service neo4j stop"
+							// This static script adjusts permissions of the graph.db folder and moves it to /var/lib/neo4j/data/databases/.
+							sh "sudo bash ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
+							sh "sudo service neo4j start"
+							sh "sudo service tomcat7 start"
+							sh "rm ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
+						}
+					}
+				}
+			}			
+		}
+		// This stage runs the graph-qa script that will be emailed to Curation.
+		stage('Post: Run graph-qa'){
+			steps{
+				script{
+					cloneOrPullGitRepo("graph-qa")
+					dir("graph-qa"){
+						sh "mvn clean compile assembly:single"
+						withCredentials([usernamePassword(credentialsId: 'neo4jUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
+							sh "java -jar target/graph-qa-jar-with-dependencies.jar -u $user -p  $pass --verbose"
+						}
+					}
+				}
+			}
+		}
+		// This stage emails the contents of the GraphQA_Summary_vXX.csv that is generated by graph-qa for review. 
+		stage('Post: Email graph-qa output'){
+			steps{
+				script{
+					emailext (
+						body: "Hello,\n\nThis is an automated message from Jenkins regarding an update for v${currentRelease}. The Orthoinference step has finished running. Attached to this email should be the summary report output by graph-qa. Please compare this with the graph-qa output from the previous release and confirm if they look appropriate with the developer running Release. \n\nThanks!",
+						to: '$DEFAULT_RECIPIENTS',
+						from: "${env.JENKINS_RELEASE_EMAIL}",
+						subject: "Orthoinference graph-qa for v${currentRelease}",
+						attachmentsPattern: "**/graph-qa/reports/GraphQA_Summary_v${currentRelease}.csv"
+						
+					)
+				}
+			}
+		}
+		// All databases, logs, reports, and data files generated by this step are compressed before moving them to the Reactome S3 bucket. 
+		// All remaining files/folders are then deleted that are not a part of the release-orthoinference repository.
+		stage('Post: Archive Outputs'){
+			steps{
+				script{
+					def s3Path = "${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthoinference"
+					sh "mkdir -p databases/ data/ reports/"
+					sh "mv --backup=numbered *_${currentRelease}_*.dump.gz databases/"
+					sh "mv graph-qa/logs/* logs/"
+					sh "mv *.txt data/"
+					// Keep this in orthoinference directory for symlink
+					sh "mv data/report*sorted.txt ."
+					sh "mv graph-qa/reports/* reports/"
+					sh "gzip data/* logs/* reports/*"
+					sh "aws s3 --no-progress --recursive cp databases/ $s3Path/databases/"
+					sh "aws s3 --no-progress --recursive cp logs/ $s3Path/logs/"
+					sh "aws s3 --no-progress --recursive cp data/ $s3Path/data/"
+					sh "aws s3 --no-progress --recursive cp reports/ $s3Path/reports/"
+					sh "rm -r databases logs data reports orthopairs"
+					sh "rm -rf graph-importer*"
+					sh "rm -rf graph-qa*"
+					sh "rm -rf release-jenkins-utils*"
 				}
 			}
 		}
@@ -96,5 +200,14 @@ def checkUpstreamBuildsSucceeded(String stepName, String currentRelease) {
 		if(statusJson['result'] != "SUCCESS"){
 			error("Most recent $stepName build status: " + statusJson['result'] + ". Please complete a successful build.")
 		}
+	}
+}
+// Utility function that checks if a git directory exists. If not, it is cloned.
+def cloneOrPullGitRepo(String repoName) {
+	// This method is deceptively named -- it can also check if a directory exists
+	if(!fileExists(repoName)) {
+		sh "git clone ${env.REACTOME_GITHUB_BASE_URL}/${repoName}"
+	} else {
+		sh "cd ${repoName}; git pull"
 	}
 }
