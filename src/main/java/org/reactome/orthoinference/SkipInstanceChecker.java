@@ -2,13 +2,7 @@ package org.reactome.orthoinference;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -23,14 +17,17 @@ public class SkipInstanceChecker {
 	private static final Logger logger = LogManager.getLogger();
 	private static MySQLAdaptor dba;
 	private static Set<String> skipList = new HashSet<>();
+	private static final long HIV_INFECTION_DBID = 162906L;
+	private static final long INFLUENCE_INFECTION_DBID = 168255L;
+	private static final long AMYLOID_FIBER_FORMATION_DBID = 977225L;
 
 	// Skiplist was traditionally provided in a file, but since it's currently just 3 instances, I've just hard-coded them here.
 	public static void getSkipList(String pathToSkipList) throws Exception
 	{
-		String[] pathwayIdsToSkip = {"162906","168254","977225"};
-		for (String pathwayId : pathwayIdsToSkip)
+		List<Long> pathwayIdsToSkip = Arrays.asList(HIV_INFECTION_DBID, INFLUENCE_INFECTION_DBID, AMYLOID_FIBER_FORMATION_DBID);
+		for (Long pathwayId : pathwayIdsToSkip)
 		{
-			GKInstance pathwayInst = dba.fetchInstance(Long.valueOf(pathwayId));
+			GKInstance pathwayInst = dba.fetchInstance(pathwayId);
 			if (pathwayInst != null)
 			{
 				// Finds all ReactionLikeEvents associated with the skiplists Pathway and hasEvent attributes, and adds them to skiplist.

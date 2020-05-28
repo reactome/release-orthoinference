@@ -68,7 +68,7 @@ public class EventsInferrer
 		dbAdaptorPrev = new MySQLAdaptor(host, prevDatabase, username, password, port);
 		if (dbAdaptor == null || dbAdaptorPrev == null) {
 			logger.fatal("Null MySQLAdaptor, terminating orthoinference");
-			return;
+			System.exit(-1);
 		}
 		setDbAdaptors(dbAdaptor);
 
@@ -82,7 +82,7 @@ public class EventsInferrer
 		String pathToSkipList = props.getProperty("pathToOrthoinferenceSkipList");
 		if (!Files.exists(Paths.get(pathToSkipList))) {
 			logger.fatal("Unable to locate skiplist file: " + pathToSkipList);
-			return;
+			System.exit(-1);
 		}
 		SkipInstanceChecker.getSkipList(pathToSkipList);
 
@@ -118,7 +118,7 @@ public class EventsInferrer
 		} catch (Exception e) {
 			logger.fatal("Unable to locate " + speciesName +" mapping file: hsap_" + species + "_mapping.tsv. Orthology prediction not possible.");
 			e.printStackTrace();
-			return;
+			System.exit(-1);
 		}
 		EWASInferrer.readENSGMappingFile(species, pathToOrthopairs);
 		EWASInferrer.fetchAndSetUniprotDbInstance();
@@ -145,8 +145,8 @@ public class EventsInferrer
 		Collection<GKInstance> sourceSpeciesInst = (Collection<GKInstance>) dbAdaptor.fetchInstanceByAttribute("Species", "name", "=", "Homo sapiens");
 		if (sourceSpeciesInst.isEmpty())
 		{
-			logger.info("Could not find Species instance for Homo sapiens");
-			return;
+			logger.fatal("Could not find Species instance for Homo sapiens");
+			System.exit(-1);
 		}
 		long humanInstanceDbId = sourceSpeciesInst.iterator().next().getDBID();
 		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(dbAdaptor, dbAdaptorPrev, speciesInst, personId, humanInstanceDbId);
@@ -191,7 +191,7 @@ public class EventsInferrer
 				logger.info("Successfully inferred " + reactionInst);
 			} catch (Exception e) {
 				e.printStackTrace();
-				return;
+				System.exit(-1);
 			}
 		}
 		PathwaysInferrer.setInferredEvent(ReactionInferrer.getInferredEvent());
