@@ -11,14 +11,23 @@ pipeline{
 		stage('Check if Orthopairs and UpdateStableIdentifiers builds succeeded'){
 			steps{
 				script{
-					currentRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1];
-					previousRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1].toInteger() - 1;
+					currentRelease = (pwd() =~ /(\d+)\//)[0][1];
+					previousRelease = (pwd() =~ /(\d+)\//)[0][1].toInteger() - 1;
 					// This queries the Jenkins API to confirm that the most recent builds of Orthopairs and UpdateStableIdentifiers were successful.
 					checkUpstreamBuildsSucceeded("Orthopairs", "$currentRelease")
 					checkUpstreamBuildsSucceeded("UpdateStableIdentifiers", "$currentRelease")
 				}
 			}
 		}
+		stage('Test clone repo'){
+			steps{
+				script{
+					cloneGitRepo("graph-importer")
+					cloneGitRepo("graph-importer")
+				}
+			}
+		}
+		/*
 		// Orthoinference utilizes a skiplist of Reaction DbIds to prevent particular reactions from being inferred.
 		stage('User Input Required: Confirm skiplist uploaded'){
 			steps{
@@ -156,7 +165,7 @@ pipeline{
 						to: '$DEFAULT_RECIPIENTS',
 						from: "${env.JENKINS_RELEASE_EMAIL}",
 						subject: "Orthoinference graph-qa for v${currentRelease}",
-						attachmentsPattern: "**/graph-qa/reports/GraphQA_Summary_v${currentRelease}.csv"
+						
 					)
 				}
 			}
@@ -186,6 +195,7 @@ pipeline{
 				}
 			}
 		}
+		*/
 	}
 }
 
@@ -199,5 +209,14 @@ def checkUpstreamBuildsSucceeded(String stepName, String currentRelease) {
 		if(statusJson['result'] != "SUCCESS"){
 			error("Most recent $stepName build status: " + statusJson['result'] + ". Please complete a successful build.")
 		}
+	}
+}
+
+def cloneGitRepo(String repoName) {
+	if(!fileExists($repoName)) {
+		sh "git clone ${env.REACTOME_GITHUB_BASE_URL}/$repoName"
+	} else {
+		sh "echo "$repoName already exists"
+		sh "cd $repoName; git pull"
 	}
 }
