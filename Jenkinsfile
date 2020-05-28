@@ -11,8 +11,8 @@ pipeline{
 		stage('Check if Orthopairs and UpdateStableIdentifiers builds succeeded'){
 			steps{
 				script{
-					currentRelease = (pwd() =~ /(\d+)\//)[0][1];
-					previousRelease = (pwd() =~ /(\d+)\//)[0][1].toInteger() - 1;
+					currentRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1];
+					previousRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1].toInteger() - 1;
 					// This queries the Jenkins API to confirm that the most recent builds of Orthopairs and UpdateStableIdentifiers were successful.
 					checkUpstreamBuildsSucceeded("Orthopairs", "$currentRelease")
 					checkUpstreamBuildsSucceeded("UpdateStableIdentifiers", "$currentRelease")
@@ -156,6 +156,7 @@ pipeline{
 						to: '$DEFAULT_RECIPIENTS',
 						from: "${env.JENKINS_RELEASE_EMAIL}",
 						subject: "Orthoinference graph-qa for v${currentRelease}",
+						attachmentsPattern: "**/graph-qa/reports/GraphQA_Summary_v${currentRelease}.csv"
 						
 					)
 				}
