@@ -161,7 +161,7 @@ pipeline{
 		stage('Post: Archive Outputs'){
 			steps{
 				script{
-					def s3Path = "${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthoinference"
+					/*def s3Path = "${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthoinference"
 					sh "mkdir -p databases/ data/ reports/"
 					sh "mv --backup=numbered *_${currentRelease}_*.dump.gz databases/"
 					sh "mv graph-qa/logs/* logs/"
@@ -174,9 +174,10 @@ pipeline{
 					sh "aws s3 --no-progress --recursive cp logs/ $s3Path/logs/"
 					sh "aws s3 --no-progress --recursive cp data/ $s3Path/data/"
 					sh "aws s3 --no-progress --recursive cp reports/ $s3Path/reports/"
-					sh "rm -r databases logs data reports"
-					//sh "rm -rf graph-importer*"
-					//sh "rm -rf graph-qa*"
+					sh "rm -r databases logs data reports orthopairs"
+					*/
+					sh "rm -rf graph-importer*"
+					sh "rm -rf graph-qa*"
 				}
 			}
 		}
