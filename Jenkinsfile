@@ -19,15 +19,6 @@ pipeline{
 				}
 			}
 		}
-		stage('Test clone repo'){
-			steps{
-				script{
-					cloneGitRepo("graph-importer")
-					cloneGitRepo("graph-importer")
-				}
-			}
-		}
-		/*
 		// Orthoinference utilizes a skiplist of Reaction DbIds to prevent particular reactions from being inferred.
 		stage('User Input Required: Confirm skiplist uploaded'){
 			steps{
@@ -122,10 +113,10 @@ pipeline{
 		stage('Post: Generate Graph Database'){
 			steps{
 				script{
-					sh "git clone https://github.com/reactome/release-jenkins-utils"
+					cloneGitRepo("release-jenkins-utils")
 					sh "mv release-jenkins-utils/scripts/changeGraphDatabase.sh ${env.JENKINS_HOME_PATH}"
 					sh "chmod 700 ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
-					sh "git clone https://github.com/reactome/graph-importer"
+					cloneGitRepo("graph-importer")
 					dir("graph-importer"){
 						sh "mvn clean compile assembly:single"
 						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
@@ -146,7 +137,7 @@ pipeline{
 		stage('Post: Run graph-qa'){
 			steps{
 				script{
-					sh "git clone https://github.com/reactome/graph-qa"
+					cloneGitRepo("graph-qa")
 					dir("graph-qa"){
 						sh "mvn clean compile assembly:single"
 						withCredentials([usernamePassword(credentialsId: 'neo4jUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
@@ -195,7 +186,6 @@ pipeline{
 				}
 			}
 		}
-		*/
 	}
 }
 
@@ -211,8 +201,9 @@ def checkUpstreamBuildsSucceeded(String stepName, String currentRelease) {
 		}
 	}
 }
-
+// Utility function that checks if a git directory exists. If not, it is cloned.
 def cloneGitRepo(String repoName) {
+	// This method is deceptively named -- it can also check if a directory exists
 	if(!fileExists(repoName)) {
 		sh "git clone ${env.REACTOME_GITHUB_BASE_URL}/${repoName}"
 	} else {
