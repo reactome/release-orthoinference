@@ -146,13 +146,12 @@ pipeline{
 		stage('Post: Email graph-qa output'){
 			steps{
 				script{
-					sh "mv graph-qa/reports/GraphQA_Summary_v${currentRelease}.csv ."
 					emailext (
 						body: "Hello,\n\nThis is an automated message from Jenkins regarding an update for v${currentRelease}. The Orthoinference step has finished running. Attached to this email should be the summary report output by graph-qa. Please compare this with the graph-qa output from the previous release and confirm if they look appropriate or not with the developer running Release. \n\nThanks!",
 						to: '$DEFAULT_RECIPIENTS',
 						from: "${env.JENKINS_RELEASE_EMAIL}",
 						subject: "Orthoinference graph-qa for v${currentRelease}",
-						attachmentsPattern: "**/GraphQA_Summary_v${currentRelease}.csv"
+						attachmentsPattern: "**/graph-qa/reports/GraphQA_Summary_v${currentRelease}.csv"
 					)
 				}
 			}
