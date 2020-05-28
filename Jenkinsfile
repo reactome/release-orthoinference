@@ -114,7 +114,7 @@ pipeline{
 			steps{
 				script{
 					cloneGitRepo("release-jenkins-utils")
-					sh "mv release-jenkins-utils/scripts/changeGraphDatabase.sh ${env.JENKINS_HOME_PATH}"
+					sh "cp -f release-jenkins-utils/scripts/changeGraphDatabase.sh ${env.JENKINS_HOME_PATH}"
 					sh "chmod 700 ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
 					cloneGitRepo("graph-importer")
 					dir("graph-importer"){
