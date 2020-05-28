@@ -219,7 +219,7 @@ def cloneGitRepo(String repoName) {
 		}
 	} else {
 		script {
-			sh "echo "$repoName already exists"
+			sh "echo $repoName already exists"
 			sh "cd $repoName; git pull"
 		}
 	}
