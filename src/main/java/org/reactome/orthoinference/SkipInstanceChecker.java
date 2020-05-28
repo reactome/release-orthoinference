@@ -18,14 +18,18 @@ public class SkipInstanceChecker {
 	private static MySQLAdaptor dba;
 	private static Set<String> skipList = new HashSet<>();
 	private static final long HIV_INFECTION_DBID = 162906L;
-	private static final long INFLUENCE_INFECTION_DBID = 168255L;
+	private static final long INFLUENZA_INFECTION_DBID = 168255L;
 	private static final long AMYLOID_FIBER_FORMATION_DBID = 977225L;
 
 	// Skiplist was traditionally provided in a file, but since it's currently just 3 instances, I've just hard-coded them here.
 	public static void getSkipList(String pathToSkipList) throws Exception
 	{
-		List<Long> pathwayIdsToSkip = Arrays.asList(HIV_INFECTION_DBID, INFLUENCE_INFECTION_DBID, AMYLOID_FIBER_FORMATION_DBID);
-		for (Long pathwayId : pathwayIdsToSkip)
+		List<Long> pathwayIdsToSkip = Arrays.asList(
+			HIV_INFECTION_DBID,
+			INFLUENZA_INFECTION_DBID,
+			AMYLOID_FIBER_FORMATION_DBID
+		);
+		for (long pathwayId : pathwayIdsToSkip)
 		{
 			GKInstance pathwayInst = dba.fetchInstance(pathwayId);
 			if (pathwayInst != null)
