@@ -113,10 +113,10 @@ pipeline{
 		stage('Post: Generate Graph Database'){
 			steps{
 				script{
-					cloneGitRepo("release-jenkins-utils")
+					cloneOrPullGitRepo("release-jenkins-utils")
 					sh "cp -f release-jenkins-utils/scripts/changeGraphDatabase.sh ${env.JENKINS_HOME_PATH}"
 					sh "chmod 700 ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
-					cloneGitRepo("graph-importer")
+					cloneOrPullGitRepo("graph-importer")
 					dir("graph-importer"){
 						sh "mvn clean compile assembly:single"
 						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
@@ -137,7 +137,7 @@ pipeline{
 		stage('Post: Run graph-qa'){
 			steps{
 				script{
-					cloneGitRepo("graph-qa")
+					cloneOrPullGitRepo("graph-qa")
 					dir("graph-qa"){
 						sh "mvn clean compile assembly:single"
 						withCredentials([usernamePassword(credentialsId: 'neo4jUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
@@ -203,7 +203,7 @@ def checkUpstreamBuildsSucceeded(String stepName, String currentRelease) {
 	}
 }
 // Utility function that checks if a git directory exists. If not, it is cloned.
-def cloneGitRepo(String repoName) {
+def cloneOrPullGitRepo(String repoName) {
 	// This method is deceptively named -- it can also check if a directory exists
 	if(!fileExists(repoName)) {
 		sh "git clone ${env.REACTOME_GITHUB_BASE_URL}/${repoName}"
