@@ -1,6 +1,7 @@
 package org.reactome.orthoinference;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -38,6 +39,7 @@ public class EWASInferrer {
 	private static Map<String,GKInstance> residueIdenticals = new HashMap<>();
 	private static Map<String, List<String>> wormbaseMappings = new HashMap<>();
 	private static Map<String, String> geneNameMappings = new HashMap<>();
+	private static Map<String, Map<String,String>> coordinateMappings = new HashMap<>();
 
 	// Creates an array of inferred EWAS instances from the homologue mappings file (hsap_species_mapping.txt).
 	@SuppressWarnings("unchecked")
@@ -57,7 +59,7 @@ public class EWASInferrer {
 
 //				if (checkValidSpeciesProtein(homologueId)) {
 					GKInstance infReferenceGeneProductInst;
-					if (referenceGeneProductIdenticals.get(homologueId) == null) {
+//					if (referenceGeneProductIdenticals.get(homologueId) == null) {
 						logger.info("Creating ReferenceGeneProduct for " + homologue);
 						infReferenceGeneProductInst = InstanceUtilities.createNewInferredGKInstance((GKInstance) ewasInst.getAttributeValue(referenceEntity));
 						infReferenceGeneProductInst.addAttributeValue(identifier, homologueId);
@@ -82,20 +84,27 @@ public class EWASInferrer {
 						logger.info("ReferenceGeneProduct instance created");
 						infReferenceGeneProductInst = InstanceUtilities.checkForIdenticalInstances(infReferenceGeneProductInst, null);
 						referenceGeneProductIdenticals.put(homologueId, infReferenceGeneProductInst);
-					} else {
-						logger.info("Orthologous ReferenceGeneProduct already exists");
-						infReferenceGeneProductInst = referenceGeneProductIdenticals.get(homologueId);
-					}
+//					} else {
+//						logger.info("Orthologous ReferenceGeneProduct already exists");
+//						infReferenceGeneProductInst = referenceGeneProductIdenticals.get(homologueId);
+//					}
 					// Creating inferred EWAS
 					GKInstance infEWASInst = InstanceUtilities.createNewInferredGKInstance(ewasInst);
 					infEWASInst.addAttributeValue(referenceEntity, infReferenceGeneProductInst);
 
 					// Method for adding start/end coordinates. It is convoluted due to a quirk with assigning the name differently based on coordinate value (see infer_events.pl lines 1190-1192).
 					// The name of the entity needs to be at the front of the 'name' array if the coordinate is over 1, and rearranging arrays in Java for this was a bit tricky.
+					String ewasNameSimple = ewasInst.getAttributeValue(name).toString();
 					for (int startCoord : (Collection<Integer>) ewasInst.getAttributeValuesList(startCoordinate)) {
+						if (coordinateMappings.get(ewasNameSimple) != null) {
+							startCoord = Integer.valueOf(coordinateMappings.get(ewasNameSimple).get("start"));
+						}
 						infEWASInst.addAttributeValue(startCoordinate, startCoord);
 					}
 					for (int endCoord : (Collection<Integer>) ewasInst.getAttributeValuesList(endCoordinate)) {
+						if (coordinateMappings.get(ewasNameSimple) != null) {
+							endCoord = Integer.valueOf(coordinateMappings.get(ewasNameSimple).get("end"));
+						}
 						infEWASInst.addAttributeValue(endCoordinate, endCoord);
 					}
 					if (infEWASInst.getAttributeValue(startCoordinate) != null && (int) infEWASInst.getAttributeValue(startCoordinate) > 1 || infEWASInst.getAttributeValue(endCoordinate) != null && (int) infEWASInst.getAttributeValue(endCoordinate) > 1) {
@@ -190,12 +199,12 @@ public class EWASInferrer {
 						}
 						// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance' calls, which slows things.
 						String cacheKey = InstanceUtilities.getCacheKey((GKSchemaClass) infModifiedResidueInst.getSchemClass(), infModifiedResidueInst);
-						if (residueIdenticals.get(cacheKey) != null) {
-							infModifiedResidueInst = residueIdenticals.get(cacheKey);
-						} else {
+//						if (residueIdenticals.get(cacheKey) != null) {
+//							infModifiedResidueInst = residueIdenticals.get(cacheKey);
+//						} else {
 							infModifiedResidueInst = InstanceUtilities.checkForIdenticalInstances(infModifiedResidueInst, null);
-							residueIdenticals.put(cacheKey, infModifiedResidueInst);
-						}
+//							residueIdenticals.put(cacheKey, infModifiedResidueInst);
+//						}
 						infModifiedResidueInstances.add(infModifiedResidueInst);
 						logger.info("Successfully inferred ModifiedResidue");
 					}
@@ -411,5 +420,30 @@ public class EWASInferrer {
 
 	public static void setGeneNameMappingFile(Map<String, String> geneNameMappingsCopy) {
 		geneNameMappings = geneNameMappingsCopy;
+	}
+
+	public static void readAndSetCoordinateMappingFile(String targetSpecies) throws IOException {
+		String mappingFileName = targetSpecies + "_coordinate_mapping.tsv";
+		String mappingFilePath = Paths.get("orthopairs", mappingFileName).toString();
+		logger.info("Reading in " + mappingFilePath);
+		FileReader fr = new FileReader(mappingFilePath);
+		BufferedReader br = new BufferedReader(fr);
+
+		String currentLine;
+		while ((currentLine = br.readLine()) != null)
+		{
+			String[] tabSplit = currentLine.split("\t");
+			String name = tabSplit[0];
+			String startCoord = tabSplit.length > 1 ? tabSplit[1] : "";
+			String endCoord = tabSplit.length > 2 ? tabSplit[2] : "";
+			if (!startCoord.isEmpty() && !endCoord.isEmpty()) {
+				Map<String, String> coordMap = new HashMap<>();
+				coordMap.put("start", startCoord);
+				coordMap.put("end", endCoord);
+				coordinateMappings.put(name, coordMap);
+			}
+		}
+		br.close();
+		fr.close();
 	}
 }

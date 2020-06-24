@@ -145,7 +145,6 @@ public class InstanceUtilities {
 			if (originalInst != null) {
 				if (inferredInst.getSchemClass().isValidAttribute(literatureReference) && originalInst.getAttributeValue(literatureReference) != null) {
 					inferredInst.setAttributeValue(literatureReference, originalInst.getAttributeValuesList(literatureReference));
-					System.out.println("LIT REF\t\t:" + originalInst);
 				}
 				if (inferredInst.getSchemClass().isValidAttribute(disease) && originalInst.getAttributeValue(disease) != null) {
 					inferredInst.setAttributeValue(disease, diseaseInst);

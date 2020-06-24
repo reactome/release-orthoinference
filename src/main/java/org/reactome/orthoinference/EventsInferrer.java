@@ -125,6 +125,13 @@ public class EventsInferrer
 			e.printStackTrace();
 			System.exit(1);
 		}
+		try {
+			EWASInferrer.readAndSetCoordinateMappingFile(targetSpecies);
+		} catch (Exception e) {
+			logger.fatal("Unable to locate coordinate mapping file");
+			e.printStackTrace();
+			System.exit(1);
+		}
 //		EWASInferrer.readENSGMappingFile(targetSpecies, pathToOrthopairs);
 		EWASInferrer.fetchAndSetUniprotDbInstance();
 //		EWASInferrer.createEnsemblProteinDbInstance(speciesName, refDbUrl, refDbProteinUrl);
