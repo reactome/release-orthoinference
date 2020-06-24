@@ -55,7 +55,7 @@ public class EWASInferrer {
 				String homologueSource = homologue.contains(":") ? homologue.split(":")[0] : "";
 				String homologueId = homologue.contains(":") ? homologue.split(":")[1] : homologue;
 
-				if (checkValidSpeciesProtein(homologueId)) {
+//				if (checkValidSpeciesProtein(homologueId)) {
 					GKInstance infReferenceGeneProductInst;
 					if (referenceGeneProductIdenticals.get(homologueId) == null) {
 						logger.info("Creating ReferenceGeneProduct for " + homologue);
@@ -67,8 +67,8 @@ public class EWASInferrer {
 						infReferenceGeneProductInst.addAttributeValue(referenceDatabase, referenceDatabaseInst);
 
 						// Creates ReferenceDNASequence instance from ReferenceEntity
-						List<GKInstance> inferredReferenceDNAInstances = createReferenceDNASequence(homologueId);
-						infReferenceGeneProductInst.addAttributeValue(referenceGene, inferredReferenceDNAInstances);
+//						List<GKInstance> inferredReferenceDNAInstances = createReferenceDNASequence(homologueId);
+//						infReferenceGeneProductInst.addAttributeValue(referenceGene, inferredReferenceDNAInstances);
 
 						infReferenceGeneProductInst.addAttributeValue(species, speciesInst);
 						String referenceGeneProductSource = homologueSource.equals("ENSP") ? "ENSEMBL:" : "UniProt:";
@@ -215,9 +215,9 @@ public class EWASInferrer {
 					dba.updateInstanceAttribute(ewasInst, inferredTo);
 					logger.info("Successfully inferred EWAS instance for " + homologue + " homologue");
 					infEWASInstances.add(infEWASInst);
-				} else {
-					logger.info("Gene ID corresponding to " + homologue + " not found in gene_protein_mapping file -- skipping EWAS inference");
-				}
+//				} else {
+//					logger.info("Gene ID corresponding to " + homologue + " not found in gene_protein_mapping file -- skipping EWAS inference");
+//				}
 			}
 		} else {
 			logger.info("Could not infer EWAS, unable to find homologue for " + referenceEntityId);

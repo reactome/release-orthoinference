@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.sql.SQLOutput;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
 
@@ -53,7 +54,7 @@ public class EventsInferrer
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
 
 	@SuppressWarnings("unchecked")
-	public static void inferEvents(Properties props, String species) throws Exception
+	public static void inferEvents(Properties props, String referenceSpecies, String targetSpecies) throws Exception
 	{
 		logger.info("Preparing DB Adaptor and setting project variables");
 		// Set up DB adaptor using config.properties file
@@ -91,67 +92,76 @@ public class EventsInferrer
 		JSONObject jsonObject = (JSONObject) obj;
 
 		// Parse Species information (found in Species.json config file)
-		JSONObject speciesObject = (JSONObject) jsonObject.get(species);
-		JSONArray speciesNames = (JSONArray) speciesObject.get("name");
-		String speciesName = (String) speciesNames.get(0);
-		logger.info("Beginning orthoinference of " + speciesName);
+		JSONObject targetSpeciesObject = (JSONObject) jsonObject.get(targetSpecies);
+		JSONArray targetSpeciesNames = (JSONArray) targetSpeciesObject.get("name");
+		String targetSpeciesName = (String) targetSpeciesNames.get(0);
 
-		JSONObject refDb = (JSONObject) speciesObject.get("refdb");
-		String refDbUrl = (String) refDb.get("url");
-		String refDbProteinUrl = (String) refDb.get("access");
-		String refDbGeneUrl = (String) refDb.get("ensg_access");
+		JSONObject referenceSpeciesObject = (JSONObject) jsonObject.get(referenceSpecies);
+		JSONArray referenceSpeciesNames = (JSONArray) referenceSpeciesObject.get("name");
+		String referenceSpeciesName = (String) referenceSpeciesNames.get(0);
+
+		logger.info("Beginning orthoinference of " + targetSpeciesName);
+		JSONObject targetSpeciesRefDb = (JSONObject) targetSpeciesObject.get("refdb");
+//		String refDbUrl = (String) refDb.get("url");
+//		String refDbProteinUrl = (String) refDb.get("access");
+//		String refDbGeneUrl = (String) refDb.get("ensg_access");
 
 		// Creates two files that a) list reactions that are eligible for inference and b) those that are successfully inferred
-		String eligibleFilename = "eligible_" + species	+ "_75.txt";
-		String inferredFilename = "inferred_" + species + "_75.txt";
+		String eligibleFilename = "eligible_" + targetSpecies	+ "_75.txt";
+		String inferredFilename = "inferred_" + targetSpecies + "_75.txt";
 		createNewFile(eligibleFilename);
 		createNewFile(inferredFilename);
 		ReactionInferrer.setEligibleFilename(eligibleFilename);
 		ReactionInferrer.setInferredFilename(inferredFilename);
 
-		stableIdentifierGenerator = new StableIdentifierGenerator(dbAdaptor, (String) speciesObject.get("abbreviation"));
+		stableIdentifierGenerator = new StableIdentifierGenerator(dbAdaptor, (String) targetSpeciesObject.get("abbreviation"));
 		// Set static variables (DB/Species Instances, mapping files) that will be repeatedly used
 		setInstanceEdits(personId);
 		try {
-			readAndSetHomologueMappingFile(species, "hsap", pathToOrthopairs);
-			readAndSetGeneNameMappingFile(species, pathToOrthopairs);
+			readAndSetHomologueMappingFile(targetSpecies, referenceSpecies, pathToOrthopairs);
+//			readAndSetGeneNameMappingFile(targetSpecies, pathToOrthopairs);
 		} catch (Exception e) {
-			logger.fatal("Unable to locate " + speciesName +" mapping file: hsap_" + species + "_mapping.tsv. Orthology prediction not possible.");
+			logger.fatal("Unable to locate " + targetSpeciesName +" mapping file: hsap_" + targetSpecies + "_mapping.tsv. Orthology prediction not possible.");
 			e.printStackTrace();
 			System.exit(1);
 		}
-		EWASInferrer.readENSGMappingFile(species, pathToOrthopairs);
+//		EWASInferrer.readENSGMappingFile(targetSpecies, pathToOrthopairs);
 		EWASInferrer.fetchAndSetUniprotDbInstance();
-		EWASInferrer.createEnsemblProteinDbInstance(speciesName, refDbUrl, refDbProteinUrl);
-		EWASInferrer.createEnsemblGeneDBInstance(speciesName, refDbUrl, refDbGeneUrl);
+//		EWASInferrer.createEnsemblProteinDbInstance(speciesName, refDbUrl, refDbProteinUrl);
+//		EWASInferrer.createEnsemblGeneDBInstance(speciesName, refDbUrl, refDbGeneUrl);
 
-		JSONObject altRefDbJSON = (JSONObject) speciesObject.get("alt_refdb");
+		JSONObject altRefDbJSON = (JSONObject) targetSpeciesObject.get("alt_refdb");
 		if (altRefDbJSON != null)
 		{
-			logger.info("Alternate DB exists for " + speciesName);
+			logger.info("Alternate DB exists for " + targetSpeciesName);
 			EWASInferrer.createAlternateReferenceDBInstance(altRefDbJSON);
 		} else {
 			EWASInferrer.setAltRefDbToFalse();
 		}
-		createAndSetSpeciesInstance(speciesName);
+		createAndSetSpeciesInstance(targetSpeciesName);
 		setSummationInstance();
 		setEvidenceTypeInstance();
 		OrthologousEntityGenerator.setComplexSummationInstance();
 
 /**
- *  Start of ReactionlikeEvent inference. Retrieves all human ReactionlikeEvents, and attempts to infer each for the species.
+ *  Start of ReactionlikeEvent inference. Retrieves all human ReactionlikeEvents, and attempts to infer each for the targetSpecies.
  */
-		// Gets DB instance of source species (human)
-		Collection<GKInstance> sourceSpeciesInst = (Collection<GKInstance>) dbAdaptor.fetchInstanceByAttribute("Species", "name", "=", "Homo sapiens");
-		if (sourceSpeciesInst.isEmpty())
+		// Gets DB instance of source targetSpecies (human)
+		Collection<GKInstance> referenceSpeciesInst = (Collection<GKInstance>) dbAdaptor.fetchInstanceByAttribute("Species", "name", "=", referenceSpeciesName);
+		if (referenceSpeciesInst.isEmpty())
 		{
-			logger.fatal("Could not find Species instance for Homo sapiens");
+			logger.fatal("Could not find Species instance for " + referenceSpeciesName);
 			System.exit(1);
 		}
-		long humanInstanceDbId = sourceSpeciesInst.iterator().next().getDBID();
-		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(dbAdaptor, dbAdaptorPrev, speciesInst, personId, humanInstanceDbId);
-		// Gets Reaction instances of source species (human)
-		Collection<GKInstance> reactionInstances = (Collection<GKInstance>) dbAdaptor.fetchInstanceByAttribute("ReactionlikeEvent", "species", "=", humanInstanceDbId);
+		long referenceSpeciesInstanceDbId = referenceSpeciesInst.iterator().next().getDBID();
+		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(dbAdaptor, dbAdaptorPrev, speciesInst, personId, referenceSpeciesInstanceDbId);
+		// Gets Reaction instances of source targetSpecies (human)
+		Collection<GKInstance> reactionInstances = new ArrayList<>(); //
+		if (referenceSpeciesName.equals("Human SARS coronavirus")) {
+			 reactionInstances = (Collection<GKInstance>) dbAdaptor.fetchInstanceByAttribute(ReactionlikeEvent, relatedSpecies, "=", referenceSpeciesInst);
+		} else {
+			reactionInstances = (Collection<GKInstance>) dbAdaptor.fetchInstanceByAttribute(ReactionlikeEvent, species, "=", referenceSpeciesInstanceDbId);
+		}
 
 		List<Long> dbids = new ArrayList<>();
 		Map<Long, GKInstance> reactionMap = new HashMap<>();
@@ -160,13 +170,12 @@ public class EventsInferrer
 			reactionMap.put(reactionInst.getDBID(), reactionInst);
 		}
 		Collections.sort(dbids);
-
-		logger.info(sourceSpeciesInst.iterator().next().getDisplayName() + " ReactionlikeEvent instances: " + dbids.size());
+		logger.info(referenceSpeciesInst.iterator().next().getDisplayName() + " ReactionlikeEvent instances: " + dbids.size());
 		for (Long dbid : dbids)
 		{
 			GKInstance reactionInst = reactionMap.get(dbid);
 			logger.info("Attempting RlE inference: " + reactionInst);
-			// Check if the current Reaction already exists for this species, that it is a valid instance (passes some filters), and that it doesn't have a Disease attribute.
+			// Check if the current Reaction already exists for this targetSpecies, that it is a valid instance (passes some filters), and that it doesn't have a Disease attribute.
 			// Adds to manualHumanEvents array if it passes conditions. This code block allows you to re-run the code without re-inferring instances.
 			List<GKInstance> previouslyInferredInstances = new ArrayList<GKInstance>();
 			previouslyInferredInstances = checkIfPreviouslyInferred(reactionInst, orthologousEvent, previouslyInferredInstances);
@@ -185,7 +194,7 @@ public class EventsInferrer
 				continue;
 			}
 
-			// An inferred ReactionlikeEvent doesn't already exist for this species, and an orthologous inference will be attempted.
+			// An inferred ReactionlikeEvent doesn't already exist for this targetSpecies, and an orthologous inference will be attempted.
 			try {
 				ReactionInferrer.inferReaction(reactionInst);
 				logger.info("Successfully inferred " + reactionInst);
@@ -197,8 +206,8 @@ public class EventsInferrer
 		PathwaysInferrer.setInferredEvent(ReactionInferrer.getInferredEvent());
 		PathwaysInferrer.inferPathways(ReactionInferrer.getInferrableHumanEvents());
 		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
-		outputReport(species);
-		logger.info("Finished orthoinference of " + speciesName);
+		outputReport(targetSpecies);
+		logger.info("Finished orthoinference of " + targetSpeciesName);
 	}
 
 	/**
