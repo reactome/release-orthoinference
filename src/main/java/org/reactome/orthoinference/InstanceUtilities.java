@@ -1,10 +1,6 @@
 package org.reactome.orthoinference;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -23,6 +19,7 @@ public class InstanceUtilities {
 	private static MySQLAdaptor dba; 
 	private static GKInstance speciesInst;
 	private static GKInstance instanceEditInst;
+	private static GKInstance diseaseInst;
 	private static Map<String,GKInstance> mockedIdenticals = new HashMap<>();
 	
 	// Creates new instance that will be inferred based on the incoming instances class		
@@ -54,7 +51,18 @@ public class InstanceUtilities {
 		}
 		if (instanceToBeInferred.getSchemClass().isValidAttribute(species) && instanceToBeInferred.getAttributeValue(species) != null)
 		{
-			inferredInst.addAttributeValue(species, speciesInst);
+			GKInstance originalSpeciesInst = (GKInstance) instanceToBeInferred.getAttributeValue(species);
+			if (originalSpeciesInst.getDBID().equals(48887L)) {
+				inferredInst.addAttributeValue(species, instanceToBeInferred.getAttributeValue(species));
+			} else {
+				inferredInst.addAttributeValue(species, speciesInst);
+			}
+		}
+		if (instanceToBeInferred.getSchemClass().isValidAttribute(relatedSpecies) && instanceToBeInferred.getAttributeValue(relatedSpecies) != null) {
+			List<GKInstance> relatedSpeciesList = instanceToBeInferred.getAttributeValuesList(relatedSpecies);
+			if (relatedSpeciesList.contains(speciesInst)) {
+				inferredInst.addAttributeValue(relatedSpecies, speciesInst);
+			}
 		}
 		return inferredInst;
 	}
@@ -133,6 +141,23 @@ public class InstanceUtilities {
 				GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(inferredInst, originalInst);
 				inferredInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
 			}
+			// COV-1-to-COV-2 Projection additions.
+			if (originalInst != null) {
+				if (inferredInst.getSchemClass().isValidAttribute(literatureReference) && originalInst.getAttributeValue(literatureReference) != null) {
+					inferredInst.setAttributeValue(literatureReference, originalInst.getAttributeValuesList(literatureReference));
+					System.out.println("LIT REF\t\t:" + originalInst);
+				}
+				if (inferredInst.getSchemClass().isValidAttribute(disease) && originalInst.getAttributeValue(disease) != null) {
+					inferredInst.setAttributeValue(disease, diseaseInst);
+				}
+				if (inferredInst.getSchemClass().isValidAttribute(isChimeric) && originalInst.getAttributeValue(isChimeric) != null) {
+					inferredInst.setAttributeValue(isChimeric, originalInst.getAttributeValue(isChimeric));
+				}
+				if (inferredInst.getSchemClass().isValidAttribute(includedLocation) && originalInst.getAttributeValuesList(includedLocation) != null) {
+					inferredInst.setAttributeValue(includedLocation, originalInst.getAttributeValuesList(includedLocation));
+				}
+			}
+			//
 			dba.storeInstance(inferredInst);
 			return inferredInst;
 		}
@@ -218,5 +243,13 @@ public class InstanceUtilities {
 	public static void setInstanceEdit(GKInstance instanceEditCopy) 
 	{
 		instanceEditInst = instanceEditCopy;
+	}
+
+	public static void setDiseaseInstance(GKInstance diseaseInstanceCopy) {
+		diseaseInst = diseaseInstanceCopy;
+	}
+
+	public static GKInstance getDiseaseInst() {
+		return diseaseInst;
 	}
 }

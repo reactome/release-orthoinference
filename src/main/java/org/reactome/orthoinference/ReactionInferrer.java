@@ -56,11 +56,12 @@ public class ReactionInferrer {
 			// Total proteins are stored in reactionProteinCounts[0], inferrable proteins in [1], and the maximum number of homologues for any entity involved in index [2].
 			// Reactions with no proteins/EWAS (Total = 0) are not inferred.
 			List<Integer> reactionProteinCounts = ProteinCountUtility.getDistinctProteinCounts(reactionInst);
+			System.out.println(reactionProteinCounts);
 			int reactionTotalProteinCounts = reactionProteinCounts.get(0);
-			if (reactionTotalProteinCounts > 0) 
+			if (reactionTotalProteinCounts > 0)
 			{
 				logger.info("Total protein count for RlE: " + reactionTotalProteinCounts);
-				String eligibleEventName = reactionInst.getAttributeValue(DB_ID).toString() + "\t" + reactionInst.getDisplayName() + "\n";	
+				String eligibleEventName = reactionInst.getAttributeValue(DB_ID).toString() + "\t" + reactionInst.getDisplayName() + "\n";
 				// Having passed all tests/filters until now, the reaction is recorded in the 'eligible reactions' file, meaning inference is continued.
 				eligibleCount++;
 				Files.write(Paths.get(eligibleFilehandle), eligibleEventName.getBytes(), StandardOpenOption.APPEND);
@@ -75,7 +76,7 @@ public class ReactionInferrer {
 						logger.info("Inferring catalysts...");
 						if (inferReactionCatalysts(reactionInst, infReactionInst))
 						{
-							// Many reactions are not regulated at all, meaning inference is attempted but will not end the process if there is nothing to infer. 
+							// Many reactions are not regulated at all, meaning inference is attempted but will not end the process if there is nothing to infer.
 							// The inference process will end though if inferRegulations returns an invalid value.
 							logger.info("Inferring regulations...");
 							List<GKInstance> inferredRegulations = inferReactionRegulations(reactionInst);
@@ -83,7 +84,7 @@ public class ReactionInferrer {
 							{
 								return;
 							}
-							if (infReactionInst.getSchemClass().isValidAttribute(releaseDate)) 
+							if (infReactionInst.getSchemClass().isValidAttribute(releaseDate))
 							{
 								infReactionInst.addAttributeValue(releaseDate, dateOfRelease);
 							}
@@ -91,6 +92,24 @@ public class ReactionInferrer {
 							// add a new inferred instance, the storeInstance method is just called here.
 							GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infReactionInst, reactionInst);
 							infReactionInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+
+							// COV-1-to-COV-2 Projection additions.
+							if (reactionInst.getAttributeValuesList(literatureReference) != null) {
+								infReactionInst.setAttributeValue(literatureReference, reactionInst.getAttributeValuesList(literatureReference));
+							}
+							if (reactionInst.getAttributeValue(disease) != null) {
+								infReactionInst.setAttributeValue(disease, InstanceUtilities.getDiseaseInst());
+							}
+							if (reactionInst.getAttributeValue(isChimeric) != null) {
+								infReactionInst.setAttributeValue(isChimeric, reactionInst.getAttributeValue(isChimeric));
+							}
+							if (reactionInst.getAttributeValuesList(definition) != null) {
+								for (String definitionString : (Collection<String>) reactionInst.getAttributeValuesList(definition)) {
+									infReactionInst.addAttributeValue(definition, definitionString);
+								}
+							}
+							//
+
 							dba.storeInstance(infReactionInst);
 							logger.info("Inferred RlE instance: " + infReactionInst);
 
@@ -103,9 +122,9 @@ public class ReactionInferrer {
 							dba.updateInstanceAttribute(infReactionInst, orthologousEvent);
 							reactionInst.addAttributeValue(orthologousEvent, infReactionInst);
 							dba.updateInstanceAttribute(reactionInst, orthologousEvent);
-							
+
 							inferredEvent.put(reactionInst, infReactionInst);
-							
+
 							// Regulations instances require the DB to contain the inferred ReactionlikeEvent, so Regulations inference happens post-inference
 							if (inferredRegulations.size() > 0)
 							{
@@ -120,7 +139,7 @@ public class ReactionInferrer {
 							// After successfully adding a new inferred instance to the DB, it is recorded in the 'inferred reactions' file
 							inferredCount++;
 							inferrableHumanEvents.add(reactionInst);
-							String inferredEvent = infReactionInst.getAttributeValue(DB_ID).toString() + "\t" + infReactionInst.getDisplayName() + "\n";	
+							String inferredEvent = infReactionInst.getAttributeValue(DB_ID).toString() + "\t" + infReactionInst.getDisplayName() + "\n";
 							Files.write(Paths.get(inferredFilehandle), inferredEvent.getBytes(), StandardOpenOption.APPEND);
 						} else {
 							logger.info("Catalyst inference unsuccessful -- terminating inference for " + reactionInst);
