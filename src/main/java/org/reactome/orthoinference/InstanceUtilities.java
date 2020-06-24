@@ -6,6 +6,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+
+import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.GKSchemaAttribute;
 import org.gk.schema.GKSchemaClass;
@@ -60,9 +62,9 @@ public class InstanceUtilities {
 		}
 		if (instanceToBeInferred.getSchemClass().isValidAttribute(relatedSpecies) && instanceToBeInferred.getAttributeValue(relatedSpecies) != null) {
 			List<GKInstance> relatedSpeciesList = instanceToBeInferred.getAttributeValuesList(relatedSpecies);
-			if (relatedSpeciesList.contains(speciesInst)) {
+//			if (relatedSpeciesList.contains(speciesInst)) {
 				inferredInst.addAttributeValue(relatedSpecies, speciesInst);
-			}
+//			}
 		}
 		return inferredInst;
 	}

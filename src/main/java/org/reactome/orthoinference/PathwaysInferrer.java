@@ -112,6 +112,23 @@ public class PathwaysInferrer {
 		inferredEventIdenticals.put(sourcePathwayReferralInst, infPathwayInst);
 		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
 		infPathwayInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+
+		// COV-1-to-COV-2 Projection code
+		if (sourcePathwayReferralInst.getAttributeValue(disease) != null) {
+			infPathwayInst.setAttributeValue(disease, InstanceUtilities.getDiseaseInst());
+		}
+
+		if (sourcePathwayReferralInst.getAttributeValuesList(literatureReference) != null) {
+			infPathwayInst.setAttributeValue(literatureReference, sourcePathwayReferralInst.getAttributeValuesList(literatureReference));
+		}
+
+		if (sourcePathwayReferralInst.getAttributeValuesList(definition) != null) {
+			for (String definitionString : (Collection<String>) sourcePathwayReferralInst.getAttributeValuesList(definition)) {
+				infPathwayInst.addAttributeValue(definition, definitionString);
+			}
+		}
+		//
+
 		dba.storeInstance(infPathwayInst);
 
 		// This was replaced with addAttributeValueIfNecessary due to a bug where a Pathway instance's 'OrthologousEvent' attribute was being replaced,

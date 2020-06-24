@@ -50,7 +50,7 @@ public class StableIdentifierGenerator {
                 sourceAbbreviation = "COV";
             }
             String targetIdentifier = sourceIdentifier.replace(sourceAbbreviation, speciesAbbreviation);
-            if (originalInst.getSchemClass().isa(ReactionlikeEvent)) {
+            if (originalInst.getSchemClass().isa(Event)) {
                 targetIdentifier = targetIdentifier.replace("COV", "HSA");
             }
 

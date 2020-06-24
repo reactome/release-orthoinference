@@ -12,6 +12,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+
+import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.GKSchemaClass;
 import org.gk.schema.InvalidAttributeException;
@@ -99,6 +101,10 @@ public class OrthologousEntityGenerator {
 			infEntityInst = entityInst;
 		} else {
 			logger.warn("Unknown PhysicalEntity class: " + entityInst.getClass());
+		}
+		GKInstance speciesInst = (GKInstance) entityInst.getAttributeValue(species);
+		if (speciesInst != null && speciesInst.getDBID().equals(48887L)) {
+			return entityInst;
 		}
 		if (override)
 		{

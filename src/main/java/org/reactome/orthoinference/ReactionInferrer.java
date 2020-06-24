@@ -58,8 +58,8 @@ public class ReactionInferrer {
 			List<Integer> reactionProteinCounts = ProteinCountUtility.getDistinctProteinCounts(reactionInst);
 			System.out.println(reactionProteinCounts);
 			int reactionTotalProteinCounts = reactionProteinCounts.get(0);
-			if (reactionTotalProteinCounts > 0)
-			{
+//			if (reactionTotalProteinCounts > 0)
+//			{
 				logger.info("Total protein count for RlE: " + reactionTotalProteinCounts);
 				String eligibleEventName = reactionInst.getAttributeValue(DB_ID).toString() + "\t" + reactionInst.getDisplayName() + "\n";
 				// Having passed all tests/filters until now, the reaction is recorded in the 'eligible reactions' file, meaning inference is continued.
@@ -150,9 +150,9 @@ public class ReactionInferrer {
 				} else {
 					logger.info("Input inference unsuccessful -- terminating inference for " + reactionInst);
 				}
-			} else {
-				logger.info("No distinct proteins found in instance -- terminating inference for " + reactionInst);
-			}
+//			} else {
+//				logger.info("No distinct proteins found in instance -- terminating inference for " + reactionInst);
+//			}
 		}
 	}
 	

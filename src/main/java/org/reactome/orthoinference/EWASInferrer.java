@@ -31,6 +31,7 @@ public class EWASInferrer {
 	private static GKInstance enspDbInst;
 	private static GKInstance alternateDbInst;
 	private static GKInstance uniprotDbInst;
+	private static GKInstance ncbiNucleotideInst;
 	private static GKInstance speciesInst;
 	private static Map<String, String[]> homologueMappings = new HashMap<>();
 	private static Map<String, List<String>> ensgMappings = new HashMap<>();
@@ -65,7 +66,10 @@ public class EWASInferrer {
 						infReferenceGeneProductInst.addAttributeValue(identifier, homologueId);
 						// Reference DB can differ between homologue mappings, but can be differentiated by the 'homologueSource' found in each mapping.
 						// With PANTHER data, the Protein IDs are exclusively UniProt
-						GKInstance referenceDatabaseInst = homologueSource.equals("ENSP") ? enspDbInst : uniprotDbInst;
+						GKInstance rgpInst = (GKInstance) ewasInst.getAttributeValue(referenceEntity);
+						GKInstance refDBInst = (GKInstance) rgpInst.getAttributeValue(referenceDatabase);
+						String refDbName = refDBInst.getAttributeValue(name).toString();
+						GKInstance referenceDatabaseInst = refDbName.contains("NCBI") ? ncbiNucleotideInst : uniprotDbInst;
 						infReferenceGeneProductInst.addAttributeValue(referenceDatabase, referenceDatabaseInst);
 
 						// Creates ReferenceDNASequence instance from ReferenceEntity
@@ -73,7 +77,7 @@ public class EWASInferrer {
 //						infReferenceGeneProductInst.addAttributeValue(referenceGene, inferredReferenceDNAInstances);
 
 						infReferenceGeneProductInst.addAttributeValue(species, speciesInst);
-						String referenceGeneProductSource = homologueSource.equals("ENSP") ? "ENSEMBL:" : "UniProt:";
+						String referenceGeneProductSource = refDbName.contains("NCBI") ? "NCBI Nucleotide:" : "UniProt:";
 						infReferenceGeneProductInst.setAttributeValue(_displayName, referenceGeneProductSource + homologueId);
 
 						// GeneName value comes from UniProt's identifier mapping service.
@@ -149,28 +153,30 @@ public class EWASInferrer {
 								infModifiedResidueDisplayName += " " + ((GKInstance) infModifiedResidueInst.getAttributeValue(modification)).getDisplayName();
 							}
 						}
-						// Update name depending on the presence of 'phospho' in the Psimod's name attribute
-						GKInstance firstPsiModInst = (GKInstance) modifiedResidueInst.getAttributeValue(psiMod);
-						if (phosFlag && firstPsiModInst.getAttributeValue(name).toString().contains("phospho")) {
-							String phosphoName = "phospho-" + infEWASInst.getAttributeValue(name);
-							List<String> ewasNames = (ArrayList<String>) infEWASInst.getAttributeValuesList(name);
-							String originalName = ewasNames.remove(0);
-							infEWASInst.setAttributeValue(name, phosphoName);
-							// In the Perl version, this code block modifies the 'name' attribute to include 'phosopho-', but in the process it drops the other names contained. I believe this is unintentional.
-							// This would mean attributes without the 'phospho- ' addition would retain their array of names, while attributes containing 'phospho-' would only contain a single name attribute.
-							// I've assumed this is incorrect for the rewrite -- Instances that modify the name attribute to prepend 'phospho-' retain their name array. (Justin Cook 2018)
-							infEWASInst.addAttributeValue(name, ewasNames);
-							String phosphoDisplayName = phosphoName + " [" + ((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
-							infEWASInst.setAttributeValue(_displayName, phosphoDisplayName);
-							// This flag ensures the 'phospho-' is only prepended once.
-							logger.info("Updated EWAS name to reflect phosphorylation. Original: " + originalName + ". Updated: " + phosphoName);
-							phosFlag = false;
-						}
-						for (GKInstance psiModInst : (Collection<GKInstance>) modifiedResidueInst.getAttributeValuesList(psiMod)) {
-							infModifiedResidueInst.addAttributeValue(psiMod, psiModInst);
-						}
-						if (infModifiedResidueInst.getAttributeValue(psiMod) != null) {
-							infModifiedResidueDisplayName += " " + ((GKInstance) infModifiedResidueInst.getAttributeValue(psiMod)).getDisplayName();
+						if (modifiedResidueInst.getSchemClass().isValidAttribute(psiMod)) {
+							// Update name depending on the presence of 'phospho' in the Psimod's name attribute
+							GKInstance firstPsiModInst = (GKInstance) modifiedResidueInst.getAttributeValue(psiMod);
+							if (phosFlag && firstPsiModInst.getAttributeValue(name).toString().contains("phospho")) {
+								String phosphoName = "phospho-" + infEWASInst.getAttributeValue(name);
+								List<String> ewasNames = (ArrayList<String>) infEWASInst.getAttributeValuesList(name);
+								String originalName = ewasNames.remove(0);
+								infEWASInst.setAttributeValue(name, phosphoName);
+								// In the Perl version, this code block modifies the 'name' attribute to include 'phosopho-', but in the process it drops the other names contained. I believe this is unintentional.
+								// This would mean attributes without the 'phospho- ' addition would retain their array of names, while attributes containing 'phospho-' would only contain a single name attribute.
+								// I've assumed this is incorrect for the rewrite -- Instances that modify the name attribute to prepend 'phospho-' retain their name array. (Justin Cook 2018)
+								infEWASInst.addAttributeValue(name, ewasNames);
+								String phosphoDisplayName = phosphoName + " [" + ((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
+								infEWASInst.setAttributeValue(_displayName, phosphoDisplayName);
+								// This flag ensures the 'phospho-' is only prepended once.
+								logger.info("Updated EWAS name to reflect phosphorylation. Original: " + originalName + ". Updated: " + phosphoName);
+								phosFlag = false;
+							}
+							for (GKInstance psiModInst : (Collection<GKInstance>) modifiedResidueInst.getAttributeValuesList(psiMod)) {
+								infModifiedResidueInst.addAttributeValue(psiMod, psiModInst);
+							}
+							if (infModifiedResidueInst.getAttributeValue(psiMod) != null) {
+								infModifiedResidueDisplayName += " " + ((GKInstance) infModifiedResidueInst.getAttributeValue(psiMod)).getDisplayName();
+							}
 						}
 						infModifiedResidueInst.setAttributeValue(_displayName, modifiedResidueInst.getAttributeValue(_displayName));
 						// Update name to reflect that coordinate values are taken from humans. This takes place after cache retrieval, since the name from DB won't contain updated name.
@@ -348,10 +354,12 @@ public class EWASInferrer {
 
 	// Fetches Uniprot DB instance
 	@SuppressWarnings("unchecked")
-	public static void fetchAndSetUniprotDbInstance() throws Exception
+	public static void fetchAndSetDbInstances() throws Exception
 	{
 		Collection<GKInstance> uniprotDbInstances = (Collection<GKInstance>) dba.fetchInstanceByAttribute(ReferenceDatabase, name, "=", "UniProt");
+		Collection<GKInstance> ncbiNucleotideInstances = (Collection<GKInstance>) dba.fetchInstanceByAttribute(ReferenceDatabase, name, "=", "NCBI Nucleotide");
 		uniprotDbInst = uniprotDbInstances.iterator().next();
+		ncbiNucleotideInst = ncbiNucleotideInstances.iterator().next();
 	}
 
 	// Creates instance pertaining to the species Ensembl Protein DB

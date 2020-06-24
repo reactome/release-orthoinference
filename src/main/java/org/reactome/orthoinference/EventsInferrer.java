@@ -133,7 +133,7 @@ public class EventsInferrer
 			System.exit(1);
 		}
 //		EWASInferrer.readENSGMappingFile(targetSpecies, pathToOrthopairs);
-		EWASInferrer.fetchAndSetUniprotDbInstance();
+		EWASInferrer.fetchAndSetDbInstances();
 //		EWASInferrer.createEnsemblProteinDbInstance(speciesName, refDbUrl, refDbProteinUrl);
 //		EWASInferrer.createEnsemblGeneDBInstance(speciesName, refDbUrl, refDbGeneUrl);
 
