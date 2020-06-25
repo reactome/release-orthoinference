@@ -90,8 +90,6 @@ public class ReactionInferrer {
 							}
 							// FetchIdenticalInstances would just return the instance being inferred. Since this step is meant to always
 							// add a new inferred instance, the storeInstance method is just called here.
-							GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infReactionInst, reactionInst);
-							infReactionInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
 
 							// COV-1-to-COV-2 Projection additions.
 							if (reactionInst.getAttributeValuesList(literatureReference) != null) {
@@ -111,6 +109,10 @@ public class ReactionInferrer {
 							//
 
 							dba.storeInstance(infReactionInst);
+
+							GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infReactionInst, reactionInst);
+							infReactionInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+							dba.updateInstanceAttribute(infReactionInst, stableIdentifier);
 							logger.info("Inferred RlE instance: " + infReactionInst);
 
 							if (infReactionInst.getSchemClass().isValidAttribute(inferredFrom))
