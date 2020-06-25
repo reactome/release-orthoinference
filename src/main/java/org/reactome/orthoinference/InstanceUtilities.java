@@ -144,6 +144,9 @@ public class InstanceUtilities {
 				if (inferredInst.getSchemClass().isValidAttribute(literatureReference) && originalInst.getAttributeValue(literatureReference) != null) {
 					inferredInst.setAttributeValue(literatureReference, originalInst.getAttributeValuesList(literatureReference));
 				}
+				if (inferredInst.getSchemClass().isValidAttribute(crossReference) && originalInst.getAttributeValue(crossReference) != null) {
+					inferredInst.setAttributeValue(crossReference, originalInst.getAttributeValuesList(crossReference));
+				}
 				if (inferredInst.getSchemClass().isValidAttribute(disease) && originalInst.getAttributeValue(disease) != null) {
 					inferredInst.setAttributeValue(disease, diseaseInst);
 				}

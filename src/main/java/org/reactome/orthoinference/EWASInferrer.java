@@ -62,7 +62,8 @@ public class EWASInferrer {
 					GKInstance infReferenceGeneProductInst;
 //					if (referenceGeneProductIdenticals.get(homologueId) == null) {
 						logger.info("Creating ReferenceGeneProduct for " + homologue);
-						infReferenceGeneProductInst = InstanceUtilities.createNewInferredGKInstance((GKInstance) ewasInst.getAttributeValue(referenceEntity));
+						GKInstance referenceEntityInst = (GKInstance) ewasInst.getAttributeValue(referenceEntity);
+						infReferenceGeneProductInst = InstanceUtilities.createNewInferredGKInstance(referenceEntityInst);
 						infReferenceGeneProductInst.addAttributeValue(identifier, homologueId);
 						// Reference DB can differ between homologue mappings, but can be differentiated by the 'homologueSource' found in each mapping.
 						// With PANTHER data, the Protein IDs are exclusively UniProt
@@ -78,7 +79,12 @@ public class EWASInferrer {
 
 						infReferenceGeneProductInst.addAttributeValue(species, speciesInst);
 						String referenceGeneProductSource = refDbName.contains("NCBI") ? "NCBI Nucleotide:" : "UniProt:";
-						infReferenceGeneProductInst.setAttributeValue(_displayName, referenceGeneProductSource + homologueId);
+						infReferenceGeneProductInst.setAttributeValue(_displayName, referenceGeneProductSource + homologueId + " " + referenceEntityInst.getAttributeValue(name));
+						infReferenceGeneProductInst.setAttributeValue(name, referenceEntityInst.getAttributeValue(name));
+						infReferenceGeneProductInst.setAttributeValue(geneName, referenceEntityInst.getAttributeValue(geneName));
+						if (referenceEntityInst.getAttributeValue(keyword) != null) {
+							infReferenceGeneProductInst.setAttributeValue(keyword, referenceEntityInst.getAttributeValuesList(keyword));
+						}
 
 						// GeneName value comes from UniProt's identifier mapping service.
 						if (geneNameMappings.containsKey(homologueId)) {
@@ -95,19 +101,20 @@ public class EWASInferrer {
 					// Creating inferred EWAS
 					GKInstance infEWASInst = InstanceUtilities.createNewInferredGKInstance(ewasInst);
 					infEWASInst.addAttributeValue(referenceEntity, infReferenceGeneProductInst);
-
+					infEWASInst.addAttributeValue(name, ewasInst.getAttributeValue(name));
 					// Method for adding start/end coordinates. It is convoluted due to a quirk with assigning the name differently based on coordinate value (see infer_events.pl lines 1190-1192).
 					// The name of the entity needs to be at the front of the 'name' array if the coordinate is over 1, and rearranging arrays in Java for this was a bit tricky.
-					String ewasNameSimple = ewasInst.getAttributeValue(name).toString();
+
+					String coordKey = getCoordKey(ewasInst);
 					for (int startCoord : (Collection<Integer>) ewasInst.getAttributeValuesList(startCoordinate)) {
-						if (coordinateMappings.get(ewasNameSimple) != null) {
-							startCoord = Integer.valueOf(coordinateMappings.get(ewasNameSimple).get("start"));
+						if (coordinateMappings.get(coordKey) != null) {
+							startCoord = Integer.valueOf(coordinateMappings.get(coordKey).get("start"));
 						}
 						infEWASInst.addAttributeValue(startCoordinate, startCoord);
 					}
 					for (int endCoord : (Collection<Integer>) ewasInst.getAttributeValuesList(endCoordinate)) {
-						if (coordinateMappings.get(ewasNameSimple) != null) {
-							endCoord = Integer.valueOf(coordinateMappings.get(ewasNameSimple).get("end"));
+						if (coordinateMappings.get(coordKey) != null) {
+							endCoord = Integer.valueOf(coordinateMappings.get(coordKey).get("end"));
 						}
 						infEWASInst.addAttributeValue(endCoordinate, endCoord);
 					}
@@ -143,6 +150,16 @@ public class EWASInferrer {
 						infModifiedResidueInst.addAttributeValue(referenceSequence, infReferenceGeneProductInst);
 						infModifiedResidueDisplayName += infReferenceGeneProductInst.getDisplayName();
 						for (int coordinateValue : (Collection<Integer>) modifiedResidueInst.getAttributeValuesList(coordinate)) {
+							if (coordinateMappings.get(coordKey) != null) {
+								String ewasStartCoord = ewasInst.getAttributeValue(startCoordinate).toString();
+								String ewasEndCoord = ewasInst.getAttributeValue(endCoordinate).toString();
+								if (ewasStartCoord.equals(String.valueOf(coordinateValue))) {
+									coordinateValue = Integer.valueOf(coordinateMappings.get(coordKey).get("start"));
+								}
+								if (ewasEndCoord.equals(String.valueOf(coordinateValue))) {
+									coordinateValue = Integer.valueOf(coordinateMappings.get(coordKey).get("end"));
+								}
+							}
 							infModifiedResidueInst.addAttributeValue(coordinate, coordinateValue);
 						}
 						if (infModifiedResidueInst.getSchemClass().isValidAttribute(modification)) {
@@ -178,11 +195,17 @@ public class EWASInferrer {
 								infModifiedResidueDisplayName += " " + ((GKInstance) infModifiedResidueInst.getAttributeValue(psiMod)).getDisplayName();
 							}
 						}
-						infModifiedResidueInst.setAttributeValue(_displayName, modifiedResidueInst.getAttributeValue(_displayName));
+
+						if (infModifiedResidueInst.getSchemClass().isa("ModifiedNucleotide")) {
+							infModifiedResidueDisplayName = createModifiedNucleotideDisplayName(modifiedResidueInst, infModifiedResidueInst);
+						}
+						infModifiedResidueInst.setDisplayName(infModifiedResidueDisplayName);
 						// Update name to reflect that coordinate values are taken from humans. This takes place after cache retrieval, since the name from DB won't contain updated name.
 						if (modifiedResidueInst.getAttributeValue(coordinate) != null) {
-							String newModifiedResidueDisplayName = modifiedResidueInst.getAttributeValue(_displayName).toString() + " (in Homo sapiens)";
-							infModifiedResidueInst.setAttributeValue(_displayName, newModifiedResidueDisplayName);
+						// Commented out during COV-1 to COV-2 projection
+//							String newModifiedResidueDisplayName = modifiedResidueInst.getAttributeValue(_displayName).toString(); // + " (in Homo sapiens)";
+//							infModifiedResidueInst.setAttributeValue(_displayName, newModifiedResidueDisplayName);
+						//
 
 						} else {
 							if (infModifiedResidueInst.getSchemClass().isa(InterChainCrosslinkedResidue)) {
@@ -239,6 +262,24 @@ public class EWASInferrer {
         }
 		logger.info("Total orthologous EWAS' created: " + infEWASInstances.size());
 		return infEWASInstances;
+	}
+
+	private static String createModifiedNucleotideDisplayName(GKInstance modifiedResidueInst, GKInstance infModifiedResidueInst) throws Exception {
+		String coordinateString = infModifiedResidueInst.getAttributeValue(coordinate).toString() + " ";
+		GKInstance modificationInst = (GKInstance) infModifiedResidueInst.getAttributeValue(modification);
+		String modificationName = modificationInst.getAttributeValue(name).toString() + " ";
+		GKInstance refSeqInst = (GKInstance) infModifiedResidueInst.getAttributeValue(referenceSequence);
+		String refSeqIdentifier = refSeqInst.getAttributeValue(identifier).toString() + " ";
+		String refSeqName = refSeqInst.getAttributeValue(name).toString();
+		return coordinateString + modificationName + refSeqIdentifier + refSeqName;
+	}
+
+	private static String getCoordKey(GKInstance ewasInst) throws Exception {
+		GKInstance rgpInst = (GKInstance) ewasInst.getAttributeValue(referenceEntity);
+		String rgpIdentifier = rgpInst.getAttributeValue(identifier).toString();
+		String startCoord = ewasInst.getAttributeValue(startCoordinate).toString();
+		String endCoord = ewasInst.getAttributeValue(endCoordinate).toString();
+		return rgpIdentifier + startCoord + endCoord;
 	}
 
 	/**
@@ -438,17 +479,25 @@ public class EWASInferrer {
 		BufferedReader br = new BufferedReader(fr);
 
 		String currentLine;
+		Set<String> coords = new HashSet<>();
 		while ((currentLine = br.readLine()) != null)
 		{
 			String[] tabSplit = currentLine.split("\t");
 			String name = tabSplit[0];
-			String startCoord = tabSplit.length > 1 ? tabSplit[1] : "";
-			String endCoord = tabSplit.length > 2 ? tabSplit[2] : "";
-			if (!startCoord.isEmpty() && !endCoord.isEmpty()) {
+			String cov1Identifier = tabSplit[1];
+			String startCoordCov1 = tabSplit[2] != null ? tabSplit[2] : "";
+			String endCoordCov1 = tabSplit[3] != null ? tabSplit[3] : "";
+			if (!startCoordCov1.isEmpty() && !endCoordCov1.isEmpty()) {
+
+				String cov1Joined = cov1Identifier + startCoordCov1 + endCoordCov1;
+
+				String startCoordCov2 = tabSplit[5] != null ? tabSplit[5] : "";
+				String endCoordCov2 = tabSplit[6] != null ? tabSplit[6] : "";
+
 				Map<String, String> coordMap = new HashMap<>();
-				coordMap.put("start", startCoord);
-				coordMap.put("end", endCoord);
-				coordinateMappings.put(name, coordMap);
+				coordMap.put("start", startCoordCov2);
+				coordMap.put("end", endCoordCov2);
+				coordinateMappings.put(cov1Joined, coordMap);
 			}
 		}
 		br.close();
