@@ -23,7 +23,7 @@ public class InstanceUtilities {
 	private static GKInstance instanceEditInst;
 	private static GKInstance diseaseInst;
 	private static Map<String,GKInstance> mockedIdenticals = new HashMap<>();
-	
+
 	// Creates new instance that will be inferred based on the incoming instances class		
 	public static GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception
 	{

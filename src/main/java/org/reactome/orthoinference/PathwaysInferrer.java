@@ -109,10 +109,6 @@ public class PathwaysInferrer {
 			logger.warn(sourcePathwayReferralInst + " is a ReactionLikeEvent, which is unexpected -- refer to infer_events.pl");
 		}
 		infPathwayInst.setDisplayName(sourcePathwayReferralInst.getDisplayName());
-		inferredEventIdenticals.put(sourcePathwayReferralInst, infPathwayInst);
-
-        GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
-        infPathwayInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
 
 		// COV-1-to-COV-2 Projection code
 		if (sourcePathwayReferralInst.getAttributeValue(disease) != null) {
@@ -137,6 +133,11 @@ public class PathwaysInferrer {
 			newNames.add(newName);
 		}
 		infPathwayInst.setAttributeValue(name, newNames);
+
+		inferredEventIdenticals.put(sourcePathwayReferralInst, infPathwayInst);
+
+		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
+		infPathwayInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
 		//
 		dba.storeInstance(infPathwayInst);
 
