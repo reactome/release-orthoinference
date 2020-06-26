@@ -61,9 +61,11 @@ public class StableIdentifierGenerator {
 //            if (paralogCount > 1) {
 //                targetIdentifier += "-" + paralogCount;
 //            }
-//            targetIdentifier += "-2";
-            String sourceDBID = originalInst.getDBID().toString();
-            targetIdentifier = targetIdentifier.replace(sourceDBID, inferredInst.getDBID().toString());
+
+
+            targetIdentifier += "-2";
+//            String sourceDBID = originalInst.getDBID().toString();
+//            targetIdentifier = targetIdentifier.replace(sourceDBID, inferredInst.getDBID().toString());
             //
 
             // Check that the stable identifier instance does not already exist in DB

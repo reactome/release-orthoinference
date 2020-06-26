@@ -101,7 +101,8 @@ public class EWASInferrer {
 					// Creating inferred EWAS
 					GKInstance infEWASInst = InstanceUtilities.createNewInferredGKInstance(ewasInst);
 					infEWASInst.addAttributeValue(referenceEntity, infReferenceGeneProductInst);
-					infEWASInst.addAttributeValue(name, ewasInst.getAttributeValue(name));
+					infEWASInst.setAttributeValue(name, ewasInst.getAttributeValuesList(name));
+
 					// Method for adding start/end coordinates. It is convoluted due to a quirk with assigning the name differently based on coordinate value (see infer_events.pl lines 1190-1192).
 					// The name of the entity needs to be at the front of the 'name' array if the coordinate is over 1, and rearranging arrays in Java for this was a bit tricky.
 
@@ -238,6 +239,14 @@ public class EWASInferrer {
 						logger.info("Successfully inferred ModifiedResidue");
 					}
 					infEWASInst.addAttributeValue(hasModifiedResidue, infModifiedResidueInstances);
+					Set<String> infEWASNames = new HashSet<>();
+					for (String infEWASName : (Collection<String>) infEWASInst.getAttributeValuesList(name)) {
+						if (infEWASNames.contains(infEWASName)) {
+							infEWASInst.removeAttributeValueNoCheck(name, infEWASName);
+						} else {
+							infEWASNames.add(infEWASName);
+						}
+					}
 					// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance' calls, which slows things.
 					String cacheKey = InstanceUtilities.getCacheKey((GKSchemaClass) infEWASInst.getSchemClass(), infEWASInst);
 					if (ewasIdenticals.get(cacheKey) != null) {

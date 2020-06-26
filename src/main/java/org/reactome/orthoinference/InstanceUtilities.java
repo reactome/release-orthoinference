@@ -139,6 +139,12 @@ public class InstanceUtilities {
 				return identicalInstances.iterator().next();
 			}
 		} else {
+
+			if (inferredInst.getSchemClass().isa(PhysicalEntity)) {
+				GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(inferredInst, originalInst);
+				inferredInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+			}
+
 			// COV-1-to-COV-2 Projection additions.
 			if (originalInst != null) {
 				if (inferredInst.getSchemClass().isValidAttribute(literatureReference) && originalInst.getAttributeValue(literatureReference) != null) {
@@ -160,11 +166,12 @@ public class InstanceUtilities {
 			//
 			dba.storeInstance(inferredInst);
 
-			if (inferredInst.getSchemClass().isa(PhysicalEntity)) {
-				GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(inferredInst, originalInst);
-				inferredInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
-				dba.updateInstanceAttribute(inferredInst, stableIdentifier);
-			}
+//			if (inferredInst.getSchemClass().isa(PhysicalEntity)) {
+//				GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(inferredInst, originalInst);
+//				inferredInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+//				dba.updateInstanceAttribute(inferredInst, stableIdentifier);
+//			}
+
 			return inferredInst;
 		}
 	}
