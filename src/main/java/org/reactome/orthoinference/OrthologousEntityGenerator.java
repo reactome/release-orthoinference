@@ -1,12 +1,6 @@
 package org.reactome.orthoinference;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -35,6 +29,7 @@ public class OrthologousEntityGenerator {
 	private static Map<String,GKInstance> definedSetIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> complexIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> entitySetIdenticals = new HashMap<>();
+	private static Map<GKInstance, Set<GKInstance>> nonHumanParticpants = new HashMap<>();
 
 /** The heart of the OrthoInference process. This function takes PhysicalEntity (PE) instances and will infer those that are EWAS', Complexes/Polymers, or EntitySets.
 	 The function's arguments are an incoming PE instance and an override attribute. Instances that are comprised of PE's will often recursively call this createOrthoEntity function
@@ -102,8 +97,9 @@ public class OrthologousEntityGenerator {
 		} else {
 			logger.warn("Unknown PhysicalEntity class: " + entityInst.getClass());
 		}
-		GKInstance speciesInst = (GKInstance) entityInst.getAttributeValue(species);
-		if (speciesInst != null && speciesInst.getDBID().equals(48887L)) {
+		GKInstance entitySpeciesInst = (GKInstance) entityInst.getAttributeValue(species);
+		if (entitySpeciesInst != null && entitySpeciesInst.getDBID().equals(48887L)) {
+			inferNonHumanParticipants(entityInst);
 			return entityInst;
 		}
 		if (override)
@@ -114,7 +110,33 @@ public class OrthologousEntityGenerator {
 			logger.info("PE inference completed: " + entityInst);
 			return infEntityInst;
 	}
-	
+
+	private static void inferNonHumanParticipants(GKInstance entityInst) throws Exception {
+		Set<GKInstance> containedInstances= org.gk.model.InstanceUtilities.getContainedInstances(entityInst,
+				ReactomeJavaConstants.hasMember,
+				ReactomeJavaConstants.hasCandidate,
+				ReactomeJavaConstants.hasComponent,
+				ReactomeJavaConstants.repeatedUnit
+		);
+		for (GKInstance containedInst : containedInstances) {
+			if (containedInst.getSchemClass().isValidAttribute(species)) {
+				Collection<GKInstance> containedInstSpecies = (Collection<GKInstance>) containedInst.getAttributeValuesList(species);
+				for (GKInstance conSpeciesInst : containedInstSpecies) {
+					if (conSpeciesInst.getDBID().equals(9678119L)) {
+//						System.out.println("\t\t\t\t" + entityInst + "\t" + containedInst);
+						if (nonHumanParticpants.get(entityInst) != null) {
+							nonHumanParticpants.get(entityInst).add(containedInst);
+						} else {
+							Set<GKInstance> singleSet = new HashSet<>(Arrays.asList(containedInst));
+							nonHumanParticpants.put(entityInst, singleSet);
+						}
+					}
+				}
+
+			}
+		}
+	}
+
 	// Function that first tries to infer any EWAS' associated with the instance. For those that have more than 1 returned EWAS instance, 
 	// it's re-structured to a DefinedSet instance. If there is no EWAS instances inferred, it will either return null or, if override is set, return a mock instance. 
 	private static GKInstance createInfEWAS(GKInstance ewasInst, boolean override) throws InvalidAttributeException, Exception
@@ -443,5 +465,9 @@ public class OrthologousEntityGenerator {
 		complexSummationInst.addAttributeValue(text, complexSummationText);
 		complexSummationInst.setAttributeValue(_displayName, complexSummationText);
 		complexSummationInst = InstanceUtilities.checkForIdenticalInstances(complexSummationInst, null);
+	}
+
+	public static Map<GKInstance, Set<GKInstance>> getNonHumanParticipants() {
+		return nonHumanParticpants;
 	}
 }

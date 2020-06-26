@@ -163,7 +163,20 @@ public class InstanceUtilities {
 					inferredInst.setAttributeValue(includedLocation, originalInst.getAttributeValuesList(includedLocation));
 				}
 			}
+
+			String updatedDisplayName = inferredInst.getDisplayName().replace("CoV-1", "CoV-2");
+			inferredInst.setDisplayName(updatedDisplayName);
+			if (inferredInst.getSchemClass().isValidAttribute(name)) {
+				List<String> names = inferredInst.getAttributeValuesList(name);
+				List<String> newNames = new ArrayList<>();
+				for (String name : names) {
+					String newName = name.replace("CoV-1", "CoV-2");
+					newNames.add(newName);
+				}
+				inferredInst.setAttributeValue(name, newNames);
+			}
 			//
+
 			dba.storeInstance(inferredInst);
 
 //			if (inferredInst.getSchemClass().isa(PhysicalEntity)) {

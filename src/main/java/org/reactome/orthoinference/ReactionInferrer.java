@@ -110,7 +110,15 @@ public class ReactionInferrer {
 								}
 							}
 							//
-
+							String updatedDisplayName = infReactionInst.getDisplayName().replace("CoV-1", "CoV-2");
+							infReactionInst.setDisplayName(updatedDisplayName);
+							List<String> names = infReactionInst.getAttributeValuesList(name);
+							List<String> newNames = new ArrayList<>();
+							for (String name : names) {
+								String newName = name.replace("CoV-1", "CoV-2");
+								newNames.add(newName);
+							}
+							infReactionInst.setAttributeValue(name, newNames);
 							dba.storeInstance(infReactionInst);
 
 //							GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infReactionInst, reactionInst);
@@ -172,6 +180,7 @@ public class ReactionInferrer {
 		logger.info(attribute.substring(0,1).toUpperCase() + attribute.substring(1) + " instances: " + attributeInstances);
 		for (GKInstance attributeInst : attributeInstances)
 		{
+//			System.out.println("\t" + attribute + "\t" + attributeInst);
 			GKInstance infAttributeInst = OrthologousEntityGenerator.createOrthoEntity(attributeInst, false);
 			if (infAttributeInst == null)
 			{
@@ -197,6 +206,7 @@ public class ReactionInferrer {
 		for (GKInstance catalystInst : catalystInstances)
 		{
 			logger.info("Attempting catalyst inference: " + catalystInst);
+//			System.out.println("\tcatalyst\t" + catalystInst);
 			if (inferredCatalyst.get(catalystInst) == null)
 			{
 				GKInstance infCatalystInst = InstanceUtilities.createNewInferredGKInstance(catalystInst);
@@ -252,6 +262,7 @@ public class ReactionInferrer {
 			logger.info("Regulation instances: " + regulationInstances);
 			for (GKInstance regulationInst : regulationInstances) {
 				logger.info("Attempting Regulation inference: " + regulationInst);
+//				System.out.println("\tregulation\t" + regulationInst);
 				GKInstance regulatorInst = (GKInstance) regulationInst.getAttributeValue(regulator);
 				logger.info("Regulator: " + regulatorInst);
 				GKInstance infRegulatorInst = null;

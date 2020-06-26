@@ -128,6 +128,15 @@ public class PathwaysInferrer {
 				infPathwayInst.addAttributeValue(definition, definitionString);
 			}
 		}
+		String updatedDisplayName = infPathwayInst.getDisplayName().replace("CoV-1", "CoV-2");
+		infPathwayInst.setDisplayName(updatedDisplayName);
+		List<String> names = infPathwayInst.getAttributeValuesList(name);
+		List<String> newNames = new ArrayList<>();
+		for (String name : names) {
+			String newName = name.replace("CoV-1", "CoV-2");
+			newNames.add(newName);
+		}
+		infPathwayInst.setAttributeValue(name, newNames);
 		//
 		dba.storeInstance(infPathwayInst);
 

@@ -204,6 +204,7 @@ public class EventsInferrer
 
 			// An inferred ReactionlikeEvent doesn't already exist for this targetSpecies, and an orthologous inference will be attempted.
 			try {
+//				System.out.println(reactionInst);
 				ReactionInferrer.inferReaction(reactionInst);
 				logger.info("Successfully inferred " + reactionInst);
 			} catch (Exception e) {
@@ -211,6 +212,14 @@ public class EventsInferrer
 				System.exit(1);
 			}
 		}
+//		System.out.println("\n\n");
+//		Map<GKInstance, Set<GKInstance>> nonHumanParticpants = OrthologousEntityGenerator.getNonHumanParticipants();
+//		for (GKInstance humanPE : nonHumanParticpants.keySet()) {
+//			System.out.println(humanPE);
+//			for (GKInstance nonHumanParticipant : nonHumanParticpants.get(humanPE)) {
+//				System.out.println("\t" + nonHumanParticipant);
+//			}
+//		}
 		PathwaysInferrer.setInferredEvent(ReactionInferrer.getInferredEvent());
 		PathwaysInferrer.inferPathways(ReactionInferrer.getInferrableHumanEvents());
 		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
