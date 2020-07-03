@@ -196,7 +196,6 @@ public class InstanceUtilities {
 
 	public static void createCOVSummationInstances(GKInstance inferredInst, GKInstance originalInst) throws Exception {
 
-		System.out.println(originalInst);
 		List<GKInstance> originalSummationInstances = originalInst.getAttributeValuesList(summation);
 		String summationText = "This CoV-2 Reactome " + originalInst.getSchemClass().getName() + " instance was generated via electronic inference from a curated CoV-1 instance. In Reactome, inference is the process used to automatically create orthologous Pathways, Reactions and PhysicalEntities from our expertly curated data (" + inferredEventsReactomeURL + ").";
 		if (originalSummationInstances.size() > 0) {

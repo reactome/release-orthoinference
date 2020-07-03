@@ -1,7 +1,6 @@
 package org.reactome.orthoinference;
 
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -41,6 +40,7 @@ public class EWASInferrer {
 	private static Map<String, List<String>> wormbaseMappings = new HashMap<>();
 	private static Map<String, String> geneNameMappings = new HashMap<>();
 	private static Map<String, Map<String,String>> coordinateMappings = new HashMap<>();
+	private static Map<GKInstance, List<GKInstance>> modifiedResidueMappings = new HashMap<>();
 
 	// Creates an array of inferred EWAS instances from the homologue mappings file (hsap_species_mapping.txt).
 	@SuppressWarnings("unchecked")
@@ -147,103 +147,113 @@ public class EWASInferrer {
 					// Infer residue modifications. This was another step where the name of an EWAS can change.
 					// For this, it is based on the existence of the string 'phospho' in the name of the psiMod attribute.
 					// If true, 'phospho-' is prepended to the EWAS' name attribute.
-					List<GKInstance> infModifiedResidueInstances = new ArrayList<>();
-					boolean phosFlag = true;
+//					List<GKInstance> infModifiedResidueInstances = new ArrayList<>();
+//					boolean phosFlag = true;
 					for (GKInstance modifiedResidueInst : (Collection<GKInstance>) ewasInst.getAttributeValuesList(hasModifiedResidue)) {
 						logger.info("Inferring ModifiedResidue: " + modifiedResidueInst);
-						String infModifiedResidueDisplayName = "";
-						GKInstance infModifiedResidueInst = InstanceUtilities.createNewInferredGKInstance(modifiedResidueInst);
-						infModifiedResidueInst.addAttributeValue(referenceSequence, infReferenceGeneProductInst);
-						infModifiedResidueDisplayName += infReferenceGeneProductInst.getDisplayName();
-						for (int coordinateValue : (Collection<Integer>) modifiedResidueInst.getAttributeValuesList(coordinate)) {
-							if (coordinateMappings.get(coordKey) != null) {
-								String ewasStartCoord = ewasInst.getAttributeValue(startCoordinate).toString();
-								String ewasEndCoord = ewasInst.getAttributeValue(endCoordinate).toString();
-								if (ewasStartCoord.equals(String.valueOf(coordinateValue))) {
-									coordinateValue = Integer.valueOf(coordinateMappings.get(coordKey).get("start"));
-								}
-								if (ewasEndCoord.equals(String.valueOf(coordinateValue))) {
-									coordinateValue = Integer.valueOf(coordinateMappings.get(coordKey).get("end"));
-								}
-							}
-							infModifiedResidueInst.addAttributeValue(coordinate, coordinateValue);
-						}
-						if (infModifiedResidueInst.getSchemClass().isValidAttribute(modification)) {
-							for (GKInstance modifiedInst : (Collection<GKInstance>) modifiedResidueInst.getAttributeValuesList(modification)) {
-								infModifiedResidueInst.addAttributeValue(modification, modifiedInst);
-							}
-							if (infModifiedResidueInst.getAttributeValue(modification) != null) {
-								infModifiedResidueDisplayName += " " + ((GKInstance) infModifiedResidueInst.getAttributeValue(modification)).getDisplayName();
-							}
-						}
-						if (modifiedResidueInst.getSchemClass().isValidAttribute(psiMod)) {
-							// Update name depending on the presence of 'phospho' in the Psimod's name attribute
-							GKInstance firstPsiModInst = (GKInstance) modifiedResidueInst.getAttributeValue(psiMod);
-							if (phosFlag && firstPsiModInst.getAttributeValue(name).toString().contains("phospho")) {
-								String phosphoName = "phospho-" + infEWASInst.getAttributeValue(name);
-								List<String> ewasNames = (ArrayList<String>) infEWASInst.getAttributeValuesList(name);
-								String originalName = ewasNames.remove(0);
-								infEWASInst.setAttributeValue(name, phosphoName);
-								// In the Perl version, this code block modifies the 'name' attribute to include 'phosopho-', but in the process it drops the other names contained. I believe this is unintentional.
-								// This would mean attributes without the 'phospho- ' addition would retain their array of names, while attributes containing 'phospho-' would only contain a single name attribute.
-								// I've assumed this is incorrect for the rewrite -- Instances that modify the name attribute to prepend 'phospho-' retain their name array. (Justin Cook 2018)
-								infEWASInst.addAttributeValue(name, ewasNames);
-								String phosphoDisplayName = phosphoName + " [" + ((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
-								infEWASInst.setAttributeValue(_displayName, phosphoDisplayName);
-								// This flag ensures the 'phospho-' is only prepended once.
-								logger.info("Updated EWAS name to reflect phosphorylation. Original: " + originalName + ". Updated: " + phosphoName);
-								phosFlag = false;
-							}
-							for (GKInstance psiModInst : (Collection<GKInstance>) modifiedResidueInst.getAttributeValuesList(psiMod)) {
-								infModifiedResidueInst.addAttributeValue(psiMod, psiModInst);
-							}
-							if (infModifiedResidueInst.getAttributeValue(psiMod) != null) {
-								infModifiedResidueDisplayName += " " + ((GKInstance) infModifiedResidueInst.getAttributeValue(psiMod)).getDisplayName();
-							}
-						}
 
-						if (infModifiedResidueInst.getSchemClass().isa("ModifiedNucleotide")) {
-							infModifiedResidueDisplayName = createModifiedNucleotideDisplayName(modifiedResidueInst, infModifiedResidueInst);
-						}
-						infModifiedResidueInst.setDisplayName(infModifiedResidueDisplayName);
-						// Update name to reflect that coordinate values are taken from humans. This takes place after cache retrieval, since the name from DB won't contain updated name.
-						if (modifiedResidueInst.getAttributeValue(coordinate) != null) {
-						// Commented out during COV-1 to COV-2 projection
-//							String newModifiedResidueDisplayName = modifiedResidueInst.getAttributeValue(_displayName).toString(); // + " (in Homo sapiens)";
-//							infModifiedResidueInst.setAttributeValue(_displayName, newModifiedResidueDisplayName);
-						//
-
+						if (modifiedResidueMappings.get(ewasInst) != null) {
+							modifiedResidueMappings.get(ewasInst).add(modifiedResidueInst);
 						} else {
-							if (infModifiedResidueInst.getSchemClass().isa(InterChainCrosslinkedResidue)) {
-								infModifiedResidueInst.setDisplayName(infModifiedResidueDisplayName);
-							}
+							List<GKInstance> singleList = new ArrayList<>();
+							singleList.add(modifiedResidueInst);
+							modifiedResidueMappings.put(ewasInst, singleList);
 						}
-						// Database-checker gave errors related to missing 'secondReferenceSequence' and 'equivalentTo' attributes in InterChainCrosslinkedResidues
-						// This was because they were never populated. This block is the fix.
-						if (infModifiedResidueInst.getSchemClass().isa(InterChainCrosslinkedResidue)) {
-							if (modifiedResidueInst.getAttributeValue(secondReferenceSequence) != null) {
-								for (GKInstance secondRefSequenceInst : (Collection<GKInstance>) modifiedResidueInst.getAttributeValuesList(secondReferenceSequence)) {
-									infModifiedResidueInst.addAttributeValue(secondReferenceSequence, secondRefSequenceInst);
-								}
-							}
-							if (modifiedResidueInst.getAttributeValue("equivalentTo") != null) {
-								for (GKInstance equivalentToInst : (Collection<GKInstance>) modifiedResidueInst.getAttributeValuesList("equivalentTo")) {
-									infModifiedResidueInst.addAttributeValue("equivalentTo", equivalentToInst);
-								}
-							}
-						}
-						// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance' calls, which slows things.
-						String cacheKey = InstanceUtilities.getCacheKey((GKSchemaClass) infModifiedResidueInst.getSchemClass(), infModifiedResidueInst);
-//						if (residueIdenticals.get(cacheKey) != null) {
-//							infModifiedResidueInst = residueIdenticals.get(cacheKey);
-//						} else {
-							infModifiedResidueInst = InstanceUtilities.checkForIdenticalInstances(infModifiedResidueInst, null);
-//							residueIdenticals.put(cacheKey, infModifiedResidueInst);
+
+
+//						String infModifiedResidueDisplayName = "";
+//						GKInstance infModifiedResidueInst = InstanceUtilities.createNewInferredGKInstance(modifiedResidueInst);
+//						infModifiedResidueInst.addAttributeValue(referenceSequence, infReferenceGeneProductInst);
+//						infModifiedResidueDisplayName += infReferenceGeneProductInst.getDisplayName();
+//						for (int coordinateValue : (Collection<Integer>) modifiedResidueInst.getAttributeValuesList(coordinate)) {
+//							if (coordinateMappings.get(coordKey) != null) {
+//								String ewasStartCoord = ewasInst.getAttributeValue(startCoordinate).toString();
+//								String ewasEndCoord = ewasInst.getAttributeValue(endCoordinate).toString();
+//								if (ewasStartCoord.equals(String.valueOf(coordinateValue))) {
+//									coordinateValue = Integer.valueOf(coordinateMappings.get(coordKey).get("start"));
+//								}
+//								if (ewasEndCoord.equals(String.valueOf(coordinateValue))) {
+//									coordinateValue = Integer.valueOf(coordinateMappings.get(coordKey).get("end"));
+//								}
+//							}
+//							infModifiedResidueInst.addAttributeValue(coordinate, coordinateValue);
 //						}
-						infModifiedResidueInstances.add(infModifiedResidueInst);
-						logger.info("Successfully inferred ModifiedResidue");
+//						if (infModifiedResidueInst.getSchemClass().isValidAttribute(modification)) {
+//							for (GKInstance modifiedInst : (Collection<GKInstance>) modifiedResidueInst.getAttributeValuesList(modification)) {
+//								infModifiedResidueInst.addAttributeValue(modification, modifiedInst);
+//							}
+//							if (infModifiedResidueInst.getAttributeValue(modification) != null) {
+//								infModifiedResidueDisplayName += " " + ((GKInstance) infModifiedResidueInst.getAttributeValue(modification)).getDisplayName();
+//							}
+//						}
+//						if (modifiedResidueInst.getSchemClass().isValidAttribute(psiMod)) {
+//							// Update name depending on the presence of 'phospho' in the Psimod's name attribute
+//							GKInstance firstPsiModInst = (GKInstance) modifiedResidueInst.getAttributeValue(psiMod);
+//							if (phosFlag && firstPsiModInst.getAttributeValue(name).toString().contains("phospho")) {
+//								String phosphoName = "phospho-" + infEWASInst.getAttributeValue(name);
+//								List<String> ewasNames = (ArrayList<String>) infEWASInst.getAttributeValuesList(name);
+//								String originalName = ewasNames.remove(0);
+//								infEWASInst.setAttributeValue(name, phosphoName);
+//								// In the Perl version, this code block modifies the 'name' attribute to include 'phosopho-', but in the process it drops the other names contained. I believe this is unintentional.
+//								// This would mean attributes without the 'phospho- ' addition would retain their array of names, while attributes containing 'phospho-' would only contain a single name attribute.
+//								// I've assumed this is incorrect for the rewrite -- Instances that modify the name attribute to prepend 'phospho-' retain their name array. (Justin Cook 2018)
+//								infEWASInst.addAttributeValue(name, ewasNames);
+//								String phosphoDisplayName = phosphoName + " [" + ((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
+//								infEWASInst.setAttributeValue(_displayName, phosphoDisplayName);
+//								// This flag ensures the 'phospho-' is only prepended once.
+//								logger.info("Updated EWAS name to reflect phosphorylation. Original: " + originalName + ". Updated: " + phosphoName);
+//								phosFlag = false;
+//							}
+//							for (GKInstance psiModInst : (Collection<GKInstance>) modifiedResidueInst.getAttributeValuesList(psiMod)) {
+//								infModifiedResidueInst.addAttributeValue(psiMod, psiModInst);
+//							}
+//							if (infModifiedResidueInst.getAttributeValue(psiMod) != null) {
+//								infModifiedResidueDisplayName += " " + ((GKInstance) infModifiedResidueInst.getAttributeValue(psiMod)).getDisplayName();
+//							}
+//						}
+//
+//						if (infModifiedResidueInst.getSchemClass().isa("ModifiedNucleotide")) {
+//							infModifiedResidueDisplayName = createModifiedNucleotideDisplayName(modifiedResidueInst, infModifiedResidueInst);
+//						}
+//						infModifiedResidueInst.setDisplayName(infModifiedResidueDisplayName);
+//						// Update name to reflect that coordinate values are taken from humans. This takes place after cache retrieval, since the name from DB won't contain updated name.
+//						if (modifiedResidueInst.getAttributeValue(coordinate) != null) {
+//						// Commented out during COV-1 to COV-2 projection
+////							String newModifiedResidueDisplayName = modifiedResidueInst.getAttributeValue(_displayName).toString(); // + " (in Homo sapiens)";
+////							infModifiedResidueInst.setAttributeValue(_displayName, newModifiedResidueDisplayName);
+//						//
+//
+//						} else {
+//							if (infModifiedResidueInst.getSchemClass().isa(InterChainCrosslinkedResidue)) {
+//								infModifiedResidueInst.setDisplayName(infModifiedResidueDisplayName);
+//							}
+//						}
+//						// Database-checker gave errors related to missing 'secondReferenceSequence' and 'equivalentTo' attributes in InterChainCrosslinkedResidues
+//						// This was because they were never populated. This block is the fix.
+//						if (infModifiedResidueInst.getSchemClass().isa(InterChainCrosslinkedResidue)) {
+//							if (modifiedResidueInst.getAttributeValue(secondReferenceSequence) != null) {
+//								for (GKInstance secondRefSequenceInst : (Collection<GKInstance>) modifiedResidueInst.getAttributeValuesList(secondReferenceSequence)) {
+//									infModifiedResidueInst.addAttributeValue(secondReferenceSequence, secondRefSequenceInst);
+//								}
+//							}
+//							if (modifiedResidueInst.getAttributeValue("equivalentTo") != null) {
+//								for (GKInstance equivalentToInst : (Collection<GKInstance>) modifiedResidueInst.getAttributeValuesList("equivalentTo")) {
+//									infModifiedResidueInst.addAttributeValue("equivalentTo", equivalentToInst);
+//								}
+//							}
+//						}
+//						// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance' calls, which slows things.
+//						String cacheKey = InstanceUtilities.getCacheKey((GKSchemaClass) infModifiedResidueInst.getSchemClass(), infModifiedResidueInst);
+////						if (residueIdenticals.get(cacheKey) != null) {
+////							infModifiedResidueInst = residueIdenticals.get(cacheKey);
+////						} else {
+//							infModifiedResidueInst = InstanceUtilities.checkForIdenticalInstances(infModifiedResidueInst, null);
+////							residueIdenticals.put(cacheKey, infModifiedResidueInst);
+////						}
+//						infModifiedResidueInstances.add(infModifiedResidueInst);
+//						logger.info("Successfully inferred ModifiedResidue");
 					}
-					infEWASInst.addAttributeValue(hasModifiedResidue, infModifiedResidueInstances);
+//					infEWASInst.addAttributeValue(hasModifiedResidue, infModifiedResidueInstances);
 					// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance' calls, which slows things.
 					String cacheKey = InstanceUtilities.getCacheKey((GKSchemaClass) infEWASInst.getSchemClass(), infEWASInst);
 					if (ewasIdenticals.get(cacheKey) != null) {
@@ -508,5 +518,9 @@ public class EWASInferrer {
 		}
 		br.close();
 		fr.close();
+	}
+
+	public static Map<GKInstance, List<GKInstance>> getModifiedResiduesMapping() {
+		return modifiedResidueMappings;
 	}
 }
