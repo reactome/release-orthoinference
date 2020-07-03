@@ -90,7 +90,9 @@ public class EWASInferrer {
 						if (geneNameMappings.containsKey(homologueId)) {
 							infReferenceGeneProductInst.addAttributeValue(geneName, geneNameMappings.get(homologueId));
 						}
-
+						if (referenceEntityInst.getAttributeValue(comment) != null) {
+							infReferenceGeneProductInst.setAttributeValue(comment, referenceEntityInst.getAttributeValuesList(comment));
+						}
 						logger.info("ReferenceGeneProduct instance created");
 						infReferenceGeneProductInst = InstanceUtilities.checkForIdenticalInstances(infReferenceGeneProductInst, null);
 						referenceGeneProductIdenticals.put(homologueId, infReferenceGeneProductInst);

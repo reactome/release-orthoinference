@@ -52,6 +52,7 @@ public class EventsInferrer
 	private static List<GKInstance> manualHumanEvents = new ArrayList<>();
 	private static StableIdentifierGenerator stableIdentifierGenerator;
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
+	private static Long sarsCOVInfectionsPathwayDbId = 9679506L;
 
 	@SuppressWarnings("unchecked")
 	public static void inferEvents(Properties props, String referenceSpecies, String targetSpecies) throws Exception
@@ -166,11 +167,15 @@ public class EventsInferrer
 		// Gets Reaction instances of source targetSpecies (human)
 		Collection<GKInstance> reactionInstances = new ArrayList<>(); //
 		if (referenceSpeciesName.equals("Human SARS coronavirus")) {
-			 reactionInstances = (Collection<GKInstance>) dbAdaptor.fetchInstanceByAttribute(ReactionlikeEvent, relatedSpecies, "=", referenceSpeciesInst);
+			GKInstance covPathwayInst = dbAdaptor.fetchInstance(sarsCOVInfectionsPathwayDbId);
+			Set<GKInstance> uniqueReactionInstances = new HashSet<>();
+			for (GKInstance hasEventInst : (Collection<GKInstance>) covPathwayInst.getAttributeValuesList(hasEvent)) {
+				uniqueReactionInstances.addAll(getReactionsInEventHierarchy(hasEventInst));
+			}
+			reactionInstances.addAll(uniqueReactionInstances);
 		} else {
 			reactionInstances = (Collection<GKInstance>) dbAdaptor.fetchInstanceByAttribute(ReactionlikeEvent, species, "=", referenceSpeciesInstanceDbId);
 		}
-
 		List<Long> dbids = new ArrayList<>();
 		Map<Long, GKInstance> reactionMap = new HashMap<>();
 		for (GKInstance reactionInst : reactionInstances) {
@@ -204,7 +209,6 @@ public class EventsInferrer
 
 			// An inferred ReactionlikeEvent doesn't already exist for this targetSpecies, and an orthologous inference will be attempted.
 			try {
-//				System.out.println(reactionInst);
 				ReactionInferrer.inferReaction(reactionInst);
 				logger.info("Successfully inferred " + reactionInst);
 			} catch (Exception e) {
@@ -212,19 +216,30 @@ public class EventsInferrer
 				System.exit(1);
 			}
 		}
-//		System.out.println("\n\n");
-//		Map<GKInstance, Set<GKInstance>> nonHumanParticpants = OrthologousEntityGenerator.getNonHumanParticipants();
-//		for (GKInstance humanPE : nonHumanParticpants.keySet()) {
-//			System.out.println(humanPE);
-//			for (GKInstance nonHumanParticipant : nonHumanParticpants.get(humanPE)) {
-//				System.out.println("\t" + nonHumanParticipant);
-//			}
-//		}
+		Map<GKInstance, Set<GKInstance>> nonHumanParticpants = OrthologousEntityGenerator.getNonHumanParticipants();
+		for (GKInstance humanPE : nonHumanParticpants.keySet()) {
+			System.out.println(humanPE);
+			for (GKInstance nonHumanParticipant : nonHumanParticpants.get(humanPE)) {
+				System.out.println("\t" + nonHumanParticipant);
+			}
+		}
 		PathwaysInferrer.setInferredEvent(ReactionInferrer.getInferredEvent());
 		PathwaysInferrer.inferPathways(ReactionInferrer.getInferrableHumanEvents());
 		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
 		outputReport(targetSpecies);
 		logger.info("Finished orthoinference of " + targetSpeciesName);
+	}
+
+	private static Set<GKInstance> getReactionsInEventHierarchy(GKInstance eventInst) throws Exception {
+		Set<GKInstance> reactionInstances = new HashSet<>();
+		if (eventInst.getSchemClass().isa(ReactionlikeEvent)) {
+			reactionInstances.add(eventInst);
+		} else {
+			for (GKInstance hasEventInst : (Collection<GKInstance>) eventInst.getAttributeValuesList(hasEvent)) {
+				reactionInstances.addAll(getReactionsInEventHierarchy(hasEventInst));
+			}
+		}
+		return reactionInstances;
 	}
 
 	/**
