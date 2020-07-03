@@ -7,11 +7,8 @@ import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
 
-import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
-import org.gk.schema.GKSchemaAttribute;
-import org.gk.schema.GKSchemaClass;
-import org.gk.schema.SchemaClass;
+import org.gk.schema.*;
 
 
 // GenerateInstance is meant to act as a catch-all for functions that are instance-oriented, such as creating, mocking, or identical-checking.
@@ -23,6 +20,7 @@ public class InstanceUtilities {
 	private static GKInstance instanceEditInst;
 	private static GKInstance diseaseInst;
 	private static Map<String,GKInstance> mockedIdenticals = new HashMap<>();
+	private static String inferredEventsReactomeURL = "https://reactome.org/documentation/inferred-events";
 
 	// Creates new instance that will be inferred based on the incoming instances class		
 	public static GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception
@@ -141,8 +139,8 @@ public class InstanceUtilities {
 		} else {
 
 			if (inferredInst.getSchemClass().isa(PhysicalEntity)) {
-				GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(inferredInst, originalInst);
-				inferredInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+//				GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(inferredInst, originalInst);
+//				inferredInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
 			}
 
 			// COV-1-to-COV-2 Projection additions.
@@ -162,10 +160,17 @@ public class InstanceUtilities {
 				if (inferredInst.getSchemClass().isValidAttribute(includedLocation) && originalInst.getAttributeValuesList(includedLocation) != null) {
 					inferredInst.setAttributeValue(includedLocation, originalInst.getAttributeValuesList(includedLocation));
 				}
+
+				if (inferredInst.getSchemClass().isValidAttribute(summation)) {
+					createCOVSummationInstances(inferredInst, originalInst);
+				}
 			}
 
-			String updatedDisplayName = inferredInst.getDisplayName().replace("CoV-1", "CoV-2");
-			inferredInst.setDisplayName(updatedDisplayName);
+			// Inferred Summations should keep the normal displayName
+			if (!inferredInst.getSchemClass().isa(Summation)) {
+				String updatedDisplayName = inferredInst.getDisplayName().replace("CoV-1", "CoV-2");
+				inferredInst.setDisplayName(updatedDisplayName);
+			}
 			if (inferredInst.getSchemClass().isValidAttribute(name)) {
 				List<String> names = inferredInst.getAttributeValuesList(name);
 				List<String> newNames = new ArrayList<>();
@@ -188,6 +193,37 @@ public class InstanceUtilities {
 			return inferredInst;
 		}
 	}
+
+	public static void createCOVSummationInstances(GKInstance inferredInst, GKInstance originalInst) throws Exception {
+
+		System.out.println(originalInst);
+		List<GKInstance> originalSummationInstances = originalInst.getAttributeValuesList(summation);
+		String summationText = "This CoV-2 Reactome " + originalInst.getSchemClass().getName() + " instance was generated via electronic inference from a curated CoV-1 instance. In Reactome, inference is the process used to automatically create orthologous Pathways, Reactions and PhysicalEntities from our expertly curated data (" + inferredEventsReactomeURL + ").";
+		if (originalSummationInstances.size() > 0) {
+			for (GKInstance summationInst : originalSummationInstances) {
+				inferredInst.addAttributeValue(summation, createCOVSummationInst(summationInst, summationText));
+			}
+		} else {
+			inferredInst.addAttributeValue(summation, createCOVSummationInst(null, summationText));
+		}
+	}
+
+	private static GKInstance createCOVSummationInst(GKInstance summationInst, String summationText) throws Exception {
+
+		GKInstance infSummationInst = new GKInstance(dba.getSchema().getClassByName(Summation));
+		infSummationInst.setDbAdaptor(dba);
+		infSummationInst.setAttributeValue(created, instanceEditInst);
+		String summationDisplayName = summationInst != null ? summationInst.getDisplayName() : summationText;
+		infSummationInst.setDisplayName(summationDisplayName);
+		String updatedSummationText = summationInst != null ? summationText + "\n\n" + summationInst.getAttributeValue(text).toString() : summationText;
+		infSummationInst.setAttributeValue(text, updatedSummationText);
+		if (summationInst != null) {
+			infSummationInst.setAttributeValue(literatureReference, summationInst.getAttributeValuesList(literatureReference));
+		}
+		infSummationInst = checkForIdenticalInstances(infSummationInst, summationInst);
+		return infSummationInst;
+	}
+
 	// Checks if the instanceToCheck already contains the instanceToUse in the multi-value attribute
 	@SuppressWarnings("unchecked")
 	public static GKInstance addAttributeValueIfNecessary(GKInstance instanceToBeCheckedForExistingAttribute, GKInstance instanceContainingAttributeToBeChecked, String attribute) throws Exception

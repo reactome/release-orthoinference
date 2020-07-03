@@ -14,7 +14,6 @@ import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
 import org.gk.persistence.MySQLAdaptor;
-import org.gk.schema.InvalidAttributeException;
 
 public class ReactionInferrer {
 
@@ -48,7 +47,8 @@ public class ReactionInferrer {
 			GKInstance infReactionInst = InstanceUtilities.createNewInferredGKInstance(reactionInst);
 			infReactionInst.addAttributeValue(name, reactionInst.getAttributeValuesList(name));
 			infReactionInst.addAttributeValue(goBiologicalProcess, reactionInst.getAttributeValue(goBiologicalProcess));
-			infReactionInst.addAttributeValue(summation, summationInst);
+//			infReactionInst.addAttributeValue(summation, summationInst);
+			InstanceUtilities.createCOVSummationInstances(infReactionInst, reactionInst);
 			infReactionInst.addAttributeValue(evidenceType, evidenceTypeInst);
 			infReactionInst.addAttributeValue(_displayName, reactionInst.getAttributeValue(_displayName));
 
@@ -89,8 +89,8 @@ public class ReactionInferrer {
 								infReactionInst.addAttributeValue(releaseDate, dateOfRelease);
 							}
 
-							GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infReactionInst, reactionInst);
-							infReactionInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+//							GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infReactionInst, reactionInst);
+//							infReactionInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
 							// FetchIdenticalInstances would just return the instance being inferred. Since this step is meant to always
 							// add a new inferred instance, the storeInstance method is just called here.
 

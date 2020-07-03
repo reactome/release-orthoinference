@@ -227,7 +227,7 @@ public class OrthologousEntityGenerator {
 			}
 			logger.info("Complex protein counts. Total: " + complexTotalProteinCounts + "  Inferrable: " + complexInferrableProteinCounts);
 			GKInstance infComplexInst = InstanceUtilities.createNewInferredGKInstance(complexInst);
-			infComplexInst.addAttributeValue(summation, complexSummationInst);
+//			infComplexInst.addAttributeValue(summation, complexSummationInst);
 			infComplexInst.addAttributeValue(name, complexInst.getAttributeValue(name));
 			List<GKInstance> infComponentInstances = new ArrayList<>();
 			// Inference handling is different depending on if it is a Complex or a Polymer. Complexes will infer all 'components' while Polymers will infer all 'repeatedUnits'.

@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.sql.SQLOutput;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
 
@@ -147,10 +146,10 @@ public class EventsInferrer
 			EWASInferrer.setAltRefDbToFalse();
 		}
 		createAndSetSpeciesInstance(targetSpeciesName);
-		setSummationInstance();
+//		setSummationInstance();
 		setEvidenceTypeInstance();
 		InstanceUtilities.setDiseaseInstance(dbAdaptor.fetchInstance(9683915L));
-		OrthologousEntityGenerator.setComplexSummationInstance();
+//		OrthologousEntityGenerator.setComplexSummationInstance();
 
 /**
  *  Start of ReactionlikeEvent inference. Retrieves all human ReactionlikeEvents, and attempts to infer each for the targetSpecies.

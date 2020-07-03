@@ -91,7 +91,8 @@ public class PathwaysInferrer {
 	private static void inferPathway(GKInstance sourcePathwayReferralInst) throws Exception {
 		GKInstance infPathwayInst = InstanceUtilities.createNewInferredGKInstance(sourcePathwayReferralInst);
 		infPathwayInst.addAttributeValue(name, sourcePathwayReferralInst.getAttributeValuesList(name));
-		infPathwayInst.addAttributeValue(summation, summationInst);
+//		infPathwayInst.addAttributeValue(summation, summationInst);
+		InstanceUtilities.createCOVSummationInstances(infPathwayInst, sourcePathwayReferralInst);
 		if (infPathwayInst.getSchemClass().isValidAttribute(releaseDate))
 		{
 			infPathwayInst.addAttributeValue(releaseDate, dateOfRelease);
@@ -136,8 +137,8 @@ public class PathwaysInferrer {
 
 		inferredEventIdenticals.put(sourcePathwayReferralInst, infPathwayInst);
 
-		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
-		infPathwayInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+//		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
+//		infPathwayInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
 		//
 		dba.storeInstance(infPathwayInst);
 
