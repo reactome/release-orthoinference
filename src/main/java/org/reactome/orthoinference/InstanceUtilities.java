@@ -40,7 +40,7 @@ public class InstanceUtilities {
 			for (Object compartmentInst : instanceToBeInferred.getAttributeValuesList(compartment)) 
 			{
 				GKInstance compartmentInstGk = (GKInstance) compartmentInst;
-				if (compartmentInstGk.getSchemClass().isa(Compartment)) 
+				if (compartmentInstGk.getSchemClass().isa(Compartment))
 				{
 					inferredInst.addAttributeValue(compartment, compartmentInstGk);
 				} else {
@@ -197,7 +197,7 @@ public class InstanceUtilities {
 	public static void createCOVSummationInstances(GKInstance inferredInst, GKInstance originalInst) throws Exception {
 
 		List<GKInstance> originalSummationInstances = originalInst.getAttributeValuesList(summation);
-		String summationText = "This CoV-2 Reactome " + originalInst.getSchemClass().getName() + " instance was generated via electronic inference from a curated CoV-1 instance. In Reactome, inference is the process used to automatically create orthologous Pathways, Reactions and PhysicalEntities from our expertly curated data (" + inferredEventsReactomeURL + ").";
+		String summationText = "This COVID-19 " + originalInst.getSchemClass().getName() + " instance was generated via electronic inference from a curated CoV-1 (Human SARS coronavirus) Reactome instance. In Reactome, inference is the process used to automatically create orthologous Pathways, Reactions and PhysicalEntities from our expertly curated data (" + inferredEventsReactomeURL + ").";
 		if (originalSummationInstances.size() > 0) {
 			for (GKInstance summationInst : originalSummationInstances) {
 				inferredInst.addAttributeValue(summation, createCOVSummationInst(summationInst, summationText));

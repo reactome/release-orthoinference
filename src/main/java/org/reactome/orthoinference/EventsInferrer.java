@@ -20,7 +20,6 @@ import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
 import org.gk.persistence.MySQLAdaptor;
-import org.gk.schema.GKSchemaClass;
 import org.gk.schema.InvalidAttributeException;
 import org.gk.schema.SchemaClass;
 import org.json.simple.JSONArray;
@@ -234,14 +233,6 @@ public class EventsInferrer
 //			}
 //			outputLine += "\n";
 //			Files.write(Paths.get("EWAS-ModifiedResidues-Mappings.tsv"), outputLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-//		}
-
-//		Map<GKInstance, Set<GKInstance>> nonHumanParticpants = OrthologousEntityGenerator.getNonHumanParticipants();
-//		for (GKInstance humanPE : nonHumanParticpants.keySet()) {
-//			System.out.println(humanPE);
-//			for (GKInstance nonHumanParticipant : nonHumanParticpants.get(humanPE)) {
-//				System.out.println("\t" + nonHumanParticipant);
-//			}
 //		}
 		PathwaysInferrer.setInferredEvent(ReactionInferrer.getInferredEvent());
 		PathwaysInferrer.inferPathways(ReactionInferrer.getInferrableHumanEvents());

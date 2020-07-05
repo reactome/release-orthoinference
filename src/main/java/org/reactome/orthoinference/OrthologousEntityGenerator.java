@@ -9,10 +9,7 @@ import static org.gk.model.ReactomeJavaConstants.*;
 
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
-import org.gk.schema.GKSchemaClass;
-import org.gk.schema.InvalidAttributeException;
-import org.gk.schema.InvalidAttributeValueException;
-import org.gk.schema.SchemaClass;
+import org.gk.schema.*;
 
 public class OrthologousEntityGenerator {
 	
@@ -30,8 +27,10 @@ public class OrthologousEntityGenerator {
 	private static Map<String,GKInstance> complexIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> entitySetIdenticals = new HashMap<>();
 	private static Map<GKInstance, Set<GKInstance>> nonHumanParticpants = new HashMap<>();
+	private static Map<GKInstance, GKInstance> inferredSARSIdenticals = new HashMap<>();
+	private static Map<GKInstance, GKInstance> humanComplexIdenticals = new HashMap<>();
 
-/** The heart of the OrthoInference process. This function takes PhysicalEntity (PE) instances and will infer those that are EWAS', Complexes/Polymers, or EntitySets.
+	/** The heart of the OrthoInference process. This function takes PhysicalEntity (PE) instances and will infer those that are EWAS', Complexes/Polymers, or EntitySets.
 	 The function's arguments are an incoming PE instance and an override attribute. Instances that are comprised of PE's will often recursively call this createOrthoEntity function
 	 on constituent PE's with the override attribute set to 'true'. This ensures that these PE's are inferred, despite the fact that they might not pass some filter criteria.
 	 This is often handled using 'mock' instances (i.e. 'ghost instances' from Perl script), which allow a PE to be inferred without having to commit a 'real' instance to the DB.
@@ -51,6 +50,12 @@ public class OrthologousEntityGenerator {
 		if (orthologousEntityIdenticals.get(entityInst) != null) {
 			logger.info("Inferred PE instance already exists");
 			return orthologousEntityIdenticals.get(entityInst);
+		}
+
+		GKInstance entitySpeciesInst = (GKInstance) entityInst.getAttributeValue(species);
+		if (entitySpeciesInst != null && entitySpeciesInst.getDBID().equals(48887L)) {
+			inferSARSParticipants(entityInst);
+			return entityInst;
 		}
 
 		// Checks that a species attribute exists in either the current instance or in constituent instances.
@@ -97,11 +102,6 @@ public class OrthologousEntityGenerator {
 		} else {
 			logger.warn("Unknown PhysicalEntity class: " + entityInst.getClass());
 		}
-		GKInstance entitySpeciesInst = (GKInstance) entityInst.getAttributeValue(species);
-		if (entitySpeciesInst != null && entitySpeciesInst.getDBID().equals(48887L)) {
-			inferNonHumanParticipants(entityInst);
-			return entityInst;
-		}
 		if (override)
 		{
 			return infEntityInst;
@@ -111,30 +111,156 @@ public class OrthologousEntityGenerator {
 			return infEntityInst;
 	}
 
-	private static void inferNonHumanParticipants(GKInstance entityInst) throws Exception {
-		Set<GKInstance> containedInstances= org.gk.model.InstanceUtilities.getContainedInstances(entityInst,
+	private static GKInstance inferSARSParticipants(GKInstance entityInst) throws Exception {
+
+		if (humanComplexIdenticals.get(entityInst) == null) {
+			Set<GKInstance> containedInstances = getComplexEntitySetContainedInstances(entityInst);
+
+			boolean hasContainedSARSInstance = false;
+			for (GKInstance containedInst : containedInstances) {
+				if (hasSARSSpecies(containedInst)) {
+					hasContainedSARSInstance = true;
+					if (inferredSARSIdenticals.get(containedInst) == null) {
+						GKInstance inferredSARSEntityInst = createOrthoEntity(containedInst, false);
+						inferredSARSIdenticals.put(containedInst, inferredSARSEntityInst);
+					}
+				}
+			}
+
+			if (hasContainedSARSInstance) {
+				GKInstance copiedHumanComplex = InstanceUtilities.createNewInferredGKInstance(entityInst);
+				for (SchemaAttribute complexAttr : (Collection<SchemaAttribute>) entityInst.getSchemClass().getAttributes()) {
+					if (!complexAttr.getName().equals(authored)
+							&& !complexAttr.getName().equals(created)
+							&& !complexAttr.getName().equals(modified)
+							&& !complexAttr.getName().equals(relatedSpecies)
+							&& !complexAttr.getName().equals(disease)
+							&& !complexAttr.getName().equals(reviewed)
+							&& !complexAttr.getName().equals(inferredFrom)
+							&& !complexAttr.getName().equals(inferredTo)
+							&& !complexAttr.getName().equals(DB_ID)
+							&& !complexAttr.getName().equals(stableIdentifier)
+							&& !complexAttr.getName().equals(revised)
+							&& !complexAttr.getName().equals(edited)
+							&& !complexAttr.getName().equals(compartment)
+							&& !complexAttr.getName().equals(species)) {
+
+						if (entityInst.getAttributeValuesList(complexAttr).size() > 0) {
+							for (Object attrValue : entityInst.getAttributeValuesList(complexAttr)) {
+								copiedHumanComplex.addAttributeValue(complexAttr, attrValue);
+							}
+						}
+					}
+				}
+
+				List<GKInstance> components = (List<GKInstance>) copiedHumanComplex.getAttributeValuesList(hasComponent);
+				List<GKInstance> updatedComponents = new ArrayList<>();
+				for (GKInstance component : components) {
+					if (hasSARSSpecies(component)) {
+						updatedComponents.add(inferredSARSIdenticals.get(component));
+					} else {
+						updatedComponents.add(component);
+					}
+				}
+				copiedHumanComplex.setAttributeValue(hasComponent, updatedComponents);
+
+				copiedHumanComplex = InstanceUtilities.checkForIdenticalInstances(copiedHumanComplex, entityInst);
+
+				copiedHumanComplex = InstanceUtilities.addAttributeValueIfNecessary(copiedHumanComplex, entityInst, inferredFrom);
+				dba.updateInstanceAttribute(copiedHumanComplex, inferredFrom);
+				entityInst = InstanceUtilities.addAttributeValueIfNecessary(entityInst, copiedHumanComplex, inferredTo);
+				dba.updateInstanceAttribute(entityInst, inferredTo);
+
+				humanComplexIdenticals.put(entityInst, copiedHumanComplex);
+
+
+				/////// This code was used for troubleshooting and to see how far down 'multi-species' instances went in the Complex/EntitySet hierarchy
+//			for (String attr : complexAttrs) {
+//				System.out.println(attr);
+//			}
+//			for (GKInstance containedInst : containedInstances) {
+
+//				if (hasSARSSpecies(containedInst)) {
+//////					System.out.println("\t" + containedInst);
+////					Set<GKInstance> subContainedInstances = getComplexEntitySetContainedInstances(containedInst);
+////					for (GKInstance subContainedInst : subContainedInstances) {
+////						if (hasSARSSpecies(subContainedInst)) {
+//////							System.out.println("\t\t" + subContainedInst);
+//////							Set<GKInstance> subSubContainedInstances = getComplexEntitySetContainedInstances(subContainedInst);
+//////							for (GKInstance subSubContainedInst : subSubContainedInstances) {
+//////								if (hasSARSSpecies(subSubContainedInst)) {
+////////									System.out.println("\t\t\t" + subSubContainedInst);
+//////									Set<GKInstance> subSubSubContainedInstances = getComplexEntitySetContainedInstances(subSubContainedInst);
+//////									for (GKInstance subSubSubContainedInst : subSubSubContainedInstances) {
+//////										if (hasSARSSpecies(subSubSubContainedInst)) {
+////////											System.out.println("\t\t\t\t" + subSubSubContainedInst);
+//////										} else if (hasContainedSARSInstance(subSubSubContainedInst)) {
+//////
+//////										} else {
+//////											System.out.println(subSubSubContainedInst.getAttributeValue(species) + "\t\t" + subSubSubContainedInst);
+//////										}
+//////									}
+//////								} else if (hasContainedSARSInstance(subSubContainedInst)) {
+//////
+//////								}
+//////							}
+////						} else if (hasContainedSARSInstance(subContainedInst)) {
+////
+////						} else {
+////							System.out.println(subContainedInst.getAttributeValue(species) + "\t\t" + subContainedInst);
+////						}
+////					}
+//				} else if (hasContainedSARSInstance(containedInst)) {
+////					Set<GKInstance> subContainedInstances = getComplexEntitySetContainedInstances(containedInst);
+////					System.out.println(subContainedInstances.size());
+////					for (GKInstance subContainedInst : subContainedInstances) {
+////						System.out.println(subContainedInst);
+////						if (hasSARSSpecies(subContainedInst)) {
+////							System.out.println("\t\tTWOO: " + subContainedInst);
+////						} else if (hasContainedSARSInstance(subContainedInst)) {
+////							System.out.println("\t\t\tTEE: " + subContainedInst);
+////						} else {
+////							System.out.println("\t\t\t\t\t\t\tDUDDD: " + subContainedInst);
+////						}
+////					}
+//				} else {
+////					System.out.println("\t\t\t\t\tDUD: " + containedInst);
+////					System.out.println(containedInst.getAttributeValue(species) + "\t\t" + containedInst);
+//				}
+//			}
+				/////////////
+
+			}
+
+		}
+		return humanComplexIdenticals.get(entityInst);
+	}
+
+	private static boolean hasSARSSpecies(GKInstance entityInst) throws Exception {
+		if (entityInst.getSchemClass().isValidAttribute(species)) {
+			GKInstance speciesInst = (GKInstance) entityInst.getAttributeValue(species);
+			return speciesInst != null && speciesInst.getDBID().equals(9678119L);
+		}
+		return false;
+	}
+
+	private static boolean hasContainedSARSInstance(GKInstance subEntityInst) throws Exception {
+		boolean hasContainedSARSInstance = false;
+		for (GKInstance subContainedInst : getComplexEntitySetContainedInstances(subEntityInst)) {
+			if (hasSARSSpecies(subContainedInst)) {
+				hasContainedSARSInstance = true;
+			}
+		}
+		return hasContainedSARSInstance;
+	}
+
+	private static Set<GKInstance> getComplexEntitySetContainedInstances(GKInstance entityInst) throws Exception {
+		return org.gk.model.InstanceUtilities.getContainedInstances(entityInst,
 				ReactomeJavaConstants.hasMember,
 				ReactomeJavaConstants.hasCandidate,
 				ReactomeJavaConstants.hasComponent,
 				ReactomeJavaConstants.repeatedUnit
 		);
-		for (GKInstance containedInst : containedInstances) {
-			if (containedInst.getSchemClass().isValidAttribute(species)) {
-				Collection<GKInstance> containedInstSpecies = (Collection<GKInstance>) containedInst.getAttributeValuesList(species);
-				for (GKInstance conSpeciesInst : containedInstSpecies) {
-					if (conSpeciesInst.getDBID().equals(9678119L)) {
-//						System.out.println("\t\t\t\t" + entityInst + "\t" + containedInst);
-						if (nonHumanParticpants.get(entityInst) != null) {
-							nonHumanParticpants.get(entityInst).add(containedInst);
-						} else {
-							Set<GKInstance> singleSet = new HashSet<>(Arrays.asList(containedInst));
-							nonHumanParticpants.put(entityInst, singleSet);
-						}
-					}
-				}
-
-			}
-		}
 	}
 
 	// Function that first tries to infer any EWAS' associated with the instance. For those that have more than 1 returned EWAS instance, 
