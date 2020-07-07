@@ -212,10 +212,11 @@ public class InstanceUtilities {
 		GKInstance infSummationInst = new GKInstance(dba.getSchema().getClassByName(Summation));
 		infSummationInst.setDbAdaptor(dba);
 		infSummationInst.setAttributeValue(created, instanceEditInst);
-		String summationDisplayName = summationInst != null ? summationInst.getDisplayName() : summationText;
-		infSummationInst.setDisplayName(summationDisplayName);
+//		String summationDisplayName = summationInst != null ? summationInst.getDisplayName() : summationText;
+//		infSummationInst.setDisplayName(summationDisplayName);
 		String updatedSummationText = summationInst != null ? summationText + "\n\n" + summationInst.getAttributeValue(text).toString() : summationText;
 		infSummationInst.setAttributeValue(text, updatedSummationText);
+		infSummationInst.setDisplayName(updatedSummationText);
 		if (summationInst != null) {
 			infSummationInst.setAttributeValue(literatureReference, summationInst.getAttributeValuesList(literatureReference));
 		}

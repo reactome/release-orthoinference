@@ -51,7 +51,7 @@ public class EventsInferrer
 	private static List<GKInstance> manualHumanEvents = new ArrayList<>();
 	private static StableIdentifierGenerator stableIdentifierGenerator;
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
-	private static Long sarsCOVInfectionsPathwayDbId = 9679506L;
+	private static Long sarsCOV1InfectionsPathwayDbId = 9678108L;
 
 	@SuppressWarnings("unchecked")
 	public static void inferEvents(Properties props, String referenceSpecies, String targetSpecies) throws Exception
@@ -66,6 +66,7 @@ public class EventsInferrer
 		int port = Integer.valueOf(props.getProperty("release.database.port"));
 
 		dbAdaptor = new MySQLAdaptor(host, database, username, password, port);
+		System.out.println(dbAdaptor.fetchMaxDbId());
 		dbAdaptorPrev = new MySQLAdaptor(host, prevDatabase, username, password, port);
 		if (dbAdaptor == null || dbAdaptorPrev == null) {
 			logger.fatal("Null MySQLAdaptor, terminating orthoinference");
@@ -166,7 +167,7 @@ public class EventsInferrer
 		// Gets Reaction instances of source targetSpecies (human)
 		Collection<GKInstance> reactionInstances = new ArrayList<>(); //
 		if (referenceSpeciesName.equals("Human SARS coronavirus")) {
-			GKInstance covPathwayInst = dbAdaptor.fetchInstance(sarsCOVInfectionsPathwayDbId);
+			GKInstance covPathwayInst = dbAdaptor.fetchInstance(sarsCOV1InfectionsPathwayDbId);
 			Set<GKInstance> uniqueReactionInstances = new HashSet<>();
 			for (GKInstance hasEventInst : (Collection<GKInstance>) covPathwayInst.getAttributeValuesList(hasEvent)) {
 				uniqueReactionInstances.addAll(getReactionsInEventHierarchy(hasEventInst));
@@ -216,6 +217,7 @@ public class EventsInferrer
 			}
 		}
 
+		// Outputs a file that contains all EWAS' that were inferred and their contained hasModifiedResidues.
 //		Map<GKInstance, List<GKInstance>> modifiedResiduesMapping = EWASInferrer.getModifiedResiduesMapping();
 //		String header = "COV-1 EWAS\tCOV-1 ModifiedResidues\n";
 //		Files.write(Paths.get("EWAS-ModifiedResidues-Mappings.tsv"), header.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
@@ -234,11 +236,26 @@ public class EventsInferrer
 //			outputLine += "\n";
 //			Files.write(Paths.get("EWAS-ModifiedResidues-Mappings.tsv"), outputLine.getBytes(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
 //		}
+
 		PathwaysInferrer.setInferredEvent(ReactionInferrer.getInferredEvent());
 		PathwaysInferrer.inferPathways(ReactionInferrer.getInferrableHumanEvents());
 		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
 		outputReport(targetSpecies);
 		logger.info("Finished orthoinference of " + targetSpeciesName);
+
+		System.out.println(dbAdaptor.fetchMaxDbId());
+
+		// Find inferred instances that are referred to by multiple curated instances
+		// Likely due to lack of distinguishing 'defining' attributes.
+//		Collection<GKInstance> inferredInstances = dbAdaptor.fetchInstancesByClass(Event);
+//		inferredInstances.addAll(dbAdaptor.fetchInstancesByClass(PhysicalEntity));
+//		for (GKInstance inferredInst : inferredInstances) {
+//			GKInstance createdInst = (GKInstance) inferredInst.getAttributeValue(created);
+//			Collection<GKInstance> inferredFromInstances = inferredInst.getAttributeValuesList(inferredFrom);
+//			if (createdInst != null && createdInst.getDisplayName().contains("Justin") && inferredFromInstances.size() > 1) {
+//				System.out.println(inferredInst);
+//			}
+//		}
 	}
 
 	private static Set<GKInstance> getReactionsInEventHierarchy(GKInstance eventInst) throws Exception {

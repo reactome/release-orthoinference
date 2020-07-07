@@ -74,7 +74,7 @@ public class PathwaysInferrer {
 		for (GKInstance sourcePathwayReferralInst : sourcePathwayReferralInstances)
 		{
 			logger.info("Generating inferred Pathway: " + sourcePathwayReferralInst);
-			if (inferredEventIdenticals.get(sourcePathwayReferralInst) == null)
+			if (inferredEventIdenticals.get(sourcePathwayReferralInst) == null && !sourcePathwayReferralInst.getDBID().equals(9679191L))
 			{
 				inferPathway(sourcePathwayReferralInst);
 			} else {

@@ -128,6 +128,8 @@ public class OrthologousEntityGenerator {
 			}
 
 			if (hasContainedSARSInstance) {
+				// Outputs Human Complexes/EntitySets that contain CoV-1 instances.
+//				System.out.println(entityInst);
 				GKInstance copiedHumanComplex = InstanceUtilities.createNewInferredGKInstance(entityInst);
 				for (SchemaAttribute complexAttr : (Collection<SchemaAttribute>) entityInst.getSchemClass().getAttributes()) {
 					if (!complexAttr.getName().equals(authored)
@@ -236,7 +238,7 @@ public class OrthologousEntityGenerator {
 		return humanComplexIdenticals.get(entityInst);
 	}
 
-	private static boolean hasSARSSpecies(GKInstance entityInst) throws Exception {
+	public static boolean hasSARSSpecies(GKInstance entityInst) throws Exception {
 		if (entityInst.getSchemClass().isValidAttribute(species)) {
 			GKInstance speciesInst = (GKInstance) entityInst.getAttributeValue(species);
 			return speciesInst != null && speciesInst.getDBID().equals(9678119L);

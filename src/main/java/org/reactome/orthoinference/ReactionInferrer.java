@@ -3,11 +3,7 @@ package org.reactome.orthoinference;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -44,6 +40,34 @@ public class ReactionInferrer {
 		{
 			///// The beginning of an inference process:
 			// Creates inferred instance of reaction.
+
+			// This code screens Reactions that will not need to be inferred.
+			Collection<GKInstance> reactionComponents = org.gk.model.InstanceUtilities.getReactionParticipants(reactionInst);
+			Set<GKInstance> containedComponents = new HashSet<>();
+			boolean hasContainedSARSInstance = false;
+			for (GKInstance reactionComponent : reactionComponents) {
+				containedComponents.add(reactionComponent);
+				containedComponents.addAll(org.gk.model.InstanceUtilities.getContainedInstances(reactionComponent,
+						hasComponent,
+						hasCandidate,
+						hasMember,
+						repeatedUnit));
+			}
+
+			for (GKInstance containedComponent : containedComponents) {
+				if (OrthologousEntityGenerator.hasSARSSpecies(containedComponent)) {
+					hasContainedSARSInstance = true;
+				}
+			}
+
+			if (!hasContainedSARSInstance) {
+				inferredEvent.put(reactionInst, reactionInst);
+				inferrableHumanEvents.add(reactionInst);
+				return;
+			}
+			// End of screening code.
+
+
 			GKInstance infReactionInst = InstanceUtilities.createNewInferredGKInstance(reactionInst);
 			infReactionInst.addAttributeValue(name, reactionInst.getAttributeValuesList(name));
 			infReactionInst.addAttributeValue(goBiologicalProcess, reactionInst.getAttributeValue(goBiologicalProcess));
@@ -56,7 +80,6 @@ public class ReactionInferrer {
 			// Total proteins are stored in reactionProteinCounts[0], inferrable proteins in [1], and the maximum number of homologues for any entity involved in index [2].
 			// Reactions with no proteins/EWAS (Total = 0) are not inferred.
 			List<Integer> reactionProteinCounts = ProteinCountUtility.getDistinctProteinCounts(reactionInst);
-			System.out.println(reactionProteinCounts);
 			int reactionTotalProteinCounts = reactionProteinCounts.get(0);
 //			if (reactionTotalProteinCounts > 0)
 //			{
