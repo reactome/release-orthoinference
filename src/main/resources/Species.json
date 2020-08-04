@@ -328,5 +328,17 @@
 			"Rattus norvegicus"
 		],
 		"abbreviation": "RNO"
+	},
+	"cov1": {
+		"name" : [
+			"Human SARS coronavirus"
+		],
+		"abbreviation": "COV"
+	},
+	"cov2": {
+		"name": [
+			"Severe acute respiratory syndrome coronavirus 2"
+		],
+		"abbreviation": "COV"
 	}
 }

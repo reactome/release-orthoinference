@@ -45,7 +45,7 @@ public class OrthologousPathwayDiagramGenerator {
         // Iterate through each PathwayDiagram instance looking for those associated with the reference species.
         for (GKInstance diagramInst: (Collection<GKInstance>) dba.fetchInstancesByClass(ReactomeJavaConstants.PathwayDiagram)) {
             GKInstance pathwayInst = (GKInstance) diagramInst.getAttributeValue(ReactomeJavaConstants.representedPathway);
-            if (isSameSpecies(pathwayInst, referenceSpeciesInst)) {
+            if (pathwayInst.getAttributeValue(ReactomeJavaConstants.disease) != null) {
                 // When a PathwayDiagram instance associated with the reference species is found, iterate through all of it's OrthologousEvent instances.
                 for (GKInstance orthoPathwayInst : (Collection<GKInstance>) pathwayInst.getAttributeValuesList(ReactomeJavaConstants.orthologousEvent)) {
                     // Look for OrthologousEvent instances that match the current target species and that are electronically inferred.
@@ -60,7 +60,7 @@ public class OrthologousPathwayDiagramGenerator {
 
     public GKInstance generateOrthologousPathwayDiagram(GKInstance orthoPathwayInst, GKInstance pathwayInst, GKInstance diagramInst, PredictedPathwayDiagramGeneratorFromDB diagramGenerator) throws Exception {
         GKInstance orthoDiagram = null;
-        if (isSameSpecies(orthoPathwayInst, targetSpeciesInst) && isElectronicallyInferred(orthoPathwayInst)) {
+        if (isElectronicallyInferred(orthoPathwayInst)) {
             // Generate Orthologous PathwayDiagram instance using generatePredictedDiagram method from PredictedPathwayDiagramGeneratorFromDB.
             // This method is the one needed to build PathwayDiagrams for species-specific Pathway instances.
             logger.info("Building inferred Pathway diagram for " + orthoPathwayInst);
@@ -72,6 +72,9 @@ public class OrthologousPathwayDiagramGenerator {
     // Compare the species attribute in a Pathway with another species instance for equality
     public boolean isSameSpecies(GKInstance pathwayInst, GKInstance speciesInst) throws Exception {
         GKInstance pathwaySpeciesInst = (GKInstance) pathwayInst.getAttributeValue(ReactomeJavaConstants.species);
+        if (pathwayInst.getAttributeValue(ReactomeJavaConstants.relatedSpecies) != null) {
+            pathwaySpeciesInst = (GKInstance) pathwayInst.getAttributeValue(ReactomeJavaConstants.relatedSpecies);
+        }
         return pathwaySpeciesInst.equals(speciesInst);
     }
 

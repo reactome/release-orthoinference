@@ -80,13 +80,13 @@ public class SkipInstanceChecker {
 		if (reactionInst.getAttributeValue("relatedSpecies") != null)
 		{
 			logger.info(reactionInst + " has related species -- skipping");
-			return true;
+//			return true;
 		}
 		// it is a disease reaction
 		if (reactionInst.getAttributeValue(disease) != null)
 		{
 			logger.info(reactionInst + " is a disease reaction -- skipping");
-			return true;
+//			return true;
 		}
 		// it is manually inferred
 		if (reactionInst.getAttributeValue(inferredFrom) != null)
@@ -99,7 +99,7 @@ public class SkipInstanceChecker {
 		if (speciesInstances.size() > 1)
 		{
 			logger.info(reactionInst + " has multiple species -- skipping");
-			return true;
+//			return true;
 		}
 		return false;
 	}

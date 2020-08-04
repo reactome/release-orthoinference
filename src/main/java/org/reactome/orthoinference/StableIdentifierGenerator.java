@@ -43,14 +43,30 @@ public class StableIdentifierGenerator {
 
             // For now, Human is hard-coded as the source species, so we replace the stableIdentifier source species based on that assumption
             String sourceIdentifier = (String) stableIdentifierInst.getAttributeValue(identifier);
-            String targetIdentifier = sourceIdentifier.replace("HSA", speciesAbbreviation);
+
+            // COV-1-to-COV-2 Projection Code
+            String sourceAbbreviation = "HSA";
+            if (sourceIdentifier.contains("COV") && !originalInst.getSchemClass().isa(ReactionlikeEvent)) {
+                sourceAbbreviation = "COV";
+            }
+            String targetIdentifier = sourceIdentifier.replace(sourceAbbreviation, speciesAbbreviation);
+            if (originalInst.getSchemClass().isa(Event)) {
+                targetIdentifier = targetIdentifier.replace("COV", "HSA");
+            }
+
             // Paralogs will have the same base stable identifier, but we want to denote when that happens.
             // We pull the value from `seenOrthoIds`, increment it and then add it to the stable identifier name (eg: R-MMU-123456-2)
-            int paralogCount = Optional.ofNullable(seenOrthoIds.get(targetIdentifier)).orElse(0) + 1;
-            seenOrthoIds.put(targetIdentifier, paralogCount);
-            if (paralogCount > 1) {
-                targetIdentifier += "-" + paralogCount;
-            }
+//            int paralogCount = Optional.ofNullable(seenOrthoIds.get(targetIdentifier)).orElse(0) + 1;
+//            seenOrthoIds.put(targetIdentifier, paralogCount);
+//            if (paralogCount > 1) {
+//                targetIdentifier += "-" + paralogCount;
+//            }
+
+
+            targetIdentifier += "-2";
+//            String sourceDBID = originalInst.getDBID().toString();
+//            targetIdentifier = targetIdentifier.replace(sourceDBID, inferredInst.getDBID().toString());
+            //
 
             // Check that the stable identifier instance does not already exist in DB
             Collection<GKInstance> existingStableIdentifier = (Collection<GKInstance>) dba.fetchInstanceByAttribute("StableIdentifier", "identifier", "=", targetIdentifier);

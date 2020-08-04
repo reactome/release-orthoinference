@@ -24,12 +24,14 @@ public class Main {
 			speciesCode = args[0];
 		} else {
 			logger.fatal("Please include a 4-letter species code as the first argument (eg: mmus)");
-			System.exit(0);
+//			System.exit(0);
 		}
+		String referenceSpeciesCode = "cov1";
+		speciesCode="cov2";
 
 		Properties props = new Properties();
 		props.load(new FileInputStream(pathToConfig));
-		EventsInferrer.inferEvents(props, speciesCode);
+		EventsInferrer.inferEvents(props, referenceSpeciesCode, speciesCode);
 	}
 
 }

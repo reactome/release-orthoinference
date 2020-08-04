@@ -74,7 +74,7 @@ public class PathwaysInferrer {
 		for (GKInstance sourcePathwayReferralInst : sourcePathwayReferralInstances)
 		{
 			logger.info("Generating inferred Pathway: " + sourcePathwayReferralInst);
-			if (inferredEventIdenticals.get(sourcePathwayReferralInst) == null)
+			if (inferredEventIdenticals.get(sourcePathwayReferralInst) == null && !sourcePathwayReferralInst.getDBID().equals(9679191L))
 			{
 				inferPathway(sourcePathwayReferralInst);
 			} else {
@@ -91,7 +91,8 @@ public class PathwaysInferrer {
 	private static void inferPathway(GKInstance sourcePathwayReferralInst) throws Exception {
 		GKInstance infPathwayInst = InstanceUtilities.createNewInferredGKInstance(sourcePathwayReferralInst);
 		infPathwayInst.addAttributeValue(name, sourcePathwayReferralInst.getAttributeValuesList(name));
-		infPathwayInst.addAttributeValue(summation, summationInst);
+//		infPathwayInst.addAttributeValue(summation, summationInst);
+		InstanceUtilities.createCOVSummationInstances(infPathwayInst, sourcePathwayReferralInst);
 		if (infPathwayInst.getSchemClass().isValidAttribute(releaseDate))
 		{
 			infPathwayInst.addAttributeValue(releaseDate, dateOfRelease);
@@ -109,10 +110,41 @@ public class PathwaysInferrer {
 			logger.warn(sourcePathwayReferralInst + " is a ReactionLikeEvent, which is unexpected -- refer to infer_events.pl");
 		}
 		infPathwayInst.setDisplayName(sourcePathwayReferralInst.getDisplayName());
+
+		// COV-1-to-COV-2 Projection code
+		if (sourcePathwayReferralInst.getAttributeValue(disease) != null) {
+			infPathwayInst.setAttributeValue(disease, InstanceUtilities.getDiseaseInst());
+		}
+
+		if (sourcePathwayReferralInst.getAttributeValuesList(literatureReference) != null) {
+			infPathwayInst.setAttributeValue(literatureReference, sourcePathwayReferralInst.getAttributeValuesList(literatureReference));
+		}
+
+		if (sourcePathwayReferralInst.getAttributeValuesList(definition) != null) {
+			for (String definitionString : (Collection<String>) sourcePathwayReferralInst.getAttributeValuesList(definition)) {
+				infPathwayInst.addAttributeValue(definition, definitionString);
+			}
+		}
+		String updatedDisplayName = infPathwayInst.getDisplayName().replace("CoV-1", "CoV-2");
+		infPathwayInst.setDisplayName(updatedDisplayName);
+		List<String> names = infPathwayInst.getAttributeValuesList(name);
+		List<String> newNames = new ArrayList<>();
+		for (String name : names) {
+			String newName = name.replace("CoV-1", "CoV-2");
+			newNames.add(newName);
+		}
+		infPathwayInst.setAttributeValue(name, newNames);
+
 		inferredEventIdenticals.put(sourcePathwayReferralInst, infPathwayInst);
-		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
-		infPathwayInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+
+//		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
+//		infPathwayInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+		//
 		dba.storeInstance(infPathwayInst);
+
+//		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
+//		infPathwayInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
+//		dba.updateInstanceAttribute(infPathwayInst, stableIdentifier);
 
 		// This was replaced with addAttributeValueIfNecessary due to a bug where a Pathway instance's 'OrthologousEvent' attribute was being replaced,
 		// instead of being added to the existing array when  the script was executed from a jar (rather than from Eclipse) (Justin Cook 2018)
