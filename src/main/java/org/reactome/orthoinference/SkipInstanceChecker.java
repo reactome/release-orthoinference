@@ -1,15 +1,14 @@
 package org.reactome.orthoinference;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
 import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.ClassAttributeFollowingInstruction;
 import org.gk.model.GKInstance;
-import org.gk.model.InstanceUtilities;
+import static org.gk.model.InstanceUtilities.followInstanceAttributes;
 import static org.gk.model.ReactomeJavaConstants.*;
+
 import org.gk.persistence.MySQLAdaptor;
 
 public class SkipInstanceChecker {
@@ -17,17 +16,17 @@ public class SkipInstanceChecker {
 	private static final Logger logger = LogManager.getLogger();
 	private static MySQLAdaptor dba;
 	private static Set<String> skipList = new HashSet<>();
-	private static final long HIV_INFECTION_DBID = 162906L;
-	private static final long INFLUENZA_INFECTION_DBID = 168255L;
-	private static final long AMYLOID_FIBER_FORMATION_DBID = 977225L;
+	private static final long HIV_INFECTION_DB_ID = 162906L;
+	private static final long INFLUENZA_INFECTION_DB_ID = 168255L;
+	private static final long AMYLOID_FIBER_FORMATION_DB_ID = 977225L;
 
 	// Skiplist was traditionally provided in a file, but since it's currently just 3 instances, I've just hard-coded them here.
-	public static void getSkipList(String pathToSkipList) throws Exception
+	public static void buildStaticSkipList() throws Exception
 	{
 		List<Long> pathwayIdsToSkip = Arrays.asList(
-			HIV_INFECTION_DBID,
-			INFLUENZA_INFECTION_DBID,
-			AMYLOID_FIBER_FORMATION_DBID
+			HIV_INFECTION_DB_ID,
+			INFLUENZA_INFECTION_DB_ID,
+			AMYLOID_FIBER_FORMATION_DB_ID
 		);
 		for (long pathwayId : pathwayIdsToSkip)
 		{
@@ -39,7 +38,7 @@ public class SkipInstanceChecker {
 				classesToFollow.add(new ClassAttributeFollowingInstruction(Pathway, new String[]{hasEvent}, new String[]{}));
 				String[] outClasses = new String[] {ReactionlikeEvent};
 				@SuppressWarnings("unchecked")
-				Collection<GKInstance> followedInstances = InstanceUtilities.followInstanceAttributes(pathwayInst, classesToFollow, outClasses);
+				Collection<GKInstance> followedInstances = followInstanceAttributes(pathwayInst, classesToFollow, outClasses);
 
 				for (GKInstance entityInst : followedInstances)
 				{
@@ -47,17 +46,8 @@ public class SkipInstanceChecker {
 				}
 			}
 		}
-		// Generates skiplist
-		FileReader fr = new FileReader(pathToSkipList);
-		BufferedReader br = new BufferedReader(fr);
-		String currentLine;
-		while ((currentLine = br.readLine()) != null)
-		{
-			skipList.add(currentLine.trim());
-		}
-		br.close();
-		fr.close();
 	}
+
 	// Skip orthoinference of this instance if:
 	public static boolean checkIfInstanceShouldBeSkipped(GKInstance reactionInst) throws Exception
 	{
@@ -65,6 +55,13 @@ public class SkipInstanceChecker {
 		if (skipList.contains(reactionInst.getDBID().toString()))
 		{
 			logger.info(reactionInst + " is in skipList -- skipping");
+			return true;
+		}
+
+		// If the only TopLevelPathway of a Reaction is 'Disease', then it is skipped.
+		// Otherwise, it is inferred, making sure in cases where a Reaction is also a part of 'Disease' that that Pathway is not inferred.
+		if (InstanceUtilities.onlyInDiseasePathway(reactionInst)) {
+			logger.info(reactionInst + " has only Disease TopLevelPathway -- skipping");
 			return true;
 		}
 		// it is chimeric

@@ -84,7 +84,8 @@ public class EventsInferrer
 			logger.fatal("Unable to locate skiplist file: " + pathToSkipList);
 			System.exit(1);
 		}
-		SkipInstanceChecker.getSkipList(pathToSkipList);
+		// Finds all skippable ReactionlikeEvents based on a static list of skippable Pathways.
+		SkipInstanceChecker.buildStaticSkipList();
 
 		JSONParser parser = new JSONParser();
 		Object obj = parser.parse(new FileReader(pathToSpeciesConfig));
