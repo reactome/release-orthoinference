@@ -53,15 +53,12 @@ pipeline{
 				// stripping them down to the reaction's constituent proteins, checks if the protein homolog exists for that species, and infers it in Reactome's data model.
 				// If enough proteins (>= 75%) are inferrable in a Reaction, then it is created and stored in the database for this release. This is done from scratch each time.
 				script{
-					withCredentials([file(credentialsId: 'orthoinferenceSkipList', variable: 'skipListFile')]) {
-						sh "cp -f $skipListFile normal_event_skip_list.txt"
-						speciesList = ['mmus', 'rnor', 'cfam', 'btau', 'sscr', 'drer', 'xtro', 'ggal', 'dmel', 'cele', 'ddis', 'spom', 'scer', 'pfal']
-						for (species in speciesList) {
-							stage("Main: Infer ${species}"){
-								script{
-									withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
-										sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
-									}
+					speciesList = ['mmus', 'rnor', 'cfam', 'btau', 'sscr', 'drer', 'xtro', 'ggal', 'dmel', 'cele', 'ddis', 'spom', 'scer', 'pfal']
+					for (species in speciesList) {
+						stage("Main: Infer ${species}"){
+							script{
+								withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
+									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
 								}
 							}
 						}
