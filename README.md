@@ -47,16 +47,13 @@ Orthoinference can be run once the <a href="https://github.com/reactome/release-
   personId=reactomePersonInstanceId
   ```
   
-  <h4> Setting normal_event_skip_list.txt </h4>
+  <h4> Orthoinference skiplists </h4>
   
-Typically there are a number of instances that inference will be skipped for. The `normal_event_skip_list.txt` file denotes these instances, listed by Reactome IDs in the format shown below:
+  Historically, the list of ReactionlikeEvents that are skipped during Orthoinference have been manually created by a Curator. As of August 2020, this process has been automated in two ways: 1) A static skiplist that is hard-coded into the orthoinference code and 2) through automated enforcement based on the membership of the ReactionlikeEvent in the Disease TopLevelPathway.
   
-  ```
-  1234567
-  8910987
-  6543210
-  ```
-  If there aren't any instances that are to be skipped, the empty file still needs to exist.
+ The static skiplist currently consists of the HIV Infection (<b>162906</b>), Influenza Infection (DbId: <b>168255</b>) and Amyloid Fiber Formation (<b>977225</b>; only non-Disease skiplist instance) Pathways. Orthoinference creates a skiplist of all ReactionlikeEvents contained within these Pathways.
+  
+  The automated skiplist is only focused on skipping inference for instances that are children of the Disease TopLevelPathway. If a ReactionlikeEvent only exists as a child of the Disease pathway, than inference will be skipped. In cases where a ReactionlikeEvent is a member of the Disease AND another TopLevelPathway, then <b>Reaction</b> inference proceeds as normal. During <b>Pathway</b> inference, the inference of the non-Disease pathways are allowed while the Disease Pathway inference (and its children) are suppressed for the instance. 
   
   <h3> Running Orthoinference </h3>
   
