@@ -137,7 +137,6 @@ public class EventsInferrer
 		createAndSetSpeciesInstance(speciesName);
 		setSummationInstance();
 		setEvidenceTypeInstance();
-		PathwaysInferrer.setDiseaseInstance(dbAdaptor.fetchInstance(InstanceUtilities.getDiseasePathwayDbId()));
 		OrthologousEntityGenerator.setComplexSummationInstance();
 
 /**

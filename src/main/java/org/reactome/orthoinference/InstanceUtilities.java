@@ -1,20 +1,17 @@
 package org.reactome.orthoinference;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+import static org.reactome.util.general.CollectionUtils.safeList;
+
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.GKSchemaAttribute;
 import org.gk.schema.GKSchemaClass;
 import org.gk.schema.SchemaClass;
-
 
 // GenerateInstance is meant to act as a catch-all for functions that are instance-oriented, such as creating, mocking, or identical-checking.
 public class InstanceUtilities {
@@ -24,7 +21,7 @@ public class InstanceUtilities {
 	private static GKInstance speciesInst;
 	private static GKInstance instanceEditInst;
 	private static Map<String,GKInstance> mockedIdenticals = new HashMap<>();
-	private static final long DISEASE_PATHWAY_DBID = 1643685L;
+	private static final long DISEASE_PATHWAY_DB_ID = 1643685L;
 	
 	// Creates new instance that will be inferred based on the incoming instances class		
 	public static GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception
@@ -207,7 +204,7 @@ public class InstanceUtilities {
 	}
 
 	/**
-	 * This method returns true if the only parent Pathway of the incoming Event instane is Disease.
+	 * This method returns true if the only parent Pathway of the incoming Event instance is Disease.
 	 * Instances with only Disease as a parent will not be inferred. Those that are a member of Disease AND
 	 * another Pathway will be inferred, but the Disease Pathway (and sub-Pathway) inference will be skipped.
 	 * @param eventInst -- GKInstance that will be checked for parent Pathways.
@@ -215,47 +212,29 @@ public class InstanceUtilities {
 	 * @throws Exception -- Thrown by MySQLAdaptor.
 	 */
 	public static boolean onlyInDiseasePathway(GKInstance eventInst) throws Exception {
-		Set<Long> topLevelPathwayDbIds = getTopLevelParents(eventInst);
-		return topLevelPathwayDbIds.size() == 1 && topLevelPathwayDbIds.contains(DISEASE_PATHWAY_DBID);
-	}
-
-	/**
-	 * Helper method for 'onlyInDiseasePathway'. Finds DbIds of all TopLevelPathways of instance.
-	 * @param eventInst -- GKInstance for which all TopLevelPathway DbIds will be found.
-	 * @return -- Set<GKInstance> containing a list of all TopLevelPathway DbIds for incoming Event instance.
-	 * @throws Exception -- Thrown by MySQLAdaptor.
-	 */
-	private static Set<Long> getTopLevelParents(GKInstance eventInst) throws Exception {
-		Set<Long> topLevelPathwayDbIds = new HashSet<>();
-		if (eventInst.getReferers(hasEvent) != null) {
-			for (GKInstance pathwayInst : (Collection<GKInstance>) eventInst.getReferers(hasEvent)) {
-				topLevelPathwayDbIds.addAll(getPathwayReferrals(pathwayInst));
-			}
-		}
-		return topLevelPathwayDbIds;
+		Set<Long> topLevelPathwayDbIds = getTopLevelPathwayDbIds(eventInst);
+		return topLevelPathwayDbIds.size() == 1 && topLevelPathwayDbIds.contains(DISEASE_PATHWAY_DB_ID);
 	}
 
 	/**
 	 * Finds all 'hasEvent' referrals for the incoming Pathway instance. If there aren't any referrals via that attribute,
 	 * then it is considered a TopLevelPathway. TopLevelPathway DbIds are added to a Set and returned. This method
 	 * checks all Pathway referrals recursively up the Pathway hierarchy.
-	 * @param pathwayInst -- GKInstance that will be checked for 'hasEvent' referrals.
+	 * @param pathway -- GKInstance that will be checked for 'hasEvent' referrals.
 	 * @return -- Set<GKInstance> containing a list of all TopLevelPathway DbIds for incoming Event instance.
 	 * @throws Exception -- Thrown by MySQLAdaptor.
 	 */
-	private static Set<Long> getPathwayReferrals(GKInstance pathwayInst) throws Exception {
-		Set<Long> topLevelPathwayDbIds = new HashSet<>();
-		if (pathwayInst.getReferers(hasEvent) != null) {
-			for (GKInstance parentPathwayInst : (Collection<GKInstance>) pathwayInst.getReferers(hasEvent)) {
-				if (parentPathwayInst.getReferers(hasEvent) == null || parentPathwayInst.getReferers(hasEvent).size() == 0) {
-					topLevelPathwayDbIds.add(parentPathwayInst.getDBID());
-				} else {
-					topLevelPathwayDbIds.addAll(getPathwayReferrals(parentPathwayInst));
-				}
-			}
-		} else {
-			topLevelPathwayDbIds.add(pathwayInst.getDBID());
+	private static Set<Long> getTopLevelPathwayDbIds(GKInstance pathway) throws Exception {
+		List<GKInstance> parentPathways = safeList(pathway.getReferers(hasEvent));
+		if (parentPathways.isEmpty()) {
+			return new HashSet<>(Arrays.asList(pathway.getDBID()));
 		}
+
+		Set<Long> topLevelPathwayDbIds = new HashSet<>();
+		for (GKInstance parentPathway : parentPathways) {
+			topLevelPathwayDbIds.addAll(getTopLevelPathwayDbIds(parentPathway));
+		}
+
 		return topLevelPathwayDbIds;
 	}
 	
@@ -275,6 +254,6 @@ public class InstanceUtilities {
 	}
 
 	public static long getDiseasePathwayDbId() {
-		return DISEASE_PATHWAY_DBID;
+		return DISEASE_PATHWAY_DB_ID;
 	}
 }
