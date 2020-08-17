@@ -18,6 +18,7 @@ public class PathwaysInferrer {
 	private static GKInstance instanceEditInst;
 	private static List<GKInstance> updatedInferrableHumanEvents = new ArrayList<>();
 	private static Map<GKInstance, GKInstance> inferredEventIdenticals = new HashMap<>();
+	private static GKInstance diseasePathwayInst;
 
 	// This class populates species pathways with the instances that have been inferred. This was copied heavily from the Perl, so my explanations are a little sparse here.
 	public static void inferPathways(List<GKInstance> inferrableHumanEvents) throws Exception
@@ -73,8 +74,15 @@ public class PathwaysInferrer {
 
 		for (GKInstance sourcePathwayReferralInst : sourcePathwayReferralInstances)
 		{
+			// Disease TopLevelPathway inference is skipped.
+			if (sourcePathwayReferralInst.equals(diseasePathwayInst)) {
+				logger.info("Pathway referral is " + diseasePathwayInst + " -- skipping Pathway inference");
+				return;
+			}
+
 			logger.info("Generating inferred Pathway: " + sourcePathwayReferralInst);
-			if (inferredEventIdenticals.get(sourcePathwayReferralInst) == null)
+			// Pathways that have been inferred already are skipped, as are Pathways that are only children of the Disease TopLevelPathway.
+			if (inferredEventIdenticals.get(sourcePathwayReferralInst) == null && !InstanceUtilities.onlyInDiseasePathway(sourcePathwayReferralInst))
 			{
 				inferPathway(sourcePathwayReferralInst);
 			} else {
@@ -268,5 +276,9 @@ public class PathwaysInferrer {
 	public static void setInferredEvent(Map<GKInstance,GKInstance> inferredEventCopy)
 	{
 		inferredEventIdenticals = inferredEventCopy;
+	}
+
+	public static void setDiseaseInstance(GKInstance disease) {
+		diseasePathwayInst = disease;
 	}
 }

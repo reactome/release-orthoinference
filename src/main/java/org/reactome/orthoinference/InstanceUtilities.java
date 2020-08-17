@@ -24,6 +24,7 @@ public class InstanceUtilities {
 	private static GKInstance speciesInst;
 	private static GKInstance instanceEditInst;
 	private static Map<String,GKInstance> mockedIdenticals = new HashMap<>();
+	private static final long DISEASE_PATHWAY_DBID = 1643685L;
 	
 	// Creates new instance that will be inferred based on the incoming instances class		
 	public static GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception
@@ -204,6 +205,59 @@ public class InstanceUtilities {
 		}
 		return key;
 	}
+
+	/**
+	 * This method returns true if the only parent Pathway of the incoming Event instane is Disease.
+	 * Instances with only Disease as a parent will not be inferred. Those that are a member of Disease AND
+	 * another Pathway will be inferred, but the Disease Pathway (and sub-Pathway) inference will be skipped.
+	 * @param eventInst -- GKInstance that will be checked for parent Pathways.
+	 * @return boolean -- true if only parent is Disease Pathway, false if not.
+	 * @throws Exception -- Thrown by MySQLAdaptor.
+	 */
+	public static boolean onlyInDiseasePathway(GKInstance eventInst) throws Exception {
+		Set<Long> topLevelPathwayDbIds = getTopLevelParents(eventInst);
+		return topLevelPathwayDbIds.size() == 1 && topLevelPathwayDbIds.contains(DISEASE_PATHWAY_DBID);
+	}
+
+	/**
+	 * Helper method for 'onlyInDiseasePathway'. Finds DbIds of all TopLevelPathways of instance.
+	 * @param eventInst -- GKInstance for which all TopLevelPathway DbIds will be found.
+	 * @return -- Set<GKInstance> containing a list of all TopLevelPathway DbIds for incoming Event instance.
+	 * @throws Exception -- Thrown by MySQLAdaptor.
+	 */
+	private static Set<Long> getTopLevelParents(GKInstance eventInst) throws Exception {
+		Set<Long> topLevelPathwayDbIds = new HashSet<>();
+		if (eventInst.getReferers(hasEvent) != null) {
+			for (GKInstance pathwayInst : (Collection<GKInstance>) eventInst.getReferers(hasEvent)) {
+				topLevelPathwayDbIds.addAll(getPathwayReferrals(pathwayInst));
+			}
+		}
+		return topLevelPathwayDbIds;
+	}
+
+	/**
+	 * Finds all 'hasEvent' referrals for the incoming Pathway instance. If there aren't any referrals via that attribute,
+	 * then it is considered a TopLevelPathway. TopLevelPathway DbIds are added to a Set and returned. This method
+	 * checks all Pathway referrals recursively up the Pathway hierarchy.
+	 * @param pathwayInst -- GKInstance that will be checked for 'hasEvent' referrals.
+	 * @return -- Set<GKInstance> containing a list of all TopLevelPathway DbIds for incoming Event instance.
+	 * @throws Exception -- Thrown by MySQLAdaptor.
+	 */
+	private static Set<Long> getPathwayReferrals(GKInstance pathwayInst) throws Exception {
+		Set<Long> topLevelPathwayDbIds = new HashSet<>();
+		if (pathwayInst.getReferers(hasEvent) != null) {
+			for (GKInstance parentPathwayInst : (Collection<GKInstance>) pathwayInst.getReferers(hasEvent)) {
+				if (parentPathwayInst.getReferers(hasEvent) == null || parentPathwayInst.getReferers(hasEvent).size() == 0) {
+					topLevelPathwayDbIds.add(parentPathwayInst.getDBID());
+				} else {
+					topLevelPathwayDbIds.addAll(getPathwayReferrals(parentPathwayInst));
+				}
+			}
+		} else {
+			topLevelPathwayDbIds.add(pathwayInst.getDBID());
+		}
+		return topLevelPathwayDbIds;
+	}
 	
 	public static void setAdaptor(MySQLAdaptor dbAdaptor)
 	{
@@ -218,5 +272,9 @@ public class InstanceUtilities {
 	public static void setInstanceEdit(GKInstance instanceEditCopy) 
 	{
 		instanceEditInst = instanceEditCopy;
+	}
+
+	public static long getDiseasePathwayDbId() {
+		return DISEASE_PATHWAY_DBID;
 	}
 }
