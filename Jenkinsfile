@@ -15,7 +15,7 @@ pipeline{
 					previousRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1].toInteger() - 1;
 					// This queries the Jenkins API to confirm that the most recent builds of Orthopairs and UpdateStableIdentifiers were successful.
 					checkUpstreamBuildsSucceeded("Orthopairs", "$currentRelease")
-					checkUpstreamBuildsSucceeded("UpdateStableIdentifiers", "$currentRelease")
+					checkUpstreamBuildsSucceeded("Relational-Database-Updates/job/UpdateStableIdentifiers", "$currentRelease")
 				}
 			}
 		}
@@ -192,7 +192,7 @@ pipeline{
 
 // Utility function that checks upstream builds of this project were successfully built.
 def checkUpstreamBuildsSucceeded(String stepName, String currentRelease) {
-	def statusUrl = httpRequest authentication: 'jenkinsKey', validResponseCodes: "${env.VALID_RESPONSE_CODES}", url: "${env.JENKINS_JOB_URL}/job/$currentRelease/job/Relational-Database-Updates/job/$stepName/lastBuild/api/json"
+	def statusUrl = httpRequest authentication: 'jenkinsKey', validResponseCodes: "${env.VALID_RESPONSE_CODES}", url: "${env.JENKINS_JOB_URL}/job/$currentRelease/job/$stepName/lastBuild/api/json"
 	if (statusUrl.getStatus() == 404) {
 		error("$stepName has not yet been run. Please complete a successful build.")
 	} else {
