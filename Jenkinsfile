@@ -19,24 +19,6 @@ pipeline{
 				}
 			}
 		}
-		// Orthoinference utilizes a skiplist of Reaction DbIds to prevent particular reactions from being inferred.
-		stage('User Input Required: Confirm skiplist uploaded'){
-			steps{
-				script{
-					def userInput = input(
-						id: 'userInput', message: "Has the Orthoinference skiplist been uploaded as a locally scoped credential? (yes/no)",
-						parameters: [
-							[$class: 'TextParameterDefinition', defaultValue: '', description: 'Confirmation of orthoinference skiplist', name: 'response']
-						])
-
-					if (userInput.toLowerCase().startsWith("y")) {
-						echo("Proceeding with Orthoinference step.")
-					} else {
-						error("Please upload the skiplist to Jenkins>Releases>${currentRelease}>Credentials>orthoinferenceSkipList. You should have received this skiplist from Curation.")
-					}
-				}
-			}
-		}
 		stage('Setup: Download Orthopairs files from S3 bucket'){
 			steps{
 				script{
