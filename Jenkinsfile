@@ -14,12 +14,11 @@ pipeline{
 					currentRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1];
 					previousRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1].toInteger() - 1;
 					// This queries the Jenkins API to confirm that the most recent builds of Orthopairs and UpdateStableIdentifiers were successful.
-					checkUpstreamBuildsSucceeded("Orthopairs", "$currentRelease")
-					checkUpstreamBuildsSucceeded("Relational-Database-Updates/job/UpdateStableIdentifiers", "$currentRelease")
+//					checkUpstreamBuildsSucceeded("Orthopairs", "$currentRelease")
+//					checkUpstreamBuildsSucceeded("Relational-Database-Updates/job/UpdateStableIdentifiers", "$currentRelease")
 				}
 			}
 		}
-		/*
 		stage('Setup: Download Orthopairs files from S3 bucket'){
 			steps{
 				script{
@@ -89,7 +88,6 @@ pipeline{
 				}
 			}
 		}
-		*/
 		// This stage generates the graph database using the graph-importer module, and replaces the current graph db with it.
 		stage('Post: Generate Graph Database'){
 			steps{
