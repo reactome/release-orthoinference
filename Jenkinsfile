@@ -19,6 +19,7 @@ pipeline{
 				}
 			}
 		}
+		/*
 		stage('Setup: Download Orthopairs files from S3 bucket'){
 			steps{
 				script{
@@ -88,6 +89,7 @@ pipeline{
 				}
 			}
 		}
+		*/
 		// This stage generates the graph database using the graph-importer module, and replaces the current graph db with it.
 		stage('Post: Generate Graph Database'){
 			steps{
@@ -99,9 +101,9 @@ pipeline{
 					dir("graph-importer"){
 						//sh "mvn clean compile assembly:single"
 						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-							//sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j /tmp/graph.db"
-							//sh "sudo service tomcat7 stop"
-							//sh "sudo service neo4j stop"
+							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j /tmp/graph.db"
+							sh "sudo service tomcat7 stop"
+							sh "sudo service neo4j stop"
 							// This static script adjusts permissions of the graph.db folder and moves it to /var/lib/neo4j/data/databases/.
 							sh "sudo bash ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
 							sh "sudo service neo4j start"
