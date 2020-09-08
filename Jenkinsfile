@@ -95,11 +95,11 @@ pipeline{
 			steps{
 				script{
 					cloneOrPullGitRepo("release-jenkins-utils")
-					//sh "cp -f release-jenkins-utils/scripts/changeGraphDatabase.sh ${env.JENKINS_HOME_PATH}"
-					//sh "chmod 700 ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
-					//cloneOrPullGitRepo("graph-importer")
+					sh "cp -f release-jenkins-utils/scripts/changeGraphDatabase.sh ${env.JENKINS_HOME_PATH}"
+					sh "chmod 700 ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
+					cloneOrPullGitRepo("graph-importer")
 					dir("graph-importer"){
-						//sh "mvn clean compile assembly:single"
+						sh "mvn clean compile assembly:single"
 						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
 							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j /tmp/graph.db"
 							sh "sudo service tomcat7 stop"
