@@ -143,6 +143,7 @@ pipeline{
 						subject: "Orthoinference graph-qa for v${currentRelease}",
 						attachmentsPattern: "**/graph-qa/reports/GraphQA_Summary_v${currentRelease}.csv, **/${prevGraphQAFileName}"
 					)
+					sh "rm ${prevGraphQAFileName}"
 				}
 			}
 		}
