@@ -14,8 +14,8 @@ pipeline{
 					currentRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1];
 					previousRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1].toInteger() - 1;
 					// This queries the Jenkins API to confirm that the most recent builds of Orthopairs and UpdateStableIdentifiers were successful.
-//					checkUpstreamBuildsSucceeded("Orthopairs", "$currentRelease")
-//					checkUpstreamBuildsSucceeded("Relational-Database-Updates/job/UpdateStableIdentifiers", "$currentRelease")
+		//			checkUpstreamBuildsSucceeded("Orthopairs", "$currentRelease")
+		//			checkUpstreamBuildsSucceeded("Relational-Database-Updates/job/UpdateStableIdentifiers", "$currentRelease")
 				}
 			}
 		}
@@ -134,10 +134,10 @@ pipeline{
 				script{
 					def prevGraphQAFileName = "GraphQA_Summary_v${previousRelease}.csv"
 					def s3PathPrevGraphQA = "${env.S3_RELEASE_DIRECTORY_URL}/${previousRelease}/orthoinference/reports/${prevGraphQAFileName}.gz"
-				//	sh "aws s3 cp ${s3PathPrevGraphQA} ."
-				//	sh "gunzip ${prevGraphQAFileName}.gz"
+					sh "aws s3 cp ${s3PathPrevGraphQA} ."
+					sh "gunzip ${prevGraphQAFileName}.gz"
 					emailext (
-						body: "Hello,\n\nThis is an automated message from Jenkins regarding an update for v${currentRelease}. The Orthoinference step has finished running. Attached to this email should be the summary report output by graph-qa. Please compare this with the graph-qa output from the previous release and confirm if they look appropriate with the developer running Release. \n\nThanks!",
+						body: "Hello,\n\nThis is an automated message from Jenkins regarding an update for v${currentRelease}. The Orthoinference step has finished running. Attached to this email should be the summary report output by graph-qa for both v${currentRelease} and v${previousRelease}. Please compare these and confirm if they look appropriate with the developer running Release. \n\nThanks!",
 						to: '$DEFAULT_RECIPIENTS',
 						from: "${env.JENKINS_RELEASE_EMAIL}",
 						subject: "Orthoinference graph-qa for v${currentRelease}",
