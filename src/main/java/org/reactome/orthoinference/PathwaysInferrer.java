@@ -81,15 +81,15 @@ public class PathwaysInferrer {
 
 			logger.info("Generating inferred Pathway: " + sourcePathwayReferralInst);
 			// Pathways that have been inferred already are skipped, as are Pathways that are only children of the Disease TopLevelPathway.
-			if (sourceInstanceToInferredInstance.get(sourcePathwayReferralInst) == null && !InstanceUtilities.onlyInDiseasePathway(sourcePathwayReferralInst)) {
+			if (hasNotBeenInferred(sourcePathwayReferralInst) && !InstanceUtilities.onlyInDiseasePathway(sourcePathwayReferralInst)) {
 				inferPathway(sourcePathwayReferralInst);
 			}
 			createInferredPathwayHierarchy(sourcePathwayReferralInst);
 		}
 	}
 
-	private static boolean alreadyInferred(GKInstance sourcePathwayReferralInst) {
-		return !sourceInstanceToInferredInstance.containsKey(sourcePathwayReferralInst);
+	private static boolean hasNotBeenInferred(GKInstance sourcePathwayReferralInst) {
+		return sourceInstanceToInferredInstance.get(sourcePathwayReferralInst) == null;
 	}
 
 	private static void inferPathway(GKInstance sourcePathwayReferralInst) throws Exception {
