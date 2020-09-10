@@ -78,25 +78,18 @@ public class PathwaysInferrer {
 
 		for (GKInstance sourcePathwayReferralInst : sourcePathwayReferralInstances)
 		{
-			// Disease TopLevelPathway inference is skipped.
-			if (sourcePathwayReferralInst.equals(diseasePathwayInst)) {
-				logger.info("Pathway referral is " + diseasePathwayInst + " -- skipping Pathway inference");
-				return;
-			}
 
 			logger.info("Generating inferred Pathway: " + sourcePathwayReferralInst);
 			// Pathways that have been inferred already are skipped, as are Pathways that are only children of the Disease TopLevelPathway.
-			if (alreadyInferred(sourcePathwayReferralInst) || InstanceUtilities.onlyInDiseasePathway(sourcePathwayReferralInst)) {
-				logger.info("Inferred pathway instance {} already exists or only has Disease for a top level pathway", sourcePathwayReferralInst.getExtendedDisplayName());
-			} else {
+			if (hasNotBeenInferred(sourcePathwayReferralInst) && !InstanceUtilities.onlyInDiseasePathway(sourcePathwayReferralInst)) {
 				inferPathway(sourcePathwayReferralInst);
 			}
 			createInferredPathwayHierarchy(sourcePathwayReferralInst);
 		}
 	}
 
-	private static boolean alreadyInferred(GKInstance sourcePathwayReferralInst) {
-		return !sourceInstanceToInferredInstance.containsKey(sourcePathwayReferralInst);
+	private static boolean hasNotBeenInferred(GKInstance sourcePathwayReferralInst) {
+		return sourceInstanceToInferredInstance.get(sourcePathwayReferralInst) == null;
 	}
 
 	private static void inferPathway(GKInstance sourcePathwayReferralInst) throws Exception {

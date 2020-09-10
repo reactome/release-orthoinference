@@ -79,11 +79,6 @@ public class EventsInferrer
 		int personId = Integer.valueOf(props.getProperty("personId"));
 		setReleaseDates(dateOfRelease);
 
-		String pathToSkipList = props.getProperty("pathToOrthoinferenceSkipList");
-		if (!Files.exists(Paths.get(pathToSkipList))) {
-			logger.fatal("Unable to locate skiplist file: " + pathToSkipList);
-			System.exit(1);
-		}
 		// Finds all skippable ReactionlikeEvents based on a static list of skippable Pathways.
 		SkipInstanceChecker.buildStaticSkipList();
 
