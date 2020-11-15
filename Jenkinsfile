@@ -22,8 +22,9 @@ pipeline{
 		stage('Setup: Download Orthopairs files from S3 bucket'){
 			steps{
 				script{
+					def releaseVersion = utils.getReleaseVersion()
 					sh "mkdir -p orthopairs"
-					sh "aws s3 --no-progress cp --recursive ${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthopairs/data/orthopairs/ ./orthopairs/"
+					sh "aws s3 --no-progress cp --recursive ${env.S3_RELEASE_DIRECTORY_URL}/${releaseVersion}/orthopairs/data/orthopairs/ ./orthopairs/"
 					sh "gunzip orthopairs/*"
 				}
 			}
