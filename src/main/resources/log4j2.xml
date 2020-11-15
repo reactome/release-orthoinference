@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="info">
 	<Appenders>
-		<Console name="Console" target="SYSTEM_OUT">
-			<PatternLayout pattern="%d{YYYY-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n" />
-		</Console>
+<!-- Uncomment below block to get logging output to the console.-->
+<!--		<Console name="Console" target="SYSTEM_OUT">-->
+<!--			<PatternLayout pattern="%d{YYYY-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n" />-->
+<!--		</Console>-->
 		<RollingFile name="LogFile" fileName="logs/OrthoInference-${date:MM-dd-yyyy_HH.mm.ss}.log" filePattern="logs/OrthoInference-%d{MM-dd-yyyy_HH.mm.ss}.log">
 			<PatternLayout>
 				<Pattern>%d{YYYY-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</Pattern>
