@@ -1,8 +1,11 @@
-import groovy.json.JsonSlurper
 // This Jenkinsfile is used by Jenkins to run the Orthoinference step of Reactome's release.
 // It requires that the Orthopairs and UpdateStableIdentifiers steps have been run successfully before it can be run.
-def currentRelease
-def previousRelease
+
+import groovy.json.JsonSlurper
+import org.reactome.release.jenkins.utilities.Utilities
+
+// Shared library maintained at 'release-jenkins-utils' repository.
+def utils = new Utilities()
 pipeline{
 	agent any
 
@@ -11,20 +14,16 @@ pipeline{
 		stage('Check if Orthopairs and UpdateStableIdentifiers builds succeeded'){
 			steps{
 				script{
-					currentRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1];
-					previousRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1].toInteger() - 1;
-					// This queries the Jenkins API to confirm that the most recent builds of Orthopairs and UpdateStableIdentifiers were successful.
-	//				checkUpstreamBuildsSucceeded("Orthopairs", "$currentRelease")
-	//				checkUpstreamBuildsSucceeded("Relational-Database-Updates/job/UpdateStableIdentifiers", "$currentRelease")
+					utils.checkUpstreamBuildsSucceeded("Orthopairs")
+					utils.checkUpstreamBuildsSucceeded("ConfirmReleaseConfigs")
 				}
 			}
 		}
-		/*
 		stage('Setup: Download Orthopairs files from S3 bucket'){
 			steps{
 				script{
 					sh "mkdir -p orthopairs"
-					sh "aws s3 --no-progress cp  --recursive ${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthopairs/data/orthopairs/ ./orthopairs/"
+					sh "aws s3 --no-progress cp --recursive ${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthopairs/data/orthopairs/ ./orthopairs/"
 					sh "gunzip orthopairs/*"
 				}
 			}
@@ -34,10 +33,7 @@ pipeline{
 			steps{
 				script{
 					withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-						def release_current_before_orthoinference_dump = "${env.RELEASE_CURRENT}_${currentRelease}_before_orthoinference.dump"
-						
-						sh "mysqldump -u$user -p$pass ${env.RELEASE_CURRENT} > $release_current_before_orthoinference_dump"
-						sh "gzip -f $release_current_before_orthoinference_dump"
+						utils.takeDatabaseDumpAndGzip("${env.RELEASE_CURRENT_DB}", "orthoinference", "before", "${env.RELEASE_SERVER}")
 					}
 				}
 			}
@@ -48,7 +44,7 @@ pipeline{
 		stage('Setup: Build jar file'){
 			steps{
 				script{
-					sh "mvn clean compile assembly:single"
+					utils.buildJarFile()
 				}
 				// This script block executes the main orthoinference code one species at a time.
 				// It takes all Human Reaction instances in the database and attempts to project each Reaction to each species by
@@ -60,6 +56,8 @@ pipeline{
 						stage("Main: Infer ${species}"){
 							script{
 								withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
+									// Changes name of output log files to include 4-letter species name, for easier file management.
+									sh "git checkout src/main/resources/log4j2.xml && sed -i -e 's/OrthoInference/${species}-OrthoInference/g' src/main/resources/log4j2.xml"
 									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
 								}
 							}
@@ -72,9 +70,13 @@ pipeline{
 		stage('Post: Sort output report & create symlink'){
 			steps{
 				script{
-					sh "./formatOrthoinferenceReport.sh --release ${currentRelease}"
-					def cwd = pwd()
-					sh "ln -sf ${cwd}/report_ortho_inference_test_reactome_${currentRelease}_sorted.txt ${env.WEBSITE_FILES_UPDATE_ABS_PATH}/report_ortho_inference.txt"
+					def releaseVersion = utils.getReleaseVersion()
+					sh "./formatOrthoinferenceReport.sh --release ${releaseVersion}"
+					def inferenceReportFilename = report_ortho_inference_test_reactome_${releaseVersion}_sorted.txt
+					sh "cp ${inferenceReportFilename} ${env.WEBSITE_FILES_UPDATE_ABS_PATH}/"
+					dir(${env.WEBSITE_FILES_UPDATE_ABS_PATH}){
+						sh "ln -f ${inferenceReportFilename} report_ortho_inference.txt"
+					}
 				}
 			}
 		}
@@ -83,14 +85,12 @@ pipeline{
 			steps{
 				script{
 					withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-						def release_current_after_orthoinference_dump = "${env.RELEASE_CURRENT}_${currentRelease}_after_orthoinference.dump"
-						
-						sh "mysqldump -u$user -p$pass ${env.RELEASE_CURRENT} > $release_current_after_orthoinference_dump"
-						sh "gzip -f $release_current_after_orthoinference_dump"
+						utils.takeDatabaseDumpAndGzip("${env.RELEASE_CURRENT_DB}", "orthoinference", "after", "${env.RELEASE_SERVER}")
 					}
 				}
 			}
 		}
+		/*
 		// This stage generates the graph database using the graph-importer module, and replaces the current graph db with it.
 		stage('Post: Generate Graph Database'){
 			steps{
@@ -116,7 +116,6 @@ pipeline{
 				}
 			}			
 		}
-		*/
 		// This stage runs the graph-qa script that will be emailed to Curation.
 		stage('Post: Run graph-qa'){
 			steps{
@@ -135,24 +134,24 @@ pipeline{
 		stage('Post: Email graph-qa output'){
 			steps{
 				script{
-					def prevGraphQAFileName = "GraphQA_Summary_v${previousRelease}.csv"
-					def currentGraphQAFileName = "GraphQA_Summary_v${currentRelease}.csv"
-					def s3PathPrevGraphQA = "${env.S3_RELEASE_DIRECTORY_URL}/${previousRelease}/orthoinference/reports/${prevGraphQAFileName}.gz"
+					def releaseVersion = utils.getReleaseVersion()
+					def previousReleaseVersion = utils.getPreviousReleaseVersion()
+					def prevGraphQAFileName = "GraphQA_Summary_v${previousReleaseVersion}.csv"
+					def currentGraphQAFileName = "GraphQA_Summary_v${releaseVersion}.csv"
+					def s3PathPrevGraphQA = "${env.S3_RELEASE_DIRECTORY_URL}/${previousReleaseVersion}/orthoinference/reports/${prevGraphQAFileName}.gz"
 					
 					sh "aws s3 cp ${s3PathPrevGraphQA} ."
 					sh "gunzip ${prevGraphQAFileName}.gz"
-					emailext (
-						body: "Hello,\n\nThis is an automated message from Jenkins regarding an update for v${currentRelease}. The Orthoinference step has finished running. Attached to this email should be the summary report output by graph-qa for both v${currentRelease} and v${previousRelease}. Please compare these and confirm if they look appropriate with the developer running Release. \n\nThanks!",
-						to: '$DEFAULT_RECIPIENTS',
-						from: "${env.JENKINS_RELEASE_EMAIL}",
-						subject: "Orthoinference graph-qa for v${currentRelease}",
-						attachmentsPattern: "**/graph-qa/reports/${currentGraphQAFileName}, **/${prevGraphQAFileName}"
-					)
+					
+					def emailSubject = "Orthoinference graph-qa for v${releaseVersion}"
+					def emailBody = "Hello,\n\nThis is an automated message from Jenkins regarding an update for v${releaseVersion}. The Orthoinference step has finished running. Attached to this email should be the summary report output by graph-qa for both v${releaseVersion} and v${previousReleaseVersion}. Please compare these and confirm if they look appropriate with the developer running Release. \n\nThanks!"
+					def emailAttachments = "graph-qa/reports/${currentGraphQAFileName}, ${prevGraphQAFileName}"
+					utils.sendEmailWithAttachment("$emailSubject", "$emailBody", "$emailAttachments")
+					
 					sh "rm ${prevGraphQAFileName}"
 				}
 			}
 		}
-		/*
 		// All databases, logs, reports, and data files generated by this step are compressed before moving them to the Reactome S3 bucket. 
 		// All remaining files/folders are then deleted that are not a part of the release-orthoinference repository.
 		stage('Post: Archive Outputs'){
@@ -180,27 +179,5 @@ pipeline{
 			}
 		}
 		*/
-	}
-}
-
-// Utility function that checks upstream builds of this project were successfully built.
-def checkUpstreamBuildsSucceeded(String stepName, String currentRelease) {
-	def statusUrl = httpRequest authentication: 'jenkinsKey', validResponseCodes: "${env.VALID_RESPONSE_CODES}", url: "${env.JENKINS_JOB_URL}/job/$currentRelease/job/$stepName/lastBuild/api/json"
-	if (statusUrl.getStatus() == 404) {
-		error("$stepName has not yet been run. Please complete a successful build.")
-	} else {
-		def statusJson = new JsonSlurper().parseText(statusUrl.getContent())
-		if(statusJson['result'] != "SUCCESS"){
-			error("Most recent $stepName build status: " + statusJson['result'] + ". Please complete a successful build.")
-		}
-	}
-}
-// Utility function that checks if a git directory exists. If not, it is cloned.
-def cloneOrPullGitRepo(String repoName) {
-	// This method is deceptively named -- it can also check if a directory exists
-	if(!fileExists(repoName)) {
-		sh "git clone ${env.REACTOME_GITHUB_BASE_URL}/${repoName}"
-	} else {
-		sh "cd ${repoName}; git pull"
 	}
 }
