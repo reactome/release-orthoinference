@@ -313,4 +313,9 @@ public class ReactionInferrer {
 		return inferredCount;
 	}
 
+	public static void addAlreadyInferredEvents(GKInstance reactionInst, GKInstance previouslyInferredReactionInst) {
+		inferredEvent.put(reactionInst, previouslyInferredReactionInst);
+		inferrableHumanEvents.add(reactionInst);
+
+	}
 }
