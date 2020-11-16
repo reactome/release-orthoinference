@@ -177,7 +177,7 @@ pipeline{
 			steps{
 				script{
 				    def releaseVersion = utils.getReleaseVersion()
-				    def dataFiles = ["orthoinferences", "report_ortho_inference_test_reactome_${releaseVersion}*.txt",]
+				    def dataFiles = ["orthoinferences", "report_ortho_inference_test_reactome_${releaseVersion}*.txt"]
 					// Additional log files from post-step QA need to be pulled in
 					def logFiles = ["graph-importer/logs/*", "graph-qa/logs/*", "graph-qa/reports/*"]
 					// This folder is utilized for post-step QA. Jenkins creates multiple temporary directories
