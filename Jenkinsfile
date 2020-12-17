@@ -158,10 +158,10 @@ pipeline{
 					def prevGraphQAFileName = "GraphQA_Summary_v${previousReleaseVersion}.csv"
 					def currentGraphQAFileName = "GraphQA_Summary_v${releaseVersion}.csv"
 					def s3PathPrevGraphQA = "${env.S3_RELEASE_DIRECTORY_URL}/${previousReleaseVersion}/orthoinference/reports/${prevGraphQAFileName}.gz"
-					
+					// Get previous release graph-qa output
 					sh "aws s3 cp ${s3PathPrevGraphQA} ."
 					sh "gunzip ${prevGraphQAFileName}.gz"
-					
+					// Email the graph-qa outputs from the current and previous releases
 					def emailSubject = "Orthoinference graph-qa for v${releaseVersion}"
 					def emailBody = "Hello,\n\nThis is an automated message from Jenkins regarding an update for v${releaseVersion}. The Orthoinference step has finished running. Attached to this email should be the summary report output by graph-qa for both v${releaseVersion} and v${previousReleaseVersion}. Please compare these and confirm if they look appropriate with the developer running Release. \n\nThanks!"
 					def emailAttachments = "graph-qa/reports/${currentGraphQAFileName}, ${prevGraphQAFileName}"
