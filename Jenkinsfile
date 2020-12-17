@@ -75,12 +75,13 @@ pipeline{
 					sh "cp ${inferenceReportFilename} ${env.WEBSITE_FILES_UPDATE_ABS_PATH}/"
 					dir("${env.WEBSITE_FILES_UPDATE_ABS_PATH}"){
 						// Creates hard-link of sorted report_ortho_inference file, in website_files_update folder.
+						// This allows the generically named file to be committed to git so that we can track it over releases.
 						sh "ln -f ${inferenceReportFilename} report_ortho_inference.txt"
 					}
 				}
 			}
 		}
-		// This stage downloads the previous releases orthoinference files (eligible, inferred), and outputs line count differenes between them.
+		// This stage downloads the previous releases orthoinference files (eligible, inferred), and outputs line count differences between them.
 		stage('Post: Orthoinference file line counts') {
 		    steps{
 		        script{
@@ -89,6 +90,7 @@ pipeline{
 		            def orthoinferencesDir = "orthoinferences"
 		            def currentDir = pwd()
 		            
+			    // Create the 'orthoinferences' and 'previousReleaseVersion' directories
 		            sh "mkdir -p ${orthoinferencesDir} ${previousReleaseVersion}"
 		            sh "mv eligible* inferred* ${orthoinferencesDir}/"
 		            sh "aws s3 --recursive --no-progress cp s3://reactome/private/releases/${previousReleaseVersion}/orthoinference/data/orthoinferences/ ${previousReleaseVersion}/"
