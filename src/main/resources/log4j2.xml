@@ -26,7 +26,8 @@
 			<AppenderRef ref="warningsLogFile"/>
 		</Logger>
 		<Root level="debug">
-			<AppenderRef ref="Console" level="debug"/>
+<!-- Uncomment below AppenderRef 'Console' block to turn on console logging -->
+<!--			<AppenderRef ref="Console" level="debug"/>-->
 			<AppenderRef ref="LogFile" level="info"/>
 		</Root>
 	</Loggers>

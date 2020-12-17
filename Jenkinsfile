@@ -1,8 +1,10 @@
-import groovy.json.JsonSlurper
 // This Jenkinsfile is used by Jenkins to run the Orthoinference step of Reactome's release.
 // It requires that the Orthopairs and UpdateStableIdentifiers steps have been run successfully before it can be run.
-def currentRelease
-def previousRelease
+
+import org.reactome.release.jenkins.utilities.Utilities
+
+// Shared library maintained at 'release-jenkins-utils' repository.
+def utils = new Utilities()
 pipeline{
 	agent any
 
@@ -11,19 +13,17 @@ pipeline{
 		stage('Check if Orthopairs and UpdateStableIdentifiers builds succeeded'){
 			steps{
 				script{
-					currentRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1];
-					previousRelease = (pwd() =~ /Releases\/(\d+)\//)[0][1].toInteger() - 1;
-					// This queries the Jenkins API to confirm that the most recent builds of Orthopairs and UpdateStableIdentifiers were successful.
-					checkUpstreamBuildsSucceeded("Orthopairs", "$currentRelease")
-					checkUpstreamBuildsSucceeded("Relational-Database-Updates/job/UpdateStableIdentifiers", "$currentRelease")
+					utils.checkUpstreamBuildsSucceeded("Orthopairs")
+					utils.checkUpstreamBuildsSucceeded("ConfirmReleaseConfigs")
 				}
 			}
 		}
 		stage('Setup: Download Orthopairs files from S3 bucket'){
 			steps{
 				script{
+					def releaseVersion = utils.getReleaseVersion()
 					sh "mkdir -p orthopairs"
-					sh "aws s3 --no-progress cp  --recursive ${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthopairs/data/orthopairs/ ./orthopairs/"
+					sh "aws s3 --no-progress cp --recursive ${env.S3_RELEASE_DIRECTORY_URL}/${releaseVersion}/orthopairs/data/orthopairs/ ./orthopairs/"
 					sh "gunzip orthopairs/*"
 				}
 			}
@@ -33,10 +33,7 @@ pipeline{
 			steps{
 				script{
 					withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-						def release_current_before_orthoinference_dump = "${env.RELEASE_CURRENT}_${currentRelease}_before_orthoinference.dump"
-						
-						sh "mysqldump -u$user -p$pass ${env.RELEASE_CURRENT} > $release_current_before_orthoinference_dump"
-						sh "gzip -f $release_current_before_orthoinference_dump"
+						utils.takeDatabaseDumpAndGzip("${env.RELEASE_CURRENT_DB}", "orthoinference", "before", "${env.RELEASE_SERVER}")
 					}
 				}
 			}
@@ -44,11 +41,8 @@ pipeline{
 		// This stage builds the jar file using maven. It also runs the Main orthoinference process as a 'sub-stage'.
 		// This was due to a restriction in iterating over a list of species names. To iterate, you need to first have a 'stage > steps > script' hierarchy.
 		// At the script level, you can iterate over a list and then create new stages from this iteration. The choice was between an empty stage or to do a sub-stage.
-		stage('Setup: Build jar file'){
+		stage('Setup: Run Orthoinference on species list'){
 			steps{
-				script{
-					sh "mvn clean compile assembly:single"
-				}
 				// This script block executes the main orthoinference code one species at a time.
 				// It takes all Human Reaction instances in the database and attempts to project each Reaction to each species by
 				// stripping them down to the reaction's constituent proteins, checks if the protein homolog exists for that species, and infers it in Reactome's data model.
@@ -59,6 +53,10 @@ pipeline{
 						stage("Main: Infer ${species}"){
 							script{
 								withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
+									// Changes name of output log files to include 4-letter species name, for easier file management.
+									sh "git checkout src/main/resources/log4j2.xml"
+									sh "sed -i -e 's/OrthoInference/${species}-OrthoInference/g' src/main/resources/log4j2.xml"
+									utils.buildJarFile()
 									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
 								}
 							}
@@ -71,21 +69,43 @@ pipeline{
 		stage('Post: Sort output report & create symlink'){
 			steps{
 				script{
-					sh "./formatOrthoinferenceReport.sh --release ${currentRelease}"
-					def cwd = pwd()
-					sh "ln -sf ${cwd}/report_ortho_inference_test_reactome_${currentRelease}_sorted.txt ${env.WEBSITE_FILES_UPDATE_ABS_PATH}/report_ortho_inference.txt"
+					def releaseVersion = utils.getReleaseVersion()
+					sh "./formatOrthoinferenceReport.sh --release ${releaseVersion}"
+					def inferenceReportFilename = "report_ortho_inference_test_reactome_${releaseVersion}_sorted.txt"
+					sh "cp ${inferenceReportFilename} ${env.WEBSITE_FILES_UPDATE_ABS_PATH}/"
+					dir("${env.WEBSITE_FILES_UPDATE_ABS_PATH}"){
+						// Creates hard-link of sorted report_ortho_inference file, in website_files_update folder.
+						// This allows the generically named file to be committed to git so that we can track it over releases.
+						sh "ln -f ${inferenceReportFilename} report_ortho_inference.txt"
+					}
 				}
 			}
+		}
+		// This stage downloads the previous releases orthoinference files (eligible, inferred), and outputs line count differences between them.
+		stage('Post: Orthoinference file line counts') {
+		    steps{
+		        script{
+		            def releaseVersion = utils.getReleaseVersion()
+		            def previousReleaseVersion = utils.getPreviousReleaseVersion()
+		            def orthoinferencesDir = "orthoinferences"
+		            def currentDir = pwd()
+		            
+			    // Create the 'orthoinferences' and 'previousReleaseVersion' directories
+		            sh "mkdir -p ${orthoinferencesDir} ${previousReleaseVersion}"
+		            sh "mv eligible* inferred* ${orthoinferencesDir}/"
+		            sh "aws s3 --recursive --no-progress cp s3://reactome/private/releases/${previousReleaseVersion}/orthoinference/data/orthoinferences/ ${previousReleaseVersion}/"
+		            sh "gunzip ${previousReleaseVersion}/*"
+	                    utils.outputLineCountsOfFilesBetweenFolders("$orthoinferencesDir", "$previousReleaseVersion", "$currentDir")
+	                    sh "rm -r ${previousReleaseVersion}"
+		        }
+		    }
 		}
 		// This stage backs up the release_current database after it is modified.
 		stage('Post: Backup DB'){
 			steps{
 				script{
 					withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-						def release_current_after_orthoinference_dump = "${env.RELEASE_CURRENT}_${currentRelease}_after_orthoinference.dump"
-						
-						sh "mysqldump -u$user -p$pass ${env.RELEASE_CURRENT} > $release_current_after_orthoinference_dump"
-						sh "gzip -f $release_current_after_orthoinference_dump"
+						utils.takeDatabaseDumpAndGzip("${env.RELEASE_CURRENT_DB}", "orthoinference", "after", "${env.RELEASE_SERVER}")
 					}
 				}
 			}
@@ -94,22 +114,24 @@ pipeline{
 		stage('Post: Generate Graph Database'){
 			steps{
 				script{
-					cloneOrPullGitRepo("release-jenkins-utils")
+					// Gets a copy of 'changeGraphDatabase', which Jenkins can execute as sudo. Changes permissions of file to user read/write only.
+					utils.cloneOrUpdateLocalRepo("release-jenkins-utils")
 					sh "cp -f release-jenkins-utils/scripts/changeGraphDatabase.sh ${env.JENKINS_HOME_PATH}"
-					sh "chmod 700 ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
-					cloneOrPullGitRepo("graph-importer")
+					sh "chmod 700 ${env.JENKINS_HOME_PATH}/changeGraphDatabase.sh"
+					utils.cloneOrUpdateLocalRepo("graph-importer")
 					
 					dir("graph-importer"){
-						sh "mvn clean compile assembly:single"
+						utils.buildJarFile()
+						// This generates the graph database.
 						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT} --user $user --password $pass --neo4j /tmp/graph.db"
+							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT_DB} --user $user --password $pass --neo4j /tmp/graph.db"
 							sh "sudo service tomcat7 stop"
 							sh "sudo service neo4j stop"
 							// This static script adjusts permissions of the graph.db folder and moves it to /var/lib/neo4j/data/databases/.
-							sh "sudo bash ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
+							sh "sudo bash ${env.JENKINS_HOME_PATH}/changeGraphDatabase.sh"
 							sh "sudo service neo4j start"
 							sh "sudo service tomcat7 start"
-							sh "rm ${env.JENKINS_HOME_PATH}changeGraphDatabase.sh"
+							sh "rm ${env.JENKINS_HOME_PATH}/changeGraphDatabase.sh"
 						}
 					}
 				}
@@ -119,9 +141,9 @@ pipeline{
 		stage('Post: Run graph-qa'){
 			steps{
 				script{
-					cloneOrPullGitRepo("graph-qa")
+					utils.cloneOrUpdateLocalRepo("graph-qa")
 					dir("graph-qa"){
-						sh "mvn clean compile assembly:single"
+						utils.buildJarFile()
 						withCredentials([usernamePassword(credentialsId: 'neo4jUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
 							sh "java -jar target/graph-qa-jar-with-dependencies.jar -u $user -p  $pass --verbose"
 						}
@@ -133,19 +155,20 @@ pipeline{
 		stage('Post: Email graph-qa output'){
 			steps{
 				script{
-					def prevGraphQAFileName = "GraphQA_Summary_v${previousRelease}.csv"
-					def currentGraphQAFileName = "GraphQA_Summary_v${currentRelease}.csv"
-					def s3PathPrevGraphQA = "${env.S3_RELEASE_DIRECTORY_URL}/${previousRelease}/orthoinference/reports/${prevGraphQAFileName}.gz"
-					
+					def releaseVersion = utils.getReleaseVersion()
+					def previousReleaseVersion = utils.getPreviousReleaseVersion()
+					def prevGraphQAFileName = "GraphQA_Summary_v${previousReleaseVersion}.csv"
+					def currentGraphQAFileName = "GraphQA_Summary_v${releaseVersion}.csv"
+					def s3PathPrevGraphQA = "${env.S3_RELEASE_DIRECTORY_URL}/${previousReleaseVersion}/orthoinference/reports/${prevGraphQAFileName}.gz"
+					// Get previous release graph-qa output
 					sh "aws s3 cp ${s3PathPrevGraphQA} ."
 					sh "gunzip ${prevGraphQAFileName}.gz"
-					emailext (
-						body: "Hello,\n\nThis is an automated message from Jenkins regarding an update for v${currentRelease}. The Orthoinference step has finished running. Attached to this email should be the summary report output by graph-qa for both v${currentRelease} and v${previousRelease}. Please compare these and confirm if they look appropriate with the developer running Release. \n\nThanks!",
-						to: '$DEFAULT_RECIPIENTS',
-						from: "${env.JENKINS_RELEASE_EMAIL}",
-						subject: "Orthoinference graph-qa for v${currentRelease}",
-						attachmentsPattern: "**/graph-qa/reports/${currentGraphQAFileName}, **/${prevGraphQAFileName}"
-					)
+					// Email the graph-qa outputs from the current and previous releases
+					def emailSubject = "Orthoinference graph-qa for v${releaseVersion}"
+					def emailBody = "Hello,\n\nThis is an automated message from Jenkins regarding an update for v${releaseVersion}. The Orthoinference step has finished running. Attached to this email should be the summary report output by graph-qa for both v${releaseVersion} and v${previousReleaseVersion}. Please compare these and confirm if they look appropriate with the developer running Release. \n\nThanks!"
+					def emailAttachments = "graph-qa/reports/${currentGraphQAFileName}, ${prevGraphQAFileName}"
+					utils.sendEmailWithAttachment("$emailSubject", "$emailBody", "$emailAttachments")
+					
 					sh "rm ${prevGraphQAFileName}"
 				}
 			}
@@ -155,48 +178,16 @@ pipeline{
 		stage('Post: Archive Outputs'){
 			steps{
 				script{
-					def s3Path = "${env.S3_RELEASE_DIRECTORY_URL}/${currentRelease}/orthoinference"
-					
-					sh "mkdir -p databases/ data/ reports/"
-					sh "mv --backup=numbered *_${currentRelease}_*.dump.gz databases/"
-					sh "mv graph-qa/logs/* logs/"
-					sh "mv *.txt data/"
-					// Keep this in orthoinference directory for symlink
-					sh "mv data/report*sorted.txt ."
-					sh "mv graph-qa/reports/* reports/"
-					sh "gzip data/* logs/* reports/*"
-					sh "aws s3 --no-progress --recursive cp databases/ $s3Path/databases/"
-					sh "aws s3 --no-progress --recursive cp logs/ $s3Path/logs/"
-					sh "aws s3 --no-progress --recursive cp data/ $s3Path/data/"
-					sh "aws s3 --no-progress --recursive cp reports/ $s3Path/reports/"
-					sh "rm -r databases logs data reports orthopairs"
-					sh "rm -rf graph-importer*"
-					sh "rm -rf graph-qa*"
-					sh "rm -rf release-jenkins-utils*"
+				    def releaseVersion = utils.getReleaseVersion()
+				    def dataFiles = ["orthoinferences", "report_ortho_inference_test_reactome_${releaseVersion}*.txt"]
+					// Additional log files from post-step QA need to be pulled in
+					def logFiles = ["graph-importer/logs/*", "graph-qa/logs/*", "graph-qa/reports/*"]
+					// This folder is utilized for post-step QA. Jenkins creates multiple temporary directories
+					// cloning and checking out repositories, which is why the wildcard is added.
+					def foldersToDelete = ["orthopairs", "release-jenkins-utils*", "graph-importer*", "graph-qa*"]
+					utils.cleanUpAndArchiveBuildFiles("orthoinference", dataFiles, logFiles, foldersToDelete)
 				}
 			}
 		}
-	}
-}
-
-// Utility function that checks upstream builds of this project were successfully built.
-def checkUpstreamBuildsSucceeded(String stepName, String currentRelease) {
-	def statusUrl = httpRequest authentication: 'jenkinsKey', validResponseCodes: "${env.VALID_RESPONSE_CODES}", url: "${env.JENKINS_JOB_URL}/job/$currentRelease/job/$stepName/lastBuild/api/json"
-	if (statusUrl.getStatus() == 404) {
-		error("$stepName has not yet been run. Please complete a successful build.")
-	} else {
-		def statusJson = new JsonSlurper().parseText(statusUrl.getContent())
-		if(statusJson['result'] != "SUCCESS"){
-			error("Most recent $stepName build status: " + statusJson['result'] + ". Please complete a successful build.")
-		}
-	}
-}
-// Utility function that checks if a git directory exists. If not, it is cloned.
-def cloneOrPullGitRepo(String repoName) {
-	// This method is deceptively named -- it can also check if a directory exists
-	if(!fileExists(repoName)) {
-		sh "git clone ${env.REACTOME_GITHUB_BASE_URL}/${repoName}"
-	} else {
-		sh "cd ${repoName}; git pull"
 	}
 }

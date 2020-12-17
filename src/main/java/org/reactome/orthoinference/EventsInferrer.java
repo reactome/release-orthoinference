@@ -19,6 +19,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.InvalidAttributeException;
 import org.gk.schema.SchemaClass;
@@ -51,6 +52,7 @@ public class EventsInferrer
 	private static List<GKInstance> manualHumanEvents = new ArrayList<>();
 	private static StableIdentifierGenerator stableIdentifierGenerator;
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
+	private static final String INFERRED_EVIDENCE_TYPE_DISPLAY_NAME = "inferred by electronic annotation";
 
 	@SuppressWarnings("unchecked")
 	public static void inferEvents(Properties props, String species) throws Exception
@@ -73,8 +75,8 @@ public class EventsInferrer
 		setDbAdaptors(dbAdaptor);
 
 		releaseVersion = props.getProperty("releaseNumber");
-		String pathToOrthopairs = props.getProperty("pathToOrthopairs");
-		String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig");
+		String pathToOrthopairs = props.getProperty("pathToOrthopairs", "orthopairs");
+		String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig", "src/main/resources/Species.json");
 		String dateOfRelease = props.getProperty("dateOfRelease");
 		int personId = Integer.valueOf(props.getProperty("personId"));
 		setReleaseDates(dateOfRelease);
@@ -165,16 +167,21 @@ public class EventsInferrer
 			// Check if the current Reaction already exists for this species, that it is a valid instance (passes some filters), and that it doesn't have a Disease attribute.
 			// Adds to manualHumanEvents array if it passes conditions. This code block allows you to re-run the code without re-inferring instances.
 			List<GKInstance> previouslyInferredInstances = new ArrayList<GKInstance>();
-			previouslyInferredInstances = checkIfPreviouslyInferred(reactionInst, orthologousEvent, previouslyInferredInstances);
-			previouslyInferredInstances = checkIfPreviouslyInferred(reactionInst, inferredFrom, previouslyInferredInstances);
+			previouslyInferredInstances.addAll(checkIfPreviouslyInferred(reactionInst, orthologousEvent, previouslyInferredInstances));
+			previouslyInferredInstances.addAll(checkIfPreviouslyInferred(reactionInst, inferredFrom, previouslyInferredInstances));
 			if (previouslyInferredInstances.size() > 0)
 			{
 				GKInstance prevInfInst = previouslyInferredInstances.get(0);
 				if (prevInfInst.getAttributeValue(disease) == null)
 				{
-					logger.info("Inferred RlE already exists, skipping inference");
-					manualEventToNonHumanSource.put(reactionInst, prevInfInst);
-					manualHumanEvents.add(reactionInst);
+					GKInstance evidenceTypeInst = (GKInstance) prevInfInst.getAttributeValue(evidenceType);
+					if (evidenceTypeInst != null && evidenceTypeInst.getDisplayName().contains(INFERRED_EVIDENCE_TYPE_DISPLAY_NAME)) {
+						ReactionInferrer.addAlreadyInferredEvents(reactionInst, prevInfInst);
+					} else {
+						logger.info("Inferred RlE already exists, skipping inference");
+						manualEventToNonHumanSource.put(reactionInst, prevInfInst);
+						manualHumanEvents.add(reactionInst);
+					}
 				} else {
 					logger.info("Disease reaction, skipping inference");
 				}
@@ -354,7 +361,7 @@ public class EventsInferrer
 		GKInstance evidenceTypeInst = new GKInstance(dbAdaptor.getSchema().getClassByName(EvidenceType));
 		evidenceTypeInst.setDbAdaptor(dbAdaptor);
 		evidenceTypeInst.addAttributeValue(created, instanceEditInst);
-		String evidenceTypeText = "inferred by electronic annotation";
+		String evidenceTypeText = INFERRED_EVIDENCE_TYPE_DISPLAY_NAME;
 		evidenceTypeInst.addAttributeValue(name, evidenceTypeText);
 		evidenceTypeInst.addAttributeValue(name, "IEA");
 		evidenceTypeInst.addAttributeValue(_displayName, evidenceTypeText);
