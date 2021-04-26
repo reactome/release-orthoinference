@@ -159,7 +159,7 @@ pipeline{
 					def previousReleaseVersion = utils.getPreviousReleaseVersion()
 					def prevGraphQAFileName = "GraphQA_Summary_v${previousReleaseVersion}.csv"
 					def currentGraphQAFileName = "GraphQA_Summary_v${releaseVersion}.csv"
-					def s3PathPrevGraphQA = "${env.S3_RELEASE_DIRECTORY_URL}/${previousReleaseVersion}/orthoinference/reports/${prevGraphQAFileName}.gz"
+					def s3PathPrevGraphQA = "${env.S3_RELEASE_DIRECTORY_URL}/${previousReleaseVersion}/orthoinference/logs/${prevGraphQAFileName}.gz"
 					// Get previous release graph-qa output
 					sh "aws s3 cp ${s3PathPrevGraphQA} ."
 					sh "gunzip ${prevGraphQAFileName}.gz"
