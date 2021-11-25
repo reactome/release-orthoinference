@@ -118,9 +118,10 @@
 				<version>3.2.0</version>
 				<configuration>
 					<archive>
-						<manifest>
-							<mainClass>org.reactome.orthoinference.Main</mainClass>
-						</manifest>
+						<manifestEntries>
+							<Multi-Release>true</Multi-Release>
+							<Main-Class>org.reactome.orthoinference.Main</Main-Class>
+						</manifestEntries>
 					</archive>
 					<descriptorRefs>
 						<descriptorRef>jar-with-dependencies</descriptorRef>
