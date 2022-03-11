@@ -6,6 +6,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+import static org.reactome.util.general.CollectionUtils.safeList;
+
 import org.gk.persistence.MySQLAdaptor;
 
 public class PathwaysInferrer {
@@ -17,11 +19,14 @@ public class PathwaysInferrer {
 	private static GKInstance evidenceTypeInst;
 	private static GKInstance instanceEditInst;
 	private static List<GKInstance> updatedInferrableHumanEvents = new ArrayList<>();
-	private static Map<GKInstance, GKInstance> inferredEventIdenticals = new HashMap<>();
+	private static Map<GKInstance, GKInstance> sourceInstanceToInferredInstance = new HashMap<>();
+	private static GKInstance diseasePathwayInst;
 
 	// This class populates species pathways with the instances that have been inferred. This was copied heavily from the Perl, so my explanations are a little sparse here.
 	public static void inferPathways(List<GKInstance> inferrableHumanEvents) throws Exception
 	{
+		diseasePathwayInst = getDiseaseInstance();
+
 		logger.info("Beginning Pathway inference");
 		updatedInferrableHumanEvents.addAll(inferrableHumanEvents);
 
@@ -73,19 +78,18 @@ public class PathwaysInferrer {
 
 		for (GKInstance sourcePathwayReferralInst : sourcePathwayReferralInstances)
 		{
+
 			logger.info("Generating inferred Pathway: " + sourcePathwayReferralInst);
-			if (inferredEventIdenticals.get(sourcePathwayReferralInst) == null)
-			{
+			// Pathways that have been inferred already are skipped, as are Pathways that are only children of the Disease TopLevelPathway.
+			if (hasNotBeenInferred(sourcePathwayReferralInst) && !InstanceUtilities.onlyInDiseasePathway(sourcePathwayReferralInst)) {
 				inferPathway(sourcePathwayReferralInst);
-			} else {
-				logger.info("Inferred Pathway instance already exists");
 			}
 			createInferredPathwayHierarchy(sourcePathwayReferralInst);
 		}
 	}
 
-	private static <E> List<E> safeList(Collection<E> collection) {
-		return Optional.ofNullable((List<E>) collection).orElse(Collections.emptyList());
+	private static boolean hasNotBeenInferred(GKInstance sourcePathwayReferralInst) {
+		return sourceInstanceToInferredInstance.get(sourcePathwayReferralInst) == null;
 	}
 
 	private static void inferPathway(GKInstance sourcePathwayReferralInst) throws Exception {
@@ -109,7 +113,7 @@ public class PathwaysInferrer {
 			logger.warn(sourcePathwayReferralInst + " is a ReactionLikeEvent, which is unexpected -- refer to infer_events.pl");
 		}
 		infPathwayInst.setDisplayName(sourcePathwayReferralInst.getDisplayName());
-		inferredEventIdenticals.put(sourcePathwayReferralInst, infPathwayInst);
+		sourceInstanceToInferredInstance.put(sourcePathwayReferralInst, infPathwayInst);
 		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
 		infPathwayInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
 		dba.storeInstance(infPathwayInst);
@@ -131,18 +135,18 @@ public class PathwaysInferrer {
 			if (humanPathwayInst.getSchemClass().isValidAttribute(hasEvent)) {
 				if (!seenInferredPathway.contains(humanPathwayInst.getDBID())) {
 					List<GKInstance> inferredEventInstances = getInferredEventInstances(humanPathwayInst);
-					if (inferredEventIdenticals.get(humanPathwayInst).getSchemClass().isValidAttribute(hasEvent)) {
+					if (sourceInstanceToInferredInstance.get(humanPathwayInst).getSchemClass().isValidAttribute(hasEvent)) {
 						// Add inferred Events to inferred Pathway
-						logger.info("Adding " + inferredEventInstances.size() + " inferred Event(s) to inferred Pathway: " + inferredEventIdenticals.get(humanPathwayInst));
+						logger.info("Adding " + inferredEventInstances.size() + " inferred Event(s) to inferred Pathway: " + sourceInstanceToInferredInstance.get(humanPathwayInst));
 						for (GKInstance infEventInst : inferredEventInstances) {
-							GKInstance infPathwayInst = inferredEventIdenticals.get(humanPathwayInst);
+							GKInstance infPathwayInst = sourceInstanceToInferredInstance.get(humanPathwayInst);
 							infPathwayInst = InstanceUtilities.addAttributeValueIfNecessary(infPathwayInst, infEventInst, hasEvent);
-							inferredEventIdenticals.remove(humanPathwayInst);
-							inferredEventIdenticals.put(humanPathwayInst, infPathwayInst);
+							sourceInstanceToInferredInstance.remove(humanPathwayInst);
+							sourceInstanceToInferredInstance.put(humanPathwayInst, infPathwayInst);
 						}
-						dba.updateInstanceAttribute(inferredEventIdenticals.get(humanPathwayInst), hasEvent);
+						dba.updateInstanceAttribute(sourceInstanceToInferredInstance.get(humanPathwayInst), hasEvent);
 					} else {
-						logger.info(humanPathwayInst + " and " + inferredEventIdenticals.get(humanPathwayInst) + " have different classes (likely connected via manual inference");
+						logger.info(humanPathwayInst + " and " + sourceInstanceToInferredInstance.get(humanPathwayInst) + " have different classes (likely connected via manual inference");
 					}
 					seenInferredPathway.add(humanPathwayInst.getDBID());
 				} else {
@@ -156,8 +160,8 @@ public class PathwaysInferrer {
 	private static List<GKInstance> getInferredEventInstances(GKInstance humanPathwayInst) throws Exception {
 		List<GKInstance> inferredEventInstances = new ArrayList<>();
 		for (GKInstance eventInst : (Collection<GKInstance>) humanPathwayInst.getAttributeValuesList(hasEvent)) {
-			if (inferredEventIdenticals.get(eventInst) != null) {
-				inferredEventInstances.add(inferredEventIdenticals.get(eventInst));
+			if (sourceInstanceToInferredInstance.get(eventInst) != null) {
+				inferredEventInstances.add(sourceInstanceToInferredInstance.get(eventInst));
 			}
 		}
 		return inferredEventInstances;
@@ -179,14 +183,14 @@ public class PathwaysInferrer {
 					// Find all preceding events for source instance that have an inferred counterpart
 					for (GKInstance precedingEventInst : (Collection<GKInstance>) inferrableEventInst.getAttributeValuesList(precedingEvent))
 					{
-						if (inferredEventIdenticals.get(precedingEventInst) != null)
+						if (sourceInstanceToInferredInstance.get(precedingEventInst) != null)
 						{
-							precedingEventInstances.add(inferredEventIdenticals.get(precedingEventInst));
+							precedingEventInstances.add(sourceInstanceToInferredInstance.get(precedingEventInst));
 						}
 					}
 					Set<String> inferredPrecedingEvents = new HashSet<>();
 					// Find any inferred preceding events that already exist for the inferred instance (don't want to add any redundant preceding events)
-					for (GKInstance precedingEventInst : (Collection<GKInstance>) inferredEventIdenticals.get(inferrableEventInst).getAttributeValuesList(precedingEvent))
+					for (GKInstance precedingEventInst : (Collection<GKInstance>) sourceInstanceToInferredInstance.get(inferrableEventInst).getAttributeValuesList(precedingEvent))
 					{
 						inferredPrecedingEvents.add(precedingEventInst.getDBID().toString());
 					}
@@ -202,8 +206,8 @@ public class PathwaysInferrer {
 					// Add preceding event to inferred instance
 					if (updatedPrecedingEventInstances != null && updatedPrecedingEventInstances.size() > 0)
 					{
-						inferredEventIdenticals.get(inferrableEventInst).addAttributeValue(precedingEvent, updatedPrecedingEventInstances);
-						dba.updateInstanceAttribute(inferredEventIdenticals.get(inferrableEventInst), precedingEvent);
+						sourceInstanceToInferredInstance.get(inferrableEventInst).addAttributeValue(precedingEvent, updatedPrecedingEventInstances);
+						dba.updateInstanceAttribute(sourceInstanceToInferredInstance.get(inferrableEventInst), precedingEvent);
 					}
 				}
 				seenPrecedingEvent.add(inferrableEventInst);
@@ -267,6 +271,14 @@ public class PathwaysInferrer {
 
 	public static void setInferredEvent(Map<GKInstance,GKInstance> inferredEventCopy)
 	{
-		inferredEventIdenticals = inferredEventCopy;
+		sourceInstanceToInferredInstance = inferredEventCopy;
+	}
+
+	private static GKInstance getDiseaseInstance() throws Exception {
+		if (diseasePathwayInst == null) {
+			diseasePathwayInst = dba.fetchInstance(InstanceUtilities.getDiseasePathwayDbId());
+		}
+
+		return diseasePathwayInst;
 	}
 }

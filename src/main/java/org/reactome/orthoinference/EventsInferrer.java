@@ -3,22 +3,15 @@ package org.reactome.orthoinference;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.zip.GZIPInputStream;
 
 import org.apache.commons.io.FileUtils;
@@ -26,6 +19,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.InvalidAttributeException;
 import org.gk.schema.SchemaClass;
@@ -58,6 +52,7 @@ public class EventsInferrer
 	private static List<GKInstance> manualHumanEvents = new ArrayList<>();
 	private static StableIdentifierGenerator stableIdentifierGenerator;
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
+	private static final String INFERRED_EVIDENCE_TYPE_DISPLAY_NAME = "inferred by electronic annotation";
 
 	@SuppressWarnings("unchecked")
 	public static void inferEvents(Properties props, String species) throws Exception
@@ -75,25 +70,19 @@ public class EventsInferrer
 		dbAdaptorPrev = new MySQLAdaptor(host, prevDatabase, username, password, port);
 		if (dbAdaptor == null || dbAdaptorPrev == null) {
 			logger.fatal("Null MySQLAdaptor, terminating orthoinference");
-			return;
+			System.exit(1);
 		}
 		setDbAdaptors(dbAdaptor);
 
-		// Download Wormbase gene names file, create mapping and set it in the EWASInferrer class.
-		if (species.equals("cele")) {
-			URL wormbaseUrl = new URL(props.getProperty("wormbaseURL"));
-			Map<String,List<String>> wormbaseMappings = downloadAndProcessWormbaseFile(wormbaseUrl);
-			EWASInferrer.setWormbaseMappings(wormbaseMappings);
-		}
 		releaseVersion = props.getProperty("releaseNumber");
-		String pathToOrthopairs = Paths.get(props.getProperty("pathToOrthopairs") + releaseVersion).toString();
-		String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig");
+		String pathToOrthopairs = props.getProperty("pathToOrthopairs", "orthopairs");
+		String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig", "src/main/resources/Species.json");
 		String dateOfRelease = props.getProperty("dateOfRelease");
 		int personId = Integer.valueOf(props.getProperty("personId"));
 		setReleaseDates(dateOfRelease);
 
-		String pathToSkipList = props.getProperty("pathToOrthoinferenceSkipList");
-		SkipInstanceChecker.getSkipList(pathToSkipList);
+		// Finds all skippable ReactionlikeEvents based on a static list of skippable Pathways.
+		SkipInstanceChecker.buildStaticSkipList();
 
 		JSONParser parser = new JSONParser();
 		Object obj = parser.parse(new FileReader(pathToSpeciesConfig));
@@ -122,12 +111,12 @@ public class EventsInferrer
 		// Set static variables (DB/Species Instances, mapping files) that will be repeatedly used
 		setInstanceEdits(personId);
 		try {
-			Map<String,String[]> homologueMappings = readHomologueMappingFile(species, "hsap", pathToOrthopairs);
-			ProteinCountUtility.setHomologueMappingFile(homologueMappings);
-			EWASInferrer.setHomologueMappingFile(homologueMappings);
-		} catch (FileNotFoundException e) {
-			logger.fatal("Unable to locate " + speciesName +" mapping file: hsap_" + species + "_mapping.txt. Orthology prediction not possible.");
-			return;
+			readAndSetHomologueMappingFile(species, "hsap", pathToOrthopairs);
+			readAndSetGeneNameMappingFile(species, pathToOrthopairs);
+		} catch (Exception e) {
+			logger.fatal("Unable to locate " + speciesName +" mapping file: hsap_" + species + "_mapping.tsv. Orthology prediction not possible.");
+			e.printStackTrace();
+			System.exit(1);
 		}
 		EWASInferrer.readENSGMappingFile(species, pathToOrthopairs);
 		EWASInferrer.fetchAndSetUniprotDbInstance();
@@ -154,8 +143,8 @@ public class EventsInferrer
 		Collection<GKInstance> sourceSpeciesInst = (Collection<GKInstance>) dbAdaptor.fetchInstanceByAttribute("Species", "name", "=", "Homo sapiens");
 		if (sourceSpeciesInst.isEmpty())
 		{
-			logger.info("Could not find Species instance for Homo sapiens");
-			return;
+			logger.fatal("Could not find Species instance for Homo sapiens");
+			System.exit(1);
 		}
 		long humanInstanceDbId = sourceSpeciesInst.iterator().next().getDBID();
 		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(dbAdaptor, dbAdaptorPrev, speciesInst, personId, humanInstanceDbId);
@@ -178,16 +167,21 @@ public class EventsInferrer
 			// Check if the current Reaction already exists for this species, that it is a valid instance (passes some filters), and that it doesn't have a Disease attribute.
 			// Adds to manualHumanEvents array if it passes conditions. This code block allows you to re-run the code without re-inferring instances.
 			List<GKInstance> previouslyInferredInstances = new ArrayList<GKInstance>();
-			previouslyInferredInstances = checkIfPreviouslyInferred(reactionInst, orthologousEvent, previouslyInferredInstances);
-			previouslyInferredInstances = checkIfPreviouslyInferred(reactionInst, inferredFrom, previouslyInferredInstances);
+			previouslyInferredInstances.addAll(checkIfPreviouslyInferred(reactionInst, orthologousEvent, previouslyInferredInstances));
+			previouslyInferredInstances.addAll(checkIfPreviouslyInferred(reactionInst, inferredFrom, previouslyInferredInstances));
 			if (previouslyInferredInstances.size() > 0)
 			{
 				GKInstance prevInfInst = previouslyInferredInstances.get(0);
 				if (prevInfInst.getAttributeValue(disease) == null)
 				{
-					logger.info("Inferred RlE already exists, skipping inference");
-					manualEventToNonHumanSource.put(reactionInst, prevInfInst);
-					manualHumanEvents.add(reactionInst);
+					GKInstance evidenceTypeInst = (GKInstance) prevInfInst.getAttributeValue(evidenceType);
+					if (evidenceTypeInst != null && evidenceTypeInst.getDisplayName().contains(INFERRED_EVIDENCE_TYPE_DISPLAY_NAME)) {
+						ReactionInferrer.addAlreadyInferredEvents(reactionInst, prevInfInst);
+					} else {
+						logger.info("Inferred RlE already exists, skipping inference");
+						manualEventToNonHumanSource.put(reactionInst, prevInfInst);
+						manualHumanEvents.add(reactionInst);
+					}
 				} else {
 					logger.info("Disease reaction, skipping inference");
 				}
@@ -200,7 +194,7 @@ public class EventsInferrer
 				logger.info("Successfully inferred " + reactionInst);
 			} catch (Exception e) {
 				e.printStackTrace();
-				return;
+				System.exit(1);
 			}
 		}
 		PathwaysInferrer.setInferredEvent(ReactionInferrer.getInferredEvent());
@@ -208,6 +202,40 @@ public class EventsInferrer
 		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
 		outputReport(species);
 		logger.info("Finished orthoinference of " + speciesName);
+	}
+
+	/**
+	 * Create mapping of UniProt accessions to species-specific gene names, and then set this mapping for use in EWASInferrer.
+	 * @param species String - 4-letter shortened version of species name (eg: Homo sapiens --> hsap).
+	 * @param pathToOrthopairs String - Path to directory containing orthopairs files.
+	 * @throws IOException - Thrown if file is not found.
+	 */
+	private static void readAndSetGeneNameMappingFile(String species, String pathToOrthopairs) throws IOException {
+		Map<String, String> geneNameMappings = readGeneNameMappingFile(species, pathToOrthopairs);
+
+		EWASInferrer.setGeneNameMappingFile(geneNameMappings);
+	}
+
+	/**
+	 * Read in the {species}_gene_name_mapping.tsv file and create a Map of UniProt identifiers to gene names.
+	 * @param species String - 4-letter shortened version of species name (eg: Homo sapiens --> hsap).
+	 * @param pathToOrthopairs String - Path to directory containing orthopairs files.
+	 * @return pathToOrthopairs String - Path to directory containing orthopairs files.
+	 * @throws IOException - Thrown if file is not found.
+	 */
+	private static Map<String, String> readGeneNameMappingFile(String species, String pathToOrthopairs) throws IOException {
+		Path geneNameMappingFilePath = Paths.get(pathToOrthopairs, species + "_gene_name_mapping.tsv");
+		Map<String, String> geneNameMappings = new HashMap<>();
+		for (String line : Files.readAllLines(geneNameMappingFilePath)) {
+			String[] tabSplit = line.split("\t");
+			if (tabSplit.length == 2) {
+				String uniprotId = tabSplit[0];
+				String geneName = tabSplit[1];
+				geneNameMappings.put(uniprotId, geneName);
+			}
+		}
+
+		return geneNameMappings;
 	}
 
 	private static void createNewFile(String filename) throws IOException {
@@ -270,10 +298,16 @@ public class EventsInferrer
 
 	}
 
+	private static void readAndSetHomologueMappingFile(String species, String fromSpecies, String pathToOrthopairs) throws IOException {
+		Map<String,String[]> homologueMappings = readHomologueMappingFile(species, fromSpecies, pathToOrthopairs);
+		ProteinCountUtility.setHomologueMappingFile(homologueMappings);
+		EWASInferrer.setHomologueMappingFile(homologueMappings);
+	}
+
 	// Read the species-specific orthopair 'mapping' file, and create a HashMap with the contents
 	private static Map<String, String[]> readHomologueMappingFile(String toSpecies, String fromSpecies, String pathToOrthopairs) throws IOException
 	{
-		String orthopairsFileName = fromSpecies + "_" + toSpecies + "_mapping.txt";
+		String orthopairsFileName = fromSpecies + "_" + toSpecies + "_mapping.tsv";
 		String orthopairsFilePath = Paths.get(pathToOrthopairs, orthopairsFileName).toString();
 		logger.info("Reading in " + orthopairsFilePath);
 		FileReader fr = new FileReader(orthopairsFilePath);
@@ -327,7 +361,7 @@ public class EventsInferrer
 		GKInstance evidenceTypeInst = new GKInstance(dbAdaptor.getSchema().getClassByName(EvidenceType));
 		evidenceTypeInst.setDbAdaptor(dbAdaptor);
 		evidenceTypeInst.addAttributeValue(created, instanceEditInst);
-		String evidenceTypeText = "inferred by electronic annotation";
+		String evidenceTypeText = INFERRED_EVIDENCE_TYPE_DISPLAY_NAME;
 		evidenceTypeInst.addAttributeValue(name, evidenceTypeText);
 		evidenceTypeInst.addAttributeValue(name, "IEA");
 		evidenceTypeInst.addAttributeValue(_displayName, evidenceTypeText);
