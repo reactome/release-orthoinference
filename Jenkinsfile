@@ -143,9 +143,9 @@ pipeline{
 				script{
 					utils.cloneOrUpdateLocalRepo("graph-qa")
 					dir("graph-qa"){
-						utils.buildJarFile()
+						utils.buildJarFileWithPackage()
 						withCredentials([usernamePassword(credentialsId: 'neo4jUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-							sh "java -jar target/graph-qa-jar-with-dependencies.jar -u $user -p  $pass --verbose"
+							sh "java -jar target/graph-qa-jar-exec.jar -u $user -p  $pass --verbose"
 						}
 					}
 				}
