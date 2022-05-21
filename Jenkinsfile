@@ -121,10 +121,10 @@ pipeline{
 					utils.cloneOrUpdateLocalRepo("graph-importer")
 					
 					dir("graph-importer"){
-						utils.buildJarFile()
+						utils.buildJarFileWithPackage()
 						// This generates the graph database.
 						withCredentials([usernamePassword(credentialsId: 'mySQLUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-							sh "java -jar target/GraphImporter-jar-with-dependencies.jar --name ${env.RELEASE_CURRENT_DB} --user $user --password $pass --neo4j /tmp/graph.db"
+							sh "java -jar target/GraphImporter-exec.jar --name ${env.RELEASE_CURRENT_DB} --user $user --password $pass --neo4j /tmp/graph.db"
 							sh "sudo service tomcat7 stop"
 							sh "sudo service neo4j stop"
 							// This static script adjusts permissions of the graph.db folder and moves it to /var/lib/neo4j/data/databases/.
