@@ -145,7 +145,7 @@ pipeline{
 					dir("graph-qa"){
 						utils.buildJarFileWithPackage()
 						withCredentials([usernamePassword(credentialsId: 'neo4jUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
-							sh "java -jar target/graph-qa-jar-exec.jar -u $user -p  $pass --verbose"
+							sh "java -jar target/graph-qa-exec.jar -u $user -p  $pass --verbose"
 						}
 					}
 				}
