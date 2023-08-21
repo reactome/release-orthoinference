@@ -26,8 +26,7 @@ public class EWASInferrer {
 	static boolean altRefDbExists = false;
 	private static String altRefDbId;
 	private static GKInstance instanceEditInst;
-	private static GKInstance ensgDbInst;
-	private static GKInstance enspDbInst;
+	private static GKInstance ensemblDBInst;
 	private static GKInstance alternateDbInst;
 	private static GKInstance uniprotDbInst;
 	private static GKInstance speciesInst;
@@ -63,7 +62,7 @@ public class EWASInferrer {
 						infReferenceGeneProductInst.addAttributeValue(identifier, homologueId);
 						// Reference DB can differ between homologue mappings, but can be differentiated by the 'homologueSource' found in each mapping.
 						// With PANTHER data, the Protein IDs are exclusively UniProt
-						GKInstance referenceDatabaseInst = homologueSource.equals("ENSP") ? enspDbInst : uniprotDbInst;
+						GKInstance referenceDatabaseInst = homologueSource.equals("ENSP") ? ensemblDBInst : uniprotDbInst;
 						infReferenceGeneProductInst.addAttributeValue(referenceDatabase, referenceDatabaseInst);
 
 						// Creates ReferenceDNASequence instance from ReferenceEntity
@@ -248,7 +247,8 @@ public class EWASInferrer {
 		return ensgMappings.containsKey(homologueId);
 	}
 
-	// Creates ReferenceGeneSequence instance based on ENSG identifier mapped to protein. Creates an instance for the primary database and an alternate, if it exists.
+	// Creates ReferenceGeneSequence instance based on ENSG identifier mapped to protein.
+	// Creates an instance for the primary database and an alternate, if it exists.
 	private static List<GKInstance> createReferenceDNASequence(String homologueId) throws Exception
 	{
 		List<GKInstance> referenceDNAInstances = new ArrayList<>();
@@ -262,7 +262,7 @@ public class EWASInferrer {
 			referenceDNAInst.setDbAdaptor(dba);
 			referenceDNAInst.addAttributeValue(created, instanceEditInst);
 			referenceDNAInst.addAttributeValue(identifier, ensgId);
-			referenceDNAInst.addAttributeValue(referenceDatabase, ensgDbInst);
+			referenceDNAInst.addAttributeValue(referenceDatabase, ensemblDBInst);
 			referenceDNAInst.addAttributeValue(species, speciesInst);
 			referenceDNAInst.setAttributeValue(_displayName, "ENSEMBL:" + ensgId);
 			referenceDNAInst = InstanceUtilities.checkForIdenticalInstances(referenceDNAInst, null);
@@ -345,34 +345,25 @@ public class EWASInferrer {
 		uniprotDbInst = uniprotDbInstances.iterator().next();
 	}
 
-	// Creates instance pertaining to the species Ensembl Protein DB
-	public static void createEnsemblProteinDbInstance(String toSpeciesLong, String toSpeciesReferenceDbUrl, String toSpeciesEnspAccessUrl) throws Exception
-	{
-		String enspSpeciesDb = "ENSEMBL_" + toSpeciesLong + "_PROTEIN";
-		enspDbInst = new GKInstance(dba.getSchema().getClassByName(ReferenceDatabase));
-		enspDbInst.setDbAdaptor(dba);
-		enspDbInst.addAttributeValue(created, instanceEditInst);
-		enspDbInst.addAttributeValue(name, "Ensembl");
-		enspDbInst.addAttributeValue(name, enspSpeciesDb);
-		enspDbInst.addAttributeValue(url, toSpeciesReferenceDbUrl);
-		enspDbInst.addAttributeValue(accessUrl, toSpeciesEnspAccessUrl);
-		enspDbInst.setAttributeValue(_displayName, "Ensembl");
-		dba.storeInstance(enspDbInst);
+	public static void fetchOrCreateProtistsEnsemblDatabase(MySQLAdaptor dba) throws Exception {
+		final String dbName = "EnsEMBL Protists";
+		final String dbBaseUrl = "https://protists.ensembl.org/";
+
+		fetchOrCreateEnsemblDatabase(dba, dbName, dbBaseUrl);
 	}
 
-	// Creates instance pertaining to the species Ensembl Gene DB
-	public static void createEnsemblGeneDBInstance(String toSpeciesLong, String toSpeciesReferenceDbUrl, String toSpeciesEnsgAccessUrl) throws Exception
-	{
-		String ensgSpeciesDb = "ENSEMBL_" + toSpeciesLong + "_GENE";
-		ensgDbInst = new GKInstance(dba.getSchema().getClassByName(ReferenceDatabase));
-		ensgDbInst.setDbAdaptor(dba);
-		ensgDbInst.addAttributeValue(created, instanceEditInst);
-		ensgDbInst.addAttributeValue(name, "ENSEMBL");
-		ensgDbInst.addAttributeValue(name, ensgSpeciesDb);
-		ensgDbInst.addAttributeValue(url, toSpeciesReferenceDbUrl);
-		ensgDbInst.addAttributeValue(accessUrl, toSpeciesEnsgAccessUrl);
-		ensgDbInst.setAttributeValue(_displayName, "ENSEMBL");
-		dba.storeInstance(ensgDbInst);
+	public static void fetchOrCreateFungiEnsemblDatabase(MySQLAdaptor dba) throws Exception {
+		final String dbName = "EnsEMBL Fungi";
+		final String dbBaseUrl = "https://fungi.ensembl.org/";
+
+		fetchOrCreateEnsemblDatabase(dba, dbName, dbBaseUrl);
+	}
+
+	public static void fetchOrCreateMainEnsemblDatabase(MySQLAdaptor dba) throws Exception {
+		final String dbName = "ENSEMBL";
+		final String dbBaseUrl = "https://ensembl.org/";
+
+		fetchOrCreateEnsemblDatabase(dba, dbName, dbBaseUrl);
 	}
 
 	// Create instance pertaining to any alternative reference DB for the species
@@ -411,5 +402,33 @@ public class EWASInferrer {
 
 	public static void setGeneNameMappingFile(Map<String, String> geneNameMappingsCopy) {
 		geneNameMappings = geneNameMappingsCopy;
+	}
+
+
+	private static void fetchOrCreateEnsemblDatabase(MySQLAdaptor dba, String dbName, String dbBaseUrl)
+		throws Exception {
+
+		Collection<GKInstance> ensemblDBInstances =
+			(Collection<GKInstance>) dba.fetchInstanceByAttribute(ReferenceDatabase, name, "=", dbName);
+		if (ensemblDBInstances == null || ensemblDBInstances.isEmpty()) {
+			ensemblDBInst = createAndStoreEnsEMBLDatabase(dba, dbName, dbBaseUrl);
+		} else {
+			ensemblDBInst = ensemblDBInstances.iterator().next();
+		}
+	}
+
+	private static GKInstance createAndStoreEnsEMBLDatabase(MySQLAdaptor dba, String dbName, String dbBaseUrl)
+		throws Exception {
+
+		GKInstance ensEMBLDbInst = new GKInstance(dba.getSchema().getClassByName(ReferenceDatabase));
+
+		ensEMBLDbInst.setDbAdaptor(dba);
+		ensEMBLDbInst.addAttributeValue(created, instanceEditInst);
+		ensEMBLDbInst.addAttributeValue(name, dbName);
+		ensEMBLDbInst.addAttributeValue(url, dbBaseUrl);
+		ensEMBLDbInst.addAttributeValue(accessUrl, dbBaseUrl + "id/###ID###");
+		ensEMBLDbInst.setDisplayName(dbName);
+		dba.storeInstance(ensEMBLDbInst);
+		return ensEMBLDbInst;
 	}
 }

@@ -94,11 +94,6 @@ public class EventsInferrer
 		String speciesName = (String) speciesNames.get(0);
 		logger.info("Beginning orthoinference of " + speciesName);
 
-		JSONObject refDb = (JSONObject) speciesObject.get("refdb");
-		String refDbUrl = (String) refDb.get("url");
-		String refDbProteinUrl = (String) refDb.get("access");
-		String refDbGeneUrl = (String) refDb.get("ensg_access");
-
 		// Creates two files that a) list reactions that are eligible for inference and b) those that are successfully inferred
 		String eligibleFilename = "eligible_" + species	+ "_75.txt";
 		String inferredFilename = "inferred_" + species + "_75.txt";
@@ -120,8 +115,16 @@ public class EventsInferrer
 		}
 		EWASInferrer.readENSGMappingFile(species, pathToOrthopairs);
 		EWASInferrer.fetchAndSetUniprotDbInstance();
-		EWASInferrer.createEnsemblProteinDbInstance(speciesName, refDbUrl, refDbProteinUrl);
-		EWASInferrer.createEnsemblGeneDBInstance(speciesName, refDbUrl, refDbGeneUrl);
+		if (isFungiSpecies(species)) {
+			EWASInferrer.fetchOrCreateFungiEnsemblDatabase(dbAdaptor);
+		} else if (isProtistSpecies(species)) {
+			EWASInferrer.fetchOrCreateProtistsEnsemblDatabase(dbAdaptor);
+		} else {
+			EWASInferrer.fetchOrCreateMainEnsemblDatabase(dbAdaptor);
+		}
+
+//		EWASInferrer.createEnsemblProteinDbInstance(speciesName, refDbUrl, refDbProteinUrl);
+//		EWASInferrer.createEnsemblGeneDBInstance(speciesName, refDbUrl, refDbGeneUrl);
 
 		JSONObject altRefDbJSON = (JSONObject) speciesObject.get("alt_refdb");
 		if (altRefDbJSON != null)
@@ -406,5 +409,15 @@ public class EventsInferrer
 		br.close();
 		wormbaseFile.delete();
 		return wormbaseMappings;
+	}
+
+	private static boolean isProtistSpecies(String speciesCode) {
+		final List<String> protistsSpeciesCodes = Arrays.asList("ddis", "pfal");
+		return protistsSpeciesCodes.contains(speciesCode);
+	}
+
+	private static boolean isFungiSpecies(String speciesCode) {
+		final List<String> fungiSpeciesCodes = Arrays.asList("scer", "spom");
+		return fungiSpeciesCodes.contains(speciesCode);
 	}
 }
