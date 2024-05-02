@@ -162,11 +162,11 @@
 		],
 		"mart_group":"spombe_eg_gene",
 		"alt_refdb":{
-			"access":"http:\/\/www.genedb.org\/genedb\/Search?organism=pombe&name=###ID###",
+			"access":"https:\/\/www.pombase.org/gene/###ID###",
 			"dbname":[
-				"GeneDB"
+				"PomBase"
 			],
-			"url":"http:\/\/www.genedb.org\/genedb\/pombe"
+			"url":"https:\/\/www.pombase.org"
 		},
 		"mart_url":"http:\/\/fungi.ensembl.org\/biomart\/martservice",
 		"refdb":{
