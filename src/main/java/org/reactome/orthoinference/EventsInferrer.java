@@ -41,8 +41,7 @@ import org.reactome.release.common.database.InstanceEditUtils;
  * completed in an organism, the pathways that contain the reactions are filled with these newly inferred ones.
  */
 
-public class EventsInferrer
-{
+public class EventsInferrer {
 	private static final Logger logger = LogManager.getLogger();
 	private static MySQLAdaptor dbAdaptor;
 	private static MySQLAdaptor dbAdaptorPrev;
@@ -130,8 +129,7 @@ public class EventsInferrer
 //		EWASInferrer.createEnsemblGeneDBInstance(speciesName, refDbUrl, refDbGeneUrl);
 
 		JSONObject altRefDbJSON = (JSONObject) speciesObject.get("alt_refdb");
-		if (altRefDbJSON != null)
-		{
+		if (altRefDbJSON != null) {
 			logger.info("Alternate DB exists for " + speciesName);
 			EWASInferrer.createAlternateReferenceDBInstance(altRefDbJSON);
 		} else {
@@ -148,8 +146,7 @@ public class EventsInferrer
 		// Gets DB instance of source species (human)
 		Collection<GKInstance> sourceSpeciesInst = (Collection<GKInstance>)
 			dbAdaptor.fetchInstanceByAttribute("Species", "name", "=", "Homo sapiens");
-		if (sourceSpeciesInst.isEmpty())
-		{
+		if (sourceSpeciesInst.isEmpty()) {
 			logger.fatal("Could not find Species instance for Homo sapiens");
 			System.exit(1);
 		}
@@ -170,8 +167,7 @@ public class EventsInferrer
 
 		logger.info(sourceSpeciesInst.iterator().next().getDisplayName() +
 			" ReactionlikeEvent instances: " + dbids.size());
-		for (Long dbid : dbids)
-		{
+		for (Long dbid : dbids) {
 			GKInstance reactionInst = reactionMap.get(dbid);
 			logger.info("Attempting RlE inference: " + reactionInst);
 			// Check if the current Reaction already exists for this species, that it is a valid instance (passes
@@ -183,11 +179,9 @@ public class EventsInferrer
 				checkIfPreviouslyInferred(reactionInst, orthologousEvent, previouslyInferredInstances));
 			previouslyInferredInstances.addAll(
 				checkIfPreviouslyInferred(reactionInst, inferredFrom, previouslyInferredInstances));
-			if (previouslyInferredInstances.size() > 0)
-			{
+			if (previouslyInferredInstances.size() > 0) {
 				GKInstance prevInfInst = previouslyInferredInstances.get(0);
-				if (prevInfInst.getAttributeValue(disease) == null)
-				{
+				if (prevInfInst.getAttributeValue(disease) == null) {
 					GKInstance evidenceTypeInst = (GKInstance) prevInfInst.getAttributeValue(evidenceType);
 					if (evidenceTypeInst != null &&
 						evidenceTypeInst.getDisplayName().contains(INFERRED_EVIDENCE_TYPE_DISPLAY_NAME)) {
@@ -269,32 +263,26 @@ public class EventsInferrer
 		return stableIdentifierGenerator;
 	}
 
-	private static void setReleaseDates(String dateOfRelease)
-	{
+	private static void setReleaseDates(String dateOfRelease) {
 		ReactionInferrer.setReleaseDate(dateOfRelease);
 		PathwaysInferrer.setReleaseDate(dateOfRelease);
-
 	}
 
 	@SuppressWarnings("unchecked")
 	private static List<GKInstance> checkIfPreviouslyInferred(
 		GKInstance reactionInst, String attribute, List<GKInstance> previouslyInferredInstances)
-		throws InvalidAttributeException, Exception
-	{
-		for (GKInstance attributeInst : (Collection<GKInstance>) reactionInst.getAttributeValuesList(attribute))
-		{
+		throws InvalidAttributeException, Exception {
+		for (GKInstance attributeInst : (Collection<GKInstance>) reactionInst.getAttributeValuesList(attribute)) {
 			GKInstance reactionSpeciesInst = (GKInstance) attributeInst.getAttributeValue(species);
 			if (reactionSpeciesInst.getDBID() == speciesInst.getDBID() &&
-				attributeInst.getAttributeValue(isChimeric) == null)
-			{
+				attributeInst.getAttributeValue(isChimeric) == null) {
 				previouslyInferredInstances.add(attributeInst);
 			}
 		}
 		return previouslyInferredInstances;
 	}
 
-	private static void outputReport(String species) throws IOException
-	{
+	private static void outputReport(String species) throws IOException {
 		int eligibleCount = ReactionInferrer.getEligibleCount();
 		int inferredCount = ReactionInferrer.getInferredCount();
 		float percentInferred = (float) 100*inferredCount/eligibleCount;
@@ -310,8 +298,7 @@ public class EventsInferrer
 	}
 
 	// Statically store the adaptor variable in each class
-	private static void setDbAdaptors(MySQLAdaptor dbAdaptor)
-	{
+	private static void setDbAdaptors(MySQLAdaptor dbAdaptor) {
 		ReactionInferrer.setAdaptor(dbAdaptor);
 		SkipInstanceChecker.setAdaptor(dbAdaptor);
 		InstanceUtilities.setAdaptor(dbAdaptor);
@@ -330,8 +317,7 @@ public class EventsInferrer
 
 	// Read the species-specific orthopair 'mapping' file, and create a HashMap with the contents
 	private static Map<String, String[]> readHomologueMappingFile(
-		String toSpecies, String fromSpecies, String pathToOrthopairs) throws IOException
-	{
+		String toSpecies, String fromSpecies, String pathToOrthopairs) throws IOException {
 		String orthopairsFileName = fromSpecies + "_" + toSpecies + "_mapping.tsv";
 		String orthopairsFilePath = Paths.get(pathToOrthopairs, orthopairsFileName).toString();
 		logger.info("Reading in " + orthopairsFilePath);
@@ -340,8 +326,7 @@ public class EventsInferrer
 
 		Map<String, String[]> homologueMappings = new HashMap<>();
 		String currentLine;
-		while ((currentLine = br.readLine()) != null)
-		{
+		while ((currentLine = br.readLine()) != null) {
 			String[] tabSplit = currentLine.split("\t");
 			String mapKey = tabSplit[0];
 			String[] spaceSplit = tabSplit[1].split(" ");
@@ -353,8 +338,7 @@ public class EventsInferrer
 	}
 
 	// Find the instance specific to this species
-	private static void createAndSetSpeciesInstance(String toSpeciesLong) throws Exception
-	{
+	private static void createAndSetSpeciesInstance(String toSpeciesLong) throws Exception {
 		SchemaClass referenceDb = dbAdaptor.getSchema().getClassByName(Species);
 		speciesInst = new GKInstance(referenceDb);
 		speciesInst.setDbAdaptor(dbAdaptor);
@@ -368,8 +352,7 @@ public class EventsInferrer
 		InstanceUtilities.setSpeciesInstance(speciesInst);
 	}
 	// Create and set static Summation instance
-	private static void setSummationInstance() throws Exception
-	{
+	private static void setSummationInstance() throws Exception {
 		GKInstance summationInst = new GKInstance(dbAdaptor.getSchema().getClassByName(Summation));
 		summationInst.setDbAdaptor(dbAdaptor);
 		summationInst.addAttributeValue(created, instanceEditInst);
@@ -387,9 +370,9 @@ public class EventsInferrer
 		ReactionInferrer.setSummationInstance(summationInst);
 		PathwaysInferrer.setSummationInstance(summationInst);
 	}
+
 	// Create and set static EvidenceType instance
-	private static void setEvidenceTypeInstance() throws Exception
-	{
+	private static void setEvidenceTypeInstance() throws Exception {
 		GKInstance evidenceTypeInst = new GKInstance(dbAdaptor.getSchema().getClassByName(EvidenceType));
 		evidenceTypeInst.setDbAdaptor(dbAdaptor);
 		evidenceTypeInst.addAttributeValue(created, instanceEditInst);
@@ -402,8 +385,7 @@ public class EventsInferrer
 		PathwaysInferrer.setEvidenceTypeInstance(evidenceTypeInst);
 	}
 
-	private static void setInstanceEdits(int personId) throws Exception
-	{
+	private static void setInstanceEdits(int personId) throws Exception {
 		instanceEditInst = InstanceEditUtils.createInstanceEdit(dbAdaptor, personId, "org.reactome.orthoinference");
 		logger.info("Instance edit: " + instanceEditInst);
 		InstanceUtilities.setInstanceEdit(instanceEditInst);
