@@ -14,3 +14,12 @@ src/main/resources/orthopairs/*
 # Ignore IntelliJ files
 .idea/
 orthoinference.iml
+
+# Ignore SQL dump files
+*.sql.gz
+*.sql
+*.dump.gz
+*.dump
+
+# Ignore backup files
+*.bak
