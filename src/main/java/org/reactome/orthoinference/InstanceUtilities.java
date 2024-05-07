@@ -25,12 +25,10 @@ public class InstanceUtilities {
 	private static final long DISEASE_PATHWAY_DB_ID = 1643685L;
 	
 	// Creates new instance that will be inferred based on the incoming instances class
-	public static GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception
-	{
+	public static GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception {
 		GKInstance inferredInst = null;
 		String reactionClass = instanceToBeInferred.getSchemClass().getName();
-		if (reactionClass.matches(ReferenceIsoform)) 
-		{
+		if (reactionClass.matches(ReferenceIsoform)) {
 			reactionClass = ReferenceGeneProduct;
 		}
 		SchemaClass instanceClass = dba.getSchema().getClassByName(reactionClass);
@@ -38,13 +36,10 @@ public class InstanceUtilities {
 		inferredInst.setDbAdaptor(dba);
 		inferredInst.addAttributeValue(created, instanceEditInst);
 		if (instanceToBeInferred.getSchemClass().isValidAttribute(compartment) &&
-			instanceToBeInferred.getAttributeValue(compartment) != null)
-		{
-			for (Object compartmentInst : instanceToBeInferred.getAttributeValuesList(compartment)) 
-			{
+			instanceToBeInferred.getAttributeValue(compartment) != null) {
+			for (Object compartmentInst : instanceToBeInferred.getAttributeValuesList(compartment)) {
 				GKInstance compartmentInstGk = (GKInstance) compartmentInst;
-				if (compartmentInstGk.getSchemClass().isa(Compartment)) 
-				{
+				if (compartmentInstGk.getSchemClass().isa(Compartment)) {
 					inferredInst.addAttributeValue(compartment, compartmentInstGk);
 				} else {
 					GKInstance newCompartmentInst = createCompartmentInstance(compartmentInstGk);
@@ -53,8 +48,7 @@ public class InstanceUtilities {
 			}
 		}
 		if (instanceToBeInferred.getSchemClass().isValidAttribute(species) &&
-			instanceToBeInferred.getAttributeValue(species) != null)
-		{
+			instanceToBeInferred.getAttributeValue(species) != null) {
 			inferredInst.addAttributeValue(species, speciesInst);
 		}
 		return inferredInst;
@@ -65,21 +59,17 @@ public class InstanceUtilities {
 	// them being a GO_CellularComponent. This function is the workaround, producing a Compartment instance that
 	// contains all the same attribute values.
 	@SuppressWarnings("unchecked")
-	public static GKInstance createCompartmentInstance(GKInstance compartmentInstGk) throws Exception
-	{
+	public static GKInstance createCompartmentInstance(GKInstance compartmentInstGk) throws Exception {
 		logger.warn(compartmentInstGk + " is a " + compartmentInstGk.getSchemClass() + " instead of a Compartment" +
 			" -- creating new Compartment instance");
 		SchemaClass compartmentClass = dba.getSchema().getClassByName(Compartment);
 		GKInstance newCompartmentInst = new GKInstance(compartmentClass);
 		newCompartmentInst.setDbAdaptor(dba);
 		Collection<GKSchemaAttribute> compartmentAttributes = compartmentClass.getAttributes();
-		for (GKSchemaAttribute compartmentAttribute : compartmentAttributes) 
-		{
+		for (GKSchemaAttribute compartmentAttribute : compartmentAttributes) {
 			if (!compartmentAttribute.getName().matches("DB_ID") &&
-				compartmentInstGk.getAttributeValue(compartmentAttribute.getName()) != null)
-			{
-				for (Object attribute : compartmentInstGk.getAttributeValuesList(compartmentAttribute.getName())) 
-				{
+				compartmentInstGk.getAttributeValue(compartmentAttribute.getName()) != null) {
+				for (Object attribute : compartmentInstGk.getAttributeValuesList(compartmentAttribute.getName())) {
 					newCompartmentInst.addAttributeValue(compartmentAttribute.getName(), attribute);
 				}
 			}
@@ -90,8 +80,7 @@ public class InstanceUtilities {
 
 	// Equivalent to create_ghost from Perl; Returns a mock homologue that is needed in cases where an inference is
 	// rejected, but the component isn't essential for the inference to be completed.
-	public static GKInstance createMockGKInstance(GKInstance instanceToBeMocked) throws Exception
-	{
+	public static GKInstance createMockGKInstance(GKInstance instanceToBeMocked) throws Exception {
 		SchemaClass genomeEncodedEntityClass = dba.getSchema().getClassByName(GenomeEncodedEntity);
 		GKInstance mockedInst = new GKInstance(genomeEncodedEntityClass);
 		mockedInst.setDbAdaptor(dba);
@@ -107,8 +96,7 @@ public class InstanceUtilities {
 		// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance'
 		// calls, which is slow.
 		String cacheKey = getCacheKey((GKSchemaClass) mockedInst.getSchemClass(), mockedInst);
-		if (mockedIdenticals.get(cacheKey) != null)
-		{
+		if (mockedIdenticals.get(cacheKey) != null) {
 			mockedInst = mockedIdenticals.get(cacheKey);
 		} else {
 			mockedInst = checkForIdenticalInstances(mockedInst, instanceToBeMocked);
@@ -122,14 +110,11 @@ public class InstanceUtilities {
 	
 	// Checks that equivalent instances don't already exist in the DB, substituting if they do
 	public static GKInstance checkForIdenticalInstances(GKInstance inferredInst, GKInstance originalInst)
-		throws Exception
-	{
+		throws Exception {
 		@SuppressWarnings("unchecked")
 		Collection<GKInstance> identicalInstances = dba.fetchIdenticalInstances(inferredInst);
-		if (identicalInstances != null) 
-		{
-			if (identicalInstances.size() == 1) 
-			{
+		if (identicalInstances != null) {
+			if (identicalInstances.size() == 1) {
 				return identicalInstances.iterator().next();
 			} else {
 				// TODO: In future, could iterate through array of returned values and pull the 'most identical'.
@@ -150,8 +135,7 @@ public class InstanceUtilities {
 	@SuppressWarnings("unchecked")
 	public static GKInstance addAttributeValueIfNecessary(GKInstance instanceToBeCheckedForExistingAttribute,
 														  GKInstance instanceContainingAttributeToBeChecked,
-														  String attribute) throws Exception
-	{
+														  String attribute) throws Exception {
 		// Original version of this function had two checks: For 'multivalue attribute' and for 'instance-type object'. 
 		// Now we know the only attributes being passed through here are inferredTo, inferredFrom, orthologousEvent,
 		// and hasEvent, which are all multivalue attribute classes.
@@ -160,19 +144,16 @@ public class InstanceUtilities {
 		Collection<GKInstance> attributeInstancesFromInferredInstance =
 			instanceToBeCheckedForExistingAttribute.getAttributeValuesList(attribute);
 		Set<Long> dbIdsFromAttributeInstances = new HashSet<>();
-		for (GKInstance attributeInstance : attributeInstancesFromInferredInstance) 
-		{
+		for (GKInstance attributeInstance : attributeInstancesFromInferredInstance) {
 			dbIdsFromAttributeInstances.add(attributeInstance.getDBID());
 		}
 		boolean attributeExists = false;
-		for (Long attributeInstanceDbId : dbIdsFromAttributeInstances) 
-		{
+		for (Long attributeInstanceDbId : dbIdsFromAttributeInstances) {
 			if (attributeInstanceDbId == instanceContainingAttributeToBeChecked.getDBID()) {
 				attributeExists = true;
 			}
 		}
-		if (!attributeExists) 
-		{
+		if (!attributeExists) {
 			instanceToBeCheckedForExistingAttribute.addAttributeValue(
 				attribute, instanceContainingAttributeToBeChecked);
 		}
@@ -184,20 +165,14 @@ public class InstanceUtilities {
 	// This allows for identical instances held in memory to be used before trying to use fetchIdenticalInstances,
 	// which is expensive.
 	@SuppressWarnings("unchecked")
-	public static String getCacheKey(GKSchemaClass instanceClass, GKInstance inferredInst) throws Exception
-	{
+	public static String getCacheKey(GKSchemaClass instanceClass, GKInstance inferredInst) throws Exception {
 		String key = "";
-		for (GKSchemaAttribute definingAttr : (Collection<GKSchemaAttribute>) instanceClass.getDefiningAttributes())
-		{
-			if (definingAttr.isMultiple()) 
-			{
+		for (GKSchemaAttribute definingAttr : (Collection<GKSchemaAttribute>) instanceClass.getDefiningAttributes()) {
+			if (definingAttr.isMultiple()) {
 				Collection<Object> multiValueAttributes = inferredInst.getAttributeValuesList(definingAttr.getName());
-				if (multiValueAttributes.size() > 0)
-				{
-					for (Object attribute : multiValueAttributes)
-					{
-						if (attribute.getClass().getSimpleName().equals("GKInstance"))
-						{
+				if (multiValueAttributes.size() > 0) {
+					for (Object attribute : multiValueAttributes) {
+						if (attribute.getClass().getSimpleName().equals("GKInstance")) {
 							GKInstance gkInstance = (GKInstance) attribute;
 							key += gkInstance.getDBID().toString();
 						} else {
@@ -209,11 +184,9 @@ public class InstanceUtilities {
 				}
 			} else {
 				if (definingAttr.isInstanceTypeAttribute() &&
-					inferredInst.getAttributeValue(definingAttr.getName()) != null)
-				{
+					inferredInst.getAttributeValue(definingAttr.getName()) != null) {
 					key += ((GKInstance) inferredInst.getAttributeValue(definingAttr.getName())).getDBID().toString();
-				} else if (inferredInst.getAttributeValue(definingAttr.getName()) != null) 
-				{
+				} else if (inferredInst.getAttributeValue(definingAttr.getName()) != null) {
 					key += inferredInst.getAttributeValue(definingAttr.getName());
 				} else {
 					key += "null";
@@ -258,18 +231,15 @@ public class InstanceUtilities {
 		return topLevelPathwayDbIds;
 	}
 	
-	public static void setAdaptor(MySQLAdaptor dbAdaptor)
-	{
+	public static void setAdaptor(MySQLAdaptor dbAdaptor) {
 		dba = dbAdaptor;
 	}
 	
-	public static void setSpeciesInstance(GKInstance speciesInstCopy)
-	{
+	public static void setSpeciesInstance(GKInstance speciesInstCopy) {
 		speciesInst = speciesInstCopy;
 	}
 	
-	public static void setInstanceEdit(GKInstance instanceEditCopy) 
-	{
+	public static void setInstanceEdit(GKInstance instanceEditCopy) {
 		instanceEditInst = instanceEditCopy;
 	}
 

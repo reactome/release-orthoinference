@@ -26,8 +26,7 @@ public class ProteinCountUtility {
 	 See the bottom of ProteinCount.checkCandidates for further elaboration. 
 	*/
 	
-	public static List<Integer> getDistinctProteinCounts (GKInstance instanceToBeInferred) throws Exception
-	{
+	public static List<Integer> getDistinctProteinCounts (GKInstance instanceToBeInferred) throws Exception {
 		// Perform an AttributeQueryRequest with specified input attributes (ReactionlikeEvent, CatalystActivity,
 		// Complex, Polymer, EWAS) and output attributes (ReferenceGeneProduct, EntitySet).
 		List<ClassAttributeFollowingInstruction> classesToFollow = new ArrayList<>();
@@ -51,14 +50,12 @@ public class ProteinCountUtility {
 		List<Long> dbIds = new ArrayList<>();
 		Collection<GKInstance> sortedFollowedInstances = new ArrayList<>();
 		Map<Long,GKInstance> instances = new HashMap<>();
-		for (GKInstance instance : followedInstances) 
-		{
+		for (GKInstance instance : followedInstances) {
 			dbIds.add(instance.getDBID());
 			instances.put(instance.getDBID(), instance);
 		}
 		Collections.sort(dbIds);
-		for (Long id : dbIds) 
-		{
+		for (Long id : dbIds) {
 			sortedFollowedInstances.add(instances.get(id));
 		}
 		
@@ -70,33 +67,26 @@ public class ProteinCountUtility {
 		int max = 0;
 		// If it is a ReferenceGene Product, the inferrable and max values are incremented depending on the number
 		// of homologue mappings, while total is incremented for each entity.
-		for (GKInstance entityInst : sortedFollowedInstances)
-		{
-			if (entityInst.getSchemClass().isa(ReferenceGeneProduct))
-			{
+		for (GKInstance entityInst : sortedFollowedInstances) {
+			if (entityInst.getSchemClass().isa(ReferenceGeneProduct)) {
 				int count = 0;
 				String identifierName = entityInst.getAttributeValue(identifier).toString();
-				if (homologueMappings.get(identifierName) != null)
-				{
+				if (homologueMappings.get(identifierName) != null) {
 					count = homologueMappings.get(identifierName).length;
 				}
 				total++;
-				if (count > max)
-				{
+				if (count > max) {
 					max = count;
 				}
-				if (count > 0)
-				{
+				if (count > 0) {
 					inferrable++;
 				}
 			}
 		}
 		// For EntitySets, another AttributeQueryRequest is completed. This time the output classes are
 		// Complex, Polymer, and ReferenceSequence.
-		for (GKInstance entityInst : sortedFollowedInstances)
-		{
-			if (entityInst.getSchemClass().isa(EntitySet))
-			{
+		for (GKInstance entityInst : sortedFollowedInstances) {
+			if (entityInst.getSchemClass().isa(EntitySet)) {
 				List<ClassAttributeFollowingInstruction> entitySetsInstancesToFollow = new ArrayList<ClassAttributeFollowingInstruction>();
 				entitySetsInstancesToFollow.add(new ClassAttributeFollowingInstruction(
 					DefinedSet, new String[]{hasMember}, new String[]{}));
@@ -114,55 +104,44 @@ public class ProteinCountUtility {
 				List<Long> entitySetsDbIds = new ArrayList<>();
 				Collection<GKInstance> entitySetsSortedInstances = new ArrayList<>();
 				Map<Long,GKInstance> entitySetInstances = new HashMap<>();
-				for (GKInstance instance : entitySetsFollowedInstances) 
-				{
+				for (GKInstance instance : entitySetsFollowedInstances) {
 					entitySetsDbIds.add(instance.getDBID());
 					entitySetInstances.put(instance.getDBID(), instance);
 				}
 				Collections.sort(entitySetsDbIds);
-				for (Long id : entitySetsDbIds) 
-				{
+				for (Long id : entitySetsDbIds) {
 					entitySetsSortedInstances.add(entitySetInstances.get(id));
 				}
 				
-				if (entitySetsFollowedInstances.size() == 0 && entityInst.getSchemClass().isa(CandidateSet))
-				{	
+				if (entitySetsFollowedInstances.size() == 0 && entityInst.getSchemClass().isa(CandidateSet)) {
 					// Protein counts are incremented depending on the number and types of candidates
 					List<Integer> checkedCandidateInstances = getCandidateProteinCounts(
 						entityInst, sortedFollowedInstances);
-					if (checkedCandidateInstances.size() > 0) 
-					{
+					if (checkedCandidateInstances.size() > 0) {
 						total += checkedCandidateInstances.get(0);
-						if (checkedCandidateInstances.size() > 1) 
-						{
+						if (checkedCandidateInstances.size() > 1) {
 							inferrable += checkedCandidateInstances.get(1);
 						}
-						if (checkedCandidateInstances.size() > 2) 
-						{
+						if (checkedCandidateInstances.size() > 2) {
 							max += checkedCandidateInstances.get(2);
 						}
 					}
 					continue;
 				}
-				if (entitySetsFollowedInstances.size() > 0)
-				{
+				if (entitySetsFollowedInstances.size() > 0) {
 					boolean uncountedInstances = false;
 					// Little trick for breaking out of a nested loop
 					outerloop:
-					for (GKInstance physicalEntityInst : entitySetsSortedInstances)
-					{
-						for (GKInstance earlyFollowedInst : sortedFollowedInstances)
-						{
+					for (GKInstance physicalEntityInst : entitySetsSortedInstances) {
+						for (GKInstance earlyFollowedInst : sortedFollowedInstances) {
 							if (physicalEntityInst.getAttributeValue(DB_ID) ==
-								earlyFollowedInst.getAttributeValue(DB_ID))
-							{
+								earlyFollowedInst.getAttributeValue(DB_ID)) {
 								continue outerloop;
 							}
 						}
 						uncountedInstances = true;
 					}
-					if (!uncountedInstances)
-					{
+					if (!uncountedInstances) {
 						continue;
 					}
 					// For Complexes and Polymers, the flag and flagInferred variables determine both if and by how
@@ -170,45 +149,35 @@ public class ProteinCountUtility {
 					// ProteinCount call for each entity in the second followedInstances array.
 					int flag = 0;
 					int flagInferred = 0;
-					for (GKInstance physicalEntityInst : entitySetsSortedInstances)
-					{
+					for (GKInstance physicalEntityInst : entitySetsSortedInstances) {
 						if (physicalEntityInst.getSchemClass().isa(Complex) ||
-							physicalEntityInst.getSchemClass().isa(Polymer))
-						{
+							physicalEntityInst.getSchemClass().isa(Polymer)) {
 							List<Integer> complexProteinCounts = getDistinctProteinCounts(physicalEntityInst);
-							if (complexProteinCounts != null)
-							{
+							if (complexProteinCounts != null) {
 								int subTotal = complexProteinCounts.get(0);
 								int subInferred = complexProteinCounts.get(1);
 								int subMax = complexProteinCounts.get(2);
-								if (subTotal > flag)
-								{
+								if (subTotal > flag) {
 									flag = subTotal;
 								}
-								if (subInferred > flagInferred)
-								{
+								if (subInferred > flagInferred) {
 									flagInferred = subInferred;
 								}
-								if (subMax > max)
-								{
+								if (subMax > max) {
 									max = subMax;
 								}
 							}
-						} else if (physicalEntityInst.getSchemClass().isa(ReferenceGeneProduct)) 
-						{
+						} else if (physicalEntityInst.getSchemClass().isa(ReferenceGeneProduct)) {
 							flag = 1;
 							String identifierName = physicalEntityInst.getAttributeValue(identifier).toString();
 							int count = 0;
-							if (homologueMappings.get(identifierName) != null)
-							{
+							if (homologueMappings.get(identifierName) != null) {
 								count = homologueMappings.get(identifierName).length;
 							}
-							if (count > max)
-							{
+							if (count > max) {
 								max = count;
 							}
-							if (count > 0)
-							{
+							if (count > 0) {
 								flagInferred = 1;
 							}
 						} 
@@ -230,11 +199,9 @@ public class ProteinCountUtility {
 	// This 'output array from the first AQR' is used to prevent redundant counts, such as if a Candidate instance has
 	// already undergone a protein count.
 	private static List<Integer> getCandidateProteinCounts(
-		GKInstance candidateSetInst, Collection<GKInstance> sortedFollowedInstances) throws Exception
-	{
+		GKInstance candidateSetInst, Collection<GKInstance> sortedFollowedInstances) throws Exception {
 		List<Integer> checkedCandidateCounts = new ArrayList<>();
-		if (candidateSetInst.getAttributeValue(hasCandidate) != null)
-		{
+		if (candidateSetInst.getAttributeValue(hasCandidate) != null) {
 			// AttributeQueryRequest for candidateSets, where the output instances are Complex, Polymer, and
 			// ReferenceSequence
 			int candidateTotal = 0;
@@ -254,75 +221,59 @@ public class ProteinCountUtility {
 			List<Long> dbIdsCandidateSet = new ArrayList<>();
 			Collection<GKInstance> sortedCandidateSetFollowedInstances = new ArrayList<>();
 			Map<Long,GKInstance> candidateSetInstances = new HashMap<>();
-			for (GKInstance instance : candidateSetFollowedInstances) 
-			{
+			for (GKInstance instance : candidateSetFollowedInstances) {
 				dbIdsCandidateSet.add(instance.getDBID());
 				candidateSetInstances.put(instance.getDBID(), instance);
 			}
 			Collections.sort(dbIdsCandidateSet);
-			for (Long id : dbIdsCandidateSet) 
-			{
+			for (Long id : dbIdsCandidateSet) {
 				sortedCandidateSetFollowedInstances.add(candidateSetInstances.get(id));
 			}
 			
 			boolean uncountedInstances = false;
-			for (GKInstance physicalEntityInst : sortedCandidateSetFollowedInstances)
-			{
-				for (GKInstance earlyFollowedInst : sortedFollowedInstances)
-				{
-					if (physicalEntityInst.getAttributeValue(DB_ID) == earlyFollowedInst.getAttributeValue(DB_ID))
-					{
+			for (GKInstance physicalEntityInst : sortedCandidateSetFollowedInstances) {
+				for (GKInstance earlyFollowedInst : sortedFollowedInstances) {
+					if (physicalEntityInst.getAttributeValue(DB_ID) == earlyFollowedInst.getAttributeValue(DB_ID)) {
 						continue;
 					}
 				}
 				uncountedInstances = true;
 			}
-			if (!uncountedInstances)
-			{
+			if (!uncountedInstances) {
 				return checkedCandidateCounts;
 			}
 			// For instances that are Complex or Polymer, the total, inferrable and max are incremented according to
 			// the results of a recursive countDistinctProteins call.
-			for (GKInstance physicalEntityInst : sortedCandidateSetFollowedInstances)
-			{
-				if (physicalEntityInst.getSchemClass().isa(Complex) || physicalEntityInst.getSchemClass().isa(Polymer))
-				{
+			for (GKInstance physicalEntityInst : sortedCandidateSetFollowedInstances) {
+				if (physicalEntityInst.getSchemClass().isa(Complex) ||
+					physicalEntityInst.getSchemClass().isa(Polymer)) {
 					List<Integer> candidateComplexCounts = getDistinctProteinCounts(physicalEntityInst);
-					if (candidateComplexCounts.size() > 0)
-					{
-						if (candidateComplexCounts.get(0) > 0 && candidateComplexCounts.get(1) == 0)
-						{
+					if (candidateComplexCounts.size() > 0) {
+						if (candidateComplexCounts.get(0) > 0 && candidateComplexCounts.get(1) == 0) {
 							flag++;
 						}
-						if (candidateTotal > 0 && candidateComplexCounts.get(0) > candidateTotal)
-						{
+						if (candidateTotal > 0 && candidateComplexCounts.get(0) > candidateTotal) {
 							candidateTotal = candidateComplexCounts.get(0);
 						}
-						if (candidateInferrable > 0 && candidateComplexCounts.get(1) > candidateInferrable)
-						{
+						if (candidateInferrable > 0 && candidateComplexCounts.get(1) > candidateInferrable) {
 							candidateInferrable = candidateComplexCounts.get(1);
 						}
-						if (candidateMax > 0 && candidateComplexCounts.get(2) > candidateMax)
-						{
+						if (candidateMax > 0 && candidateComplexCounts.get(2) > candidateMax) {
 							candidateMax = candidateComplexCounts.get(2);
 						}
 					}
 					// ReferenceGeneProduct instances can only have an inferrable of 1 (So says the Perl version)
-				} else if (physicalEntityInst.getSchemClass().isa(ReferenceGeneProduct))
-				{
+				} else if (physicalEntityInst.getSchemClass().isa(ReferenceGeneProduct)) {
 					candidateTotal = 1;
 					String identifierName = physicalEntityInst.getAttributeValue(identifier).toString();
 					int count = 0;
-					if (homologueMappings.get(identifierName) != null)
-					{
+					if (homologueMappings.get(identifierName) != null) {
 						count = homologueMappings.get(identifierName).length;
 					}
-					if (count > 0)
-					{
+					if (count > 0) {
 						candidateInferrable = 1;
 					}
-					if (candidateInferrable == 0)
-					{
+					if (candidateInferrable == 0) {
 						flag++;
 					}
 				}
@@ -335,8 +286,7 @@ public class ProteinCountUtility {
 			// be raised (incorrect, I believe). Alternatively, if 1 doesn't have an inferrable, but 2, 3, 4 do, then
 			// the flag would be raised (correctly). The second example given exemplifies how I believe the function is
 			// meant to work, but the Perl version doesn't handle it. Currently this emulates the Perl version.
-			if (flag > 0)
-			{
+			if (flag > 0) {
 				checkedCandidateCounts.add(candidateTotal);
 				checkedCandidateCounts.add(0); // candidateInferred value is dropped, 0 is returned instead
 				return checkedCandidateCounts;
@@ -349,8 +299,7 @@ public class ProteinCountUtility {
 		return checkedCandidateCounts;
 	}
 	
-	public static void setHomologueMappingFile(Map<String, String[]> homologueMappingsCopy)
-	{
+	public static void setHomologueMappingFile(Map<String, String[]> homologueMappingsCopy) {
 		homologueMappings = homologueMappingsCopy;
 	}
 }

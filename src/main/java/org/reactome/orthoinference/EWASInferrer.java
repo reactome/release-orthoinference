@@ -40,13 +40,11 @@ public class EWASInferrer {
 
 	// Creates an array of inferred EWAS instances from the homologue mappings file (hsap_species_mapping.txt).
 	@SuppressWarnings("unchecked")
-	public static List<GKInstance> inferEWAS(GKInstance ewasInst) throws InvalidAttributeException, Exception
-	{
+	public static List<GKInstance> inferEWAS(GKInstance ewasInst) throws InvalidAttributeException, Exception {
 		List<GKInstance> infEWASInstances = new ArrayList<>();
 		String referenceEntityId = ((GKInstance) ewasInst.getAttributeValue(referenceEntity))
 			.getAttributeValue(identifier).toString();
-		if (homologueMappings.get(referenceEntityId) != null)
-		{
+		if (homologueMappings.get(referenceEntityId) != null) {
 			// Iterate through the array of homologue mappings, attempting to infer EWAS instances for each.
 			logger.info("EWAS homologue(s): " + Arrays.toString(homologueMappings.get(referenceEntityId)));
 			for (String homologue : homologueMappings.get(referenceEntityId)) {
@@ -294,8 +292,7 @@ public class EWASInferrer {
 
 	// Creates ReferenceGeneSequence instance based on ENSG identifier mapped to protein.
 	// Creates an instance for the primary database and an alternate, if it exists.
-	private static List<GKInstance> createReferenceDNASequence(String homologueId) throws Exception
-	{
+	private static List<GKInstance> createReferenceDNASequence(String homologueId) throws Exception {
 		List<GKInstance> referenceDNAInstances = new ArrayList<>();
 		List<String> ensgIds = ensgMappings.get(homologueId);
 		logger.info("Gene ID(s): " + ensgIds);
@@ -337,13 +334,11 @@ public class EWASInferrer {
 	}
 
 	// These are setup functions called at the beginning of the 'inferEvent' script
-	public static void setAdaptor(MySQLAdaptor dbAdaptor)
-	{
+	public static void setAdaptor(MySQLAdaptor dbAdaptor) {
 		dba = dbAdaptor;
 	}
 
-	public static void setInstanceEdit(GKInstance instanceEditCopy)
-	{
+	public static void setInstanceEdit(GKInstance instanceEditCopy) {
 		instanceEditInst = instanceEditCopy;
 	}
 
@@ -353,8 +348,7 @@ public class EWASInferrer {
 	}
 
 	// Read the species-specific ENSG gene-protein mappings, and create a Hashmap with the contents
-	public static void readENSGMappingFile(String toSpecies, String pathToOrthopairs) throws IOException
-	{
+	public static void readENSGMappingFile(String toSpecies, String pathToOrthopairs) throws IOException {
 		String mappingFileName = toSpecies + "_gene_protein_mapping.tsv";
 		String mappingFilePath = Paths.get(pathToOrthopairs, mappingFileName).toString();
 		logger.info("Reading in " + mappingFilePath);
@@ -362,17 +356,14 @@ public class EWASInferrer {
 		BufferedReader br = new BufferedReader(fr);
 
 		String currentLine;
-		while ((currentLine = br.readLine()) != null)
-		{
+		while ((currentLine = br.readLine()) != null) {
 			String[] tabSplit = currentLine.split("\t");
 			String ensgKey = tabSplit[0];
 			String[] proteins = tabSplit[1].split(" ");
-			for (String protein : proteins)
-			{
+			for (String protein : proteins) {
 				String proteinId = protein.contains(":") ? protein.split(":")[1] : protein;
 
-				if (ensgMappings.get(proteinId) == null)
-				{
+				if (ensgMappings.get(proteinId) == null) {
 					List<String> singleArray = new ArrayList<>();
 					singleArray.add(ensgKey);
 					ensgMappings.put(proteinId, singleArray);
@@ -387,8 +378,7 @@ public class EWASInferrer {
 
 	// Fetches Uniprot DB instance
 	@SuppressWarnings("unchecked")
-	public static void fetchAndSetUniprotDbInstance() throws Exception
-	{
+	public static void fetchAndSetUniprotDbInstance() throws Exception {
 		Collection<GKInstance> uniprotDbInstances = (Collection<GKInstance>)
 			dba.fetchInstanceByAttribute(ReferenceDatabase, name, "=", "UniProt");
 		uniprotDbInst = uniprotDbInstances.iterator().next();
@@ -416,8 +406,7 @@ public class EWASInferrer {
 	}
 
 	// Create instance pertaining to any alternative reference DB for the species
-	public static void createAlternateReferenceDBInstance(JSONObject altRefDbJSON) throws Exception
-	{
+	public static void createAlternateReferenceDBInstance(JSONObject altRefDbJSON) throws Exception {
 		alternateDbInst = new GKInstance(dba.getSchema().getClassByName(ReferenceDatabase));
 		alternateDbInst.setDbAdaptor(dba);
 		alternateDbInst.addAttributeValue(created, instanceEditInst);
@@ -433,14 +422,12 @@ public class EWASInferrer {
 		altRefDbExists = true;
 	}
 
-	public static void setAltRefDbToFalse()
-	{
+	public static void setAltRefDbToFalse() {
 		altRefDbExists = false;
 	}
 
 	// Sets the species instance for inferEWAS to use
-	public static void setSpeciesInstance(GKInstance speciesInstCopy)
-	{
+	public static void setSpeciesInstance(GKInstance speciesInstCopy) {
 		speciesInst = speciesInstCopy;
 	}
 

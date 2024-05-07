@@ -22,18 +22,15 @@ public class SkipInstanceChecker {
 
 	// Skiplist was traditionally provided in a file, but since it's currently just 3 instances, I've just hard-coded
 	// them here.
-	public static void buildStaticSkipList() throws Exception
-	{
+	public static void buildStaticSkipList() throws Exception {
 		List<Long> pathwayIdsToSkip = Arrays.asList(
 			HIV_INFECTION_DB_ID,
 			INFLUENZA_INFECTION_DB_ID,
 			AMYLOID_FIBER_FORMATION_DB_ID
 		);
-		for (long pathwayId : pathwayIdsToSkip)
-		{
+		for (long pathwayId : pathwayIdsToSkip) {
 			GKInstance pathwayInst = dba.fetchInstance(pathwayId);
-			if (pathwayInst != null)
-			{
+			if (pathwayInst != null) {
 				// Finds all ReactionLikeEvents associated with the skiplists Pathway and hasEvent attributes, and
 				// adds them to skiplist.
 				List<ClassAttributeFollowingInstruction> classesToFollow = new ArrayList<>();
@@ -44,8 +41,7 @@ public class SkipInstanceChecker {
 				Collection<GKInstance> followedInstances = followInstanceAttributes(
 					pathwayInst, classesToFollow, outClasses);
 
-				for (GKInstance entityInst : followedInstances)
-				{
+				for (GKInstance entityInst : followedInstances) {
 					skipList.add(entityInst.getDBID().toString());
 				}
 			}
@@ -53,11 +49,9 @@ public class SkipInstanceChecker {
 	}
 
 	// Skip orthoinference of this instance if:
-	public static boolean checkIfInstanceShouldBeSkipped(GKInstance reactionInst) throws Exception
-	{
+	public static boolean checkIfInstanceShouldBeSkipped(GKInstance reactionInst) throws Exception {
 		// it is found in skiplist array
-		if (skipList.contains(reactionInst.getDBID().toString()))
-		{
+		if (skipList.contains(reactionInst.getDBID().toString())) {
 			logger.info(reactionInst + " is in skipList -- skipping");
 			return true;
 		}
@@ -70,36 +64,30 @@ public class SkipInstanceChecker {
 			return true;
 		}
 		// it is chimeric
-		if (reactionInst.getAttributeValue(isChimeric) != null)
-		{
-			if ((boolean) reactionInst.getAttributeValue(isChimeric))
-			{
+		if (reactionInst.getAttributeValue(isChimeric) != null) {
+			if ((boolean) reactionInst.getAttributeValue(isChimeric)) {
 				logger.info(reactionInst + " is chimeric -- skipping");
 				return true;
 			}
 		}
 		// it has related species
-		if (reactionInst.getAttributeValue("relatedSpecies") != null)
-		{
+		if (reactionInst.getAttributeValue("relatedSpecies") != null) {
 			logger.info(reactionInst + " has related species -- skipping");
 			return true;
 		}
 		// it is a disease reaction
-		if (reactionInst.getAttributeValue(disease) != null)
-		{
+		if (reactionInst.getAttributeValue(disease) != null) {
 			logger.info(reactionInst + " is a disease reaction -- skipping");
 			return true;
 		}
 		// it is manually inferred
-		if (reactionInst.getAttributeValue(inferredFrom) != null)
-		{
+		if (reactionInst.getAttributeValue(inferredFrom) != null) {
 			logger.info(reactionInst + " is manually inferred -- skipping");
 			return true;
 		}
 		// it contains multiple species
 		Collection<GKInstance> speciesInstances = checkIfEntitiesContainMultipleSpecies(reactionInst);
-		if (speciesInstances.size() > 1)
-		{
+		if (speciesInstances.size() > 1) {
 			logger.info(reactionInst + " has multiple species -- skipping");
 			return true;
 		}
@@ -110,28 +98,22 @@ public class SkipInstanceChecker {
 	// associates with them. Returns a collection of species instances.
 	@SuppressWarnings("unchecked")
 	private static Collection<GKInstance> checkIfEntitiesContainMultipleSpecies(GKInstance reactionInst)
-		throws Exception
-	{
+		throws Exception {
 		List<GKInstance> physicalEntityInstances = new ArrayList<>();
 		physicalEntityInstances.addAll(reactionInst.getAttributeValuesList(input));
 		physicalEntityInstances.addAll(reactionInst.getAttributeValuesList(output));
 		for (GKInstance catalystActivityInst :
-			(Collection<GKInstance>) reactionInst.getAttributeValuesList(catalystActivity))
-		{
+			(Collection<GKInstance>) reactionInst.getAttributeValuesList(catalystActivity)) {
 			physicalEntityInstances.addAll(catalystActivityInst.getAttributeValuesList(physicalEntity));
 		}
 		List<GKInstance> regulatedByInstances =
 			(ArrayList<GKInstance>) reactionInst.getAttributeValuesList("regulatedBy");
 
-		if (regulatedByInstances != null)
-		{
-			for (GKInstance regulatedByInst : regulatedByInstances)
-			{
+		if (regulatedByInstances != null) {
+			for (GKInstance regulatedByInst : regulatedByInstances) {
 				for (GKInstance regulatorInst :
-					(Collection<GKInstance>) regulatedByInst.getAttributeValuesList(regulator))
-				{
-					if (regulatorInst.getSchemClass().isa(PhysicalEntity))
-					{
+					(Collection<GKInstance>) regulatedByInst.getAttributeValuesList(regulator)) {
+					if (regulatorInst.getSchemClass().isa(PhysicalEntity)) {
 						physicalEntityInstances.add(regulatorInst);
 					}
 				}
@@ -139,32 +121,25 @@ public class SkipInstanceChecker {
 		}
 		Map<String, GKInstance> physicalEntityHash = new HashMap<>();
 		// Remove duplicates using HashMap
-		for (GKInstance physicalEntityInst : physicalEntityInstances)
-		{
+		for (GKInstance physicalEntityInst : physicalEntityInstances) {
 			physicalEntityHash.put(physicalEntityInst.getDBID().toString(), physicalEntityInst);
 		}
 		Map<String, GKInstance> physicalEntitiesFinal = new HashMap<>();
-		for (GKInstance physicalEntityInst : physicalEntityHash.values())
-		{
+		for (GKInstance physicalEntityInst : physicalEntityHash.values()) {
 			physicalEntitiesFinal.put(physicalEntityInst.getDBID().toString(), physicalEntityInst);
 			Collection<GKInstance> allConstituentInstances =
 				recursePhysicalEntityConstituentInstances(physicalEntityInst);
-			if (allConstituentInstances != null)
-			{
-				for (GKInstance constituentInst : allConstituentInstances)
-				{
+			if (allConstituentInstances != null) {
+				for (GKInstance constituentInst : allConstituentInstances) {
 					physicalEntitiesFinal.put(constituentInst.getDBID().toString(), constituentInst);
 				}
 			}
 		}
 		Map<String, GKInstance> speciesHash = new HashMap<>();
-		for (GKInstance physicalEntityInst : physicalEntitiesFinal.values())
-		{
-			if (physicalEntityInst.getSchemClass().isValidAttribute(species))
-			{
+		for (GKInstance physicalEntityInst : physicalEntitiesFinal.values()) {
+			if (physicalEntityInst.getSchemClass().isValidAttribute(species)) {
 				for (GKInstance speciesInst :
-					(Collection<GKInstance>) physicalEntityInst.getAttributeValuesList(species))
-				{
+					(Collection<GKInstance>) physicalEntityInst.getAttributeValuesList(species)) {
 					speciesHash.put(speciesInst.getDBID().toString(), speciesInst);
 				}
 			}
@@ -177,48 +152,36 @@ public class SkipInstanceChecker {
 	// attributes
 	@SuppressWarnings("unchecked")
 	private static Collection<GKInstance> recursePhysicalEntityConstituentInstances(GKInstance physicalEntity)
-		throws Exception
-	{
+		throws Exception {
 		Map<String, GKInstance> constituentInstances = new HashMap<>();
-		if (physicalEntity.getSchemClass().isValidAttribute(hasMember))
-		{
-			for (GKInstance memberInst : (Collection<GKInstance>) physicalEntity.getAttributeValuesList(hasMember))
-			{
+		if (physicalEntity.getSchemClass().isValidAttribute(hasMember)) {
+			for (GKInstance memberInst : (Collection<GKInstance>) physicalEntity.getAttributeValuesList(hasMember)) {
 				constituentInstances.put(memberInst.getDBID().toString(), memberInst);
 			}
 		}
-		if (physicalEntity.getSchemClass().isValidAttribute(hasComponent))
-		{
+		if (physicalEntity.getSchemClass().isValidAttribute(hasComponent)) {
 			for (GKInstance componentInst :
-				(Collection<GKInstance>) physicalEntity.getAttributeValuesList(hasComponent))
-			{
+				(Collection<GKInstance>) physicalEntity.getAttributeValuesList(hasComponent)) {
 				constituentInstances.put(componentInst.getDBID().toString(), componentInst);
 			}
 		}
-		if (physicalEntity.getSchemClass().isValidAttribute(repeatedUnit))
-		{
+		if (physicalEntity.getSchemClass().isValidAttribute(repeatedUnit)) {
 			for (GKInstance repeatedUnitInst :
-				(Collection<GKInstance>) physicalEntity.getAttributeValuesList(repeatedUnit))
-			{
+				(Collection<GKInstance>) physicalEntity.getAttributeValuesList(repeatedUnit)) {
 				constituentInstances.put(repeatedUnitInst.getDBID().toString(), repeatedUnitInst);
 			}
 		}
-		if (constituentInstances.size() > 0)
-		{
+		if (constituentInstances.size() > 0) {
 			Map<String, GKInstance> finalConstituentInstancesMap = new HashMap<>();
-			for (GKInstance constituentInst : constituentInstances.values())
-			{
+			for (GKInstance constituentInst : constituentInstances.values()) {
 				finalConstituentInstancesMap.put(constituentInst.getDBID().toString(), constituentInst);
 				if (constituentInst.getSchemClass().isa(EntitySet) ||
 					constituentInst.getSchemClass().isa(Complex) ||
-					constituentInst.getSchemClass().isa(Polymer))
-				{
+					constituentInst.getSchemClass().isa(Polymer)) {
 					Collection<GKInstance> recursedConstituentInstances =
 						recursePhysicalEntityConstituentInstances(constituentInst);
-					if (recursedConstituentInstances != null)
-					{
-						for (GKInstance recursedConstituentInst : recursedConstituentInstances)
-						{
+					if (recursedConstituentInstances != null) {
+						for (GKInstance recursedConstituentInst : recursedConstituentInstances) {
 							finalConstituentInstancesMap.put(
 								recursedConstituentInst.getDBID().toString(), recursedConstituentInst);
 						}
@@ -232,8 +195,7 @@ public class SkipInstanceChecker {
 		return null;
 	}
 
-	public static void setAdaptor(MySQLAdaptor dbAdaptor)
-	{
+	public static void setAdaptor(MySQLAdaptor dbAdaptor) {
 		dba = dbAdaptor;
 	}
 }
