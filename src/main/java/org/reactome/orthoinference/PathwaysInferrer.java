@@ -22,7 +22,8 @@ public class PathwaysInferrer {
 	private static Map<GKInstance, GKInstance> sourceInstanceToInferredInstance = new HashMap<>();
 	private static GKInstance diseasePathwayInst;
 
-	// This class populates species pathways with the instances that have been inferred. This was copied heavily from the Perl, so my explanations are a little sparse here.
+	// This class populates species pathways with the instances that have been inferred.
+	// This was copied heavily from the Perl, so my explanations are a little sparse here.
 	public static void inferPathways(List<GKInstance> inferrableHumanEvents) throws Exception
 	{
 		diseasePathwayInst = getDiseaseInstance();
@@ -30,8 +31,9 @@ public class PathwaysInferrer {
 		logger.info("Beginning Pathway inference");
 		updatedInferrableHumanEvents.addAll(inferrableHumanEvents);
 
-		// First, go through each of the inferred RlE instances and generate the entire pathway hierarchy it is associated with. Inferred Reactions are not
-		// added to the Pathway at this point. This includes the immediate Pathway, but also all parent pathways up to its TopLevelPathway.
+		// First, go through each of the inferred RlE instances and generate the entire pathway hierarchy it is
+		// associated with. Inferred Reactions are not added to the Pathway at this point. This includes the immediate
+		// Pathway, but also all parent pathways up to its TopLevelPathway.
 		logger.info("Building inferred Pathway hierarchies");
 		Set<Long> seenPathwayHierarchy = new HashSet<>();
 		for (GKInstance inferrableInst : inferrableHumanEvents)
@@ -47,7 +49,8 @@ public class PathwaysInferrer {
 		}
 		logger.info("Finished building inferred Pathway hierarchies");
 
-		// After generating the inferred Pathways hierarchys, the associated inferred Events (RlEs & Pathways) need to be added to them.
+		// After generating the inferred Pathways hierarchys, the associated inferred Events (RlEs & Pathways) need
+		// to be added to them.
 		logger.info("Populating inferred Pathways with inferred Events");
 		addInferredEventsToInferredPathways();
 		logger.info("Finished populating inferred Pathways with inferred Events");
@@ -59,13 +62,14 @@ public class PathwaysInferrer {
 		inferPrecedingEvents();
 		logger.info("Finished adding preceding events to inferred Events");
 
-		// Any source species Events (Pathway or RlEs) that were modified during Pathway inference are updated with a 'modified' instance edit.
+		// Any source species Events (Pathway or RlEs) that were modified during Pathway inference are updated with a
+		// 'modified' instance edit.
 		updateModifiedAttributeIfNecessary();
 	}
 
 	@SuppressWarnings("unchecked")
-	// This generates the inferred Pathway of an inferred RlE. It iterates, inferring parent Pathways until reaching the TopLevelPathway.
-	// Inferred Reactions are not added to the Pathway at this step.
+	// This generates the inferred Pathway of an inferred RlE. It iterates, inferring parent Pathways until reaching
+	// the TopLevelPathway.  Inferred Reactions are not added to the Pathway at this step.
 	private static void createInferredPathwayHierarchy(GKInstance sourceEventInst) throws Exception
 	{
 		List<GKInstance> sourcePathwayReferralInstances = safeList(sourceEventInst.getReferers(hasEvent));
@@ -80,8 +84,11 @@ public class PathwaysInferrer {
 		{
 
 			logger.info("Generating inferred Pathway: " + sourcePathwayReferralInst);
-			// Pathways that have been inferred already are skipped, as are Pathways that are only children of the Disease TopLevelPathway.
-			if (hasNotBeenInferred(sourcePathwayReferralInst) && !InstanceUtilities.onlyInDiseasePathway(sourcePathwayReferralInst)) {
+			// Pathways that have been inferred already are skipped, as are Pathways that are only children of the
+			// Disease TopLevelPathway.
+			if (hasNotBeenInferred(sourcePathwayReferralInst) &&
+				!InstanceUtilities.onlyInDiseasePathway(sourcePathwayReferralInst)) {
+
 				inferPathway(sourcePathwayReferralInst);
 			}
 			createInferredPathwayHierarchy(sourcePathwayReferralInst);
@@ -102,7 +109,8 @@ public class PathwaysInferrer {
 		}
 		infPathwayInst.addAttributeValue(inferredFrom, sourcePathwayReferralInst);
 		infPathwayInst.addAttributeValue(evidenceType, evidenceTypeInst);
-		for (GKInstance goBioProcessInst : (Collection<GKInstance>) sourcePathwayReferralInst.getAttributeValuesList(goBiologicalProcess))
+		for (GKInstance goBioProcessInst :
+			(Collection<GKInstance>) sourcePathwayReferralInst.getAttributeValuesList(goBiologicalProcess))
 		{
 			infPathwayInst.addAttributeValue(goBiologicalProcess, goBioProcessInst);
 		}
@@ -110,24 +118,30 @@ public class PathwaysInferrer {
 
 		if (sourcePathwayReferralInst.getSchemClass().isa(ReactionlikeEvent))
 		{
-			logger.warn(sourcePathwayReferralInst + " is a ReactionLikeEvent, which is unexpected -- refer to infer_events.pl");
+			logger.warn(sourcePathwayReferralInst + " is a ReactionLikeEvent, which is unexpected -- " +
+				"refer to infer_events.pl");
 		}
 		infPathwayInst.setDisplayName(sourcePathwayReferralInst.getDisplayName());
 		sourceInstanceToInferredInstance.put(sourcePathwayReferralInst, infPathwayInst);
-		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
+		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator()
+			.generateOrthologousStableId(infPathwayInst, sourcePathwayReferralInst);
 		infPathwayInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
 		dba.storeInstance(infPathwayInst);
 
-		// This was replaced with addAttributeValueIfNecessary due to a bug where a Pathway instance's 'OrthologousEvent' attribute was being replaced,
-		// instead of being added to the existing array when  the script was executed from a jar (rather than from Eclipse) (Justin Cook 2018)
-		sourcePathwayReferralInst = InstanceUtilities.addAttributeValueIfNecessary(sourcePathwayReferralInst, infPathwayInst, orthologousEvent);
+		// This was replaced with addAttributeValueIfNecessary due to a bug where a Pathway instance's
+		// 'OrthologousEvent' attribute was being replaced, instead of being added to the existing array when the
+		// script was executed from a jar (rather than from Eclipse) (Justin Cook 2018)
+		sourcePathwayReferralInst = InstanceUtilities.addAttributeValueIfNecessary(
+			sourcePathwayReferralInst, infPathwayInst, orthologousEvent);
 		dba.updateInstanceAttribute(sourcePathwayReferralInst, orthologousEvent);
 
-		//TODO: At this point, sourcePathwayReferralInst is always a Pathway. Perhaps move to its own data structure? Holdout from Perl...
+		//TODO: At this point, sourcePathwayReferralInst is always a Pathway.
+		// Perhaps move to its own data structure? Holdout from Perl...
 		updatedInferrableHumanEvents.add(sourcePathwayReferralInst);
 	}
 
-	// This populates the hasEvent slot of all inferred Pathways that were just generated with corresponding inferred reactions
+	// This populates the hasEvent slot of all inferred Pathways that were just generated with corresponding inferred
+	// reactions
 	private static void addInferredEventsToInferredPathways() throws Exception {
 		Set<Long> seenInferredPathway = new HashSet<>();
 		for (GKInstance humanPathwayInst : updatedInferrableHumanEvents)
@@ -137,16 +151,20 @@ public class PathwaysInferrer {
 					List<GKInstance> inferredEventInstances = getInferredEventInstances(humanPathwayInst);
 					if (sourceInstanceToInferredInstance.get(humanPathwayInst).getSchemClass().isValidAttribute(hasEvent)) {
 						// Add inferred Events to inferred Pathway
-						logger.info("Adding " + inferredEventInstances.size() + " inferred Event(s) to inferred Pathway: " + sourceInstanceToInferredInstance.get(humanPathwayInst));
+						logger.info("Adding " + inferredEventInstances.size() + " inferred Event(s) to " +
+							"inferred Pathway: " + sourceInstanceToInferredInstance.get(humanPathwayInst));
 						for (GKInstance infEventInst : inferredEventInstances) {
 							GKInstance infPathwayInst = sourceInstanceToInferredInstance.get(humanPathwayInst);
-							infPathwayInst = InstanceUtilities.addAttributeValueIfNecessary(infPathwayInst, infEventInst, hasEvent);
+							infPathwayInst = InstanceUtilities.addAttributeValueIfNecessary(
+								infPathwayInst, infEventInst, hasEvent);
 							sourceInstanceToInferredInstance.remove(humanPathwayInst);
 							sourceInstanceToInferredInstance.put(humanPathwayInst, infPathwayInst);
 						}
 						dba.updateInstanceAttribute(sourceInstanceToInferredInstance.get(humanPathwayInst), hasEvent);
 					} else {
-						logger.info(humanPathwayInst + " and " + sourceInstanceToInferredInstance.get(humanPathwayInst) + " have different classes (likely connected via manual inference");
+						logger.info(humanPathwayInst + " and " +
+							sourceInstanceToInferredInstance.get(humanPathwayInst) + " have different classes " +
+							"(likely connected via manual inference");
 					}
 					seenInferredPathway.add(humanPathwayInst.getDBID());
 				} else {
@@ -181,7 +199,8 @@ public class PathwaysInferrer {
 					logger.info("Adding preceding event to " + inferrableEventInst);
 					List<GKInstance> precedingEventInstances = new ArrayList<>();
 					// Find all preceding events for source instance that have an inferred counterpart
-					for (GKInstance precedingEventInst : (Collection<GKInstance>) inferrableEventInst.getAttributeValuesList(precedingEvent))
+					for (GKInstance precedingEventInst :
+						(Collection<GKInstance>) inferrableEventInst.getAttributeValuesList(precedingEvent))
 					{
 						if (sourceInstanceToInferredInstance.get(precedingEventInst) != null)
 						{
@@ -189,8 +208,11 @@ public class PathwaysInferrer {
 						}
 					}
 					Set<String> inferredPrecedingEvents = new HashSet<>();
-					// Find any inferred preceding events that already exist for the inferred instance (don't want to add any redundant preceding events)
-					for (GKInstance precedingEventInst : (Collection<GKInstance>) sourceInstanceToInferredInstance.get(inferrableEventInst).getAttributeValuesList(precedingEvent))
+					// Find any inferred preceding events that already exist for the inferred instance
+					// (don't want to add any redundant preceding events)
+					for (GKInstance precedingEventInst : (Collection<GKInstance>)
+						sourceInstanceToInferredInstance.get(inferrableEventInst)
+							.getAttributeValuesList(precedingEvent))
 					{
 						inferredPrecedingEvents.add(precedingEventInst.getDBID().toString());
 					}
@@ -206,8 +228,10 @@ public class PathwaysInferrer {
 					// Add preceding event to inferred instance
 					if (updatedPrecedingEventInstances != null && updatedPrecedingEventInstances.size() > 0)
 					{
-						sourceInstanceToInferredInstance.get(inferrableEventInst).addAttributeValue(precedingEvent, updatedPrecedingEventInstances);
-						dba.updateInstanceAttribute(sourceInstanceToInferredInstance.get(inferrableEventInst), precedingEvent);
+						sourceInstanceToInferredInstance.get(inferrableEventInst).addAttributeValue(
+							precedingEvent, updatedPrecedingEventInstances);
+						dba.updateInstanceAttribute(sourceInstanceToInferredInstance.get(inferrableEventInst),
+							precedingEvent);
 					}
 				}
 				seenPrecedingEvent.add(inferrableEventInst);
@@ -223,11 +247,13 @@ public class PathwaysInferrer {
 			if (!seenInstanceEditInst.contains(humanPathwayInst.getDBID()))
 			{
 				GKInstance createdInst = (GKInstance) humanPathwayInst.getAttributeValue(created);
-				if (createdInst == null || !createdInst.getDBID().toString().matches(instanceEditInst.getDBID().toString()))
+				if (createdInst == null ||
+					!createdInst.getDBID().toString().matches(instanceEditInst.getDBID().toString()))
 				{
 
 					boolean modifiedExists = false;
-					for (GKInstance modifiedInst : (Collection<GKInstance>) humanPathwayInst.getAttributeValuesList(modified))
+					for (GKInstance modifiedInst :
+						(Collection<GKInstance>) humanPathwayInst.getAttributeValuesList(modified))
 					{
 						if (modifiedInst.getDBID().toString().matches(instanceEditInst.getDBID().toString()))
 						{

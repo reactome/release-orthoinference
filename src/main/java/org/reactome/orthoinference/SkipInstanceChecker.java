@@ -20,7 +20,8 @@ public class SkipInstanceChecker {
 	private static final long INFLUENZA_INFECTION_DB_ID = 168255L;
 	private static final long AMYLOID_FIBER_FORMATION_DB_ID = 977225L;
 
-	// Skiplist was traditionally provided in a file, but since it's currently just 3 instances, I've just hard-coded them here.
+	// Skiplist was traditionally provided in a file, but since it's currently just 3 instances, I've just hard-coded
+	// them here.
 	public static void buildStaticSkipList() throws Exception
 	{
 		List<Long> pathwayIdsToSkip = Arrays.asList(
@@ -33,12 +34,15 @@ public class SkipInstanceChecker {
 			GKInstance pathwayInst = dba.fetchInstance(pathwayId);
 			if (pathwayInst != null)
 			{
-				// Finds all ReactionLikeEvents associated with the skiplists Pathway and hasEvent attributes, and adds them to skiplist.
+				// Finds all ReactionLikeEvents associated with the skiplists Pathway and hasEvent attributes, and
+				// adds them to skiplist.
 				List<ClassAttributeFollowingInstruction> classesToFollow = new ArrayList<>();
-				classesToFollow.add(new ClassAttributeFollowingInstruction(Pathway, new String[]{hasEvent}, new String[]{}));
+				classesToFollow.add(new ClassAttributeFollowingInstruction(
+					Pathway, new String[]{hasEvent}, new String[]{}));
 				String[] outClasses = new String[] {ReactionlikeEvent};
 				@SuppressWarnings("unchecked")
-				Collection<GKInstance> followedInstances = followInstanceAttributes(pathwayInst, classesToFollow, outClasses);
+				Collection<GKInstance> followedInstances = followInstanceAttributes(
+					pathwayInst, classesToFollow, outClasses);
 
 				for (GKInstance entityInst : followedInstances)
 				{
@@ -59,7 +63,8 @@ public class SkipInstanceChecker {
 		}
 
 		// If the only TopLevelPathway of a Reaction is 'Disease', then it is skipped.
-		// Otherwise, it is inferred, making sure in cases where a Reaction is also a part of 'Disease' that that Pathway is not inferred.
+		// Otherwise, it is inferred, making sure in cases where a Reaction is also a part of 'Disease' that that
+		// Pathway is not inferred.
 		if (InstanceUtilities.onlyInDiseasePathway(reactionInst)) {
 			logger.info(reactionInst + " has only Disease TopLevelPathway -- skipping");
 			return true;
@@ -101,24 +106,29 @@ public class SkipInstanceChecker {
 		return false;
 	}
 
-	// Goes through all input/output/catalystActivity/regulatedBy attribute instances, and captures all species associates with them. Returns a collection of species instances.
+	// Goes through all input/output/catalystActivity/regulatedBy attribute instances, and captures all species
+	// associates with them. Returns a collection of species instances.
 	@SuppressWarnings("unchecked")
-	private static Collection<GKInstance> checkIfEntitiesContainMultipleSpecies(GKInstance reactionInst) throws Exception
+	private static Collection<GKInstance> checkIfEntitiesContainMultipleSpecies(GKInstance reactionInst)
+		throws Exception
 	{
 		List<GKInstance> physicalEntityInstances = new ArrayList<>();
 		physicalEntityInstances.addAll(reactionInst.getAttributeValuesList(input));
 		physicalEntityInstances.addAll(reactionInst.getAttributeValuesList(output));
-		for (GKInstance catalystActivityInst : (Collection<GKInstance>) reactionInst.getAttributeValuesList(catalystActivity))
+		for (GKInstance catalystActivityInst :
+			(Collection<GKInstance>) reactionInst.getAttributeValuesList(catalystActivity))
 		{
 			physicalEntityInstances.addAll(catalystActivityInst.getAttributeValuesList(physicalEntity));
 		}
-		List<GKInstance> regulatedByInstances = (ArrayList<GKInstance>) reactionInst.getAttributeValuesList("regulatedBy");
+		List<GKInstance> regulatedByInstances =
+			(ArrayList<GKInstance>) reactionInst.getAttributeValuesList("regulatedBy");
 
 		if (regulatedByInstances != null)
 		{
 			for (GKInstance regulatedByInst : regulatedByInstances)
 			{
-				for (GKInstance regulatorInst : (Collection<GKInstance>) regulatedByInst.getAttributeValuesList(regulator))
+				for (GKInstance regulatorInst :
+					(Collection<GKInstance>) regulatedByInst.getAttributeValuesList(regulator))
 				{
 					if (regulatorInst.getSchemClass().isa(PhysicalEntity))
 					{
@@ -137,7 +147,8 @@ public class SkipInstanceChecker {
 		for (GKInstance physicalEntityInst : physicalEntityHash.values())
 		{
 			physicalEntitiesFinal.put(physicalEntityInst.getDBID().toString(), physicalEntityInst);
-			Collection<GKInstance> allConstituentInstances = recursePhysicalEntityConstituentInstances(physicalEntityInst);
+			Collection<GKInstance> allConstituentInstances =
+				recursePhysicalEntityConstituentInstances(physicalEntityInst);
 			if (allConstituentInstances != null)
 			{
 				for (GKInstance constituentInst : allConstituentInstances)
@@ -151,7 +162,8 @@ public class SkipInstanceChecker {
 		{
 			if (physicalEntityInst.getSchemClass().isValidAttribute(species))
 			{
-				for (GKInstance speciesInst : (Collection<GKInstance>) physicalEntityInst.getAttributeValuesList(species))
+				for (GKInstance speciesInst :
+					(Collection<GKInstance>) physicalEntityInst.getAttributeValuesList(species))
 				{
 					speciesHash.put(speciesInst.getDBID().toString(), speciesInst);
 				}
@@ -161,9 +173,11 @@ public class SkipInstanceChecker {
 	}
 
 	// Looks at referrals of the constituent instances for the species attribute as well
-	// The term 'constituent' is used as a catch-all for instances under the hasMember/hasComponent/repeatedUnit attributes
+	// The term 'constituent' is used as a catch-all for instances under the hasMember/hasComponent/repeatedUnit
+	// attributes
 	@SuppressWarnings("unchecked")
-	private static Collection<GKInstance> recursePhysicalEntityConstituentInstances(GKInstance physicalEntity) throws Exception
+	private static Collection<GKInstance> recursePhysicalEntityConstituentInstances(GKInstance physicalEntity)
+		throws Exception
 	{
 		Map<String, GKInstance> constituentInstances = new HashMap<>();
 		if (physicalEntity.getSchemClass().isValidAttribute(hasMember))
@@ -175,14 +189,16 @@ public class SkipInstanceChecker {
 		}
 		if (physicalEntity.getSchemClass().isValidAttribute(hasComponent))
 		{
-			for (GKInstance componentInst : (Collection<GKInstance>) physicalEntity.getAttributeValuesList(hasComponent))
+			for (GKInstance componentInst :
+				(Collection<GKInstance>) physicalEntity.getAttributeValuesList(hasComponent))
 			{
 				constituentInstances.put(componentInst.getDBID().toString(), componentInst);
 			}
 		}
 		if (physicalEntity.getSchemClass().isValidAttribute(repeatedUnit))
 		{
-			for (GKInstance repeatedUnitInst : (Collection<GKInstance>) physicalEntity.getAttributeValuesList(repeatedUnit))
+			for (GKInstance repeatedUnitInst :
+				(Collection<GKInstance>) physicalEntity.getAttributeValuesList(repeatedUnit))
 			{
 				constituentInstances.put(repeatedUnitInst.getDBID().toString(), repeatedUnitInst);
 			}
@@ -193,14 +209,18 @@ public class SkipInstanceChecker {
 			for (GKInstance constituentInst : constituentInstances.values())
 			{
 				finalConstituentInstancesMap.put(constituentInst.getDBID().toString(), constituentInst);
-				if (constituentInst.getSchemClass().isa(EntitySet) || constituentInst.getSchemClass().isa(Complex) || constituentInst.getSchemClass().isa(Polymer))
+				if (constituentInst.getSchemClass().isa(EntitySet) ||
+					constituentInst.getSchemClass().isa(Complex) ||
+					constituentInst.getSchemClass().isa(Polymer))
 				{
-					Collection<GKInstance> recursedConstituentInstances = recursePhysicalEntityConstituentInstances(constituentInst);
+					Collection<GKInstance> recursedConstituentInstances =
+						recursePhysicalEntityConstituentInstances(constituentInst);
 					if (recursedConstituentInstances != null)
 					{
 						for (GKInstance recursedConstituentInst : recursedConstituentInstances)
 						{
-							finalConstituentInstancesMap.put(recursedConstituentInst.getDBID().toString(), recursedConstituentInst);
+							finalConstituentInstancesMap.put(
+								recursedConstituentInst.getDBID().toString(), recursedConstituentInst);
 						}
 					}
 				} else {

@@ -16,7 +16,8 @@ public class SpeciesCheckUtility {
 		if (entityInst.getSchemClass().isa(OtherEntity))
 		{
 			return false;
-		} else if (entityInst.getSchemClass().isa(EntitySet)) // || entityInst.getSchemClass().isa(Polymer) || entityInst.getSchemClass().isa(EntitySet))
+		} else if (entityInst.getSchemClass().isa(EntitySet))
+			// || entityInst.getSchemClass().isa(Polymer) || entityInst.getSchemClass().isa(EntitySet))
 		{
 			for (GKInstance memberInst : (Collection<GKInstance>) entityInst.getAttributeValuesList(hasMember))
 			{
@@ -26,7 +27,8 @@ public class SpeciesCheckUtility {
 				}
 			}
 			if (entityInst.getSchemClass().isa(CandidateSet)) {
-				for (GKInstance candidateInst : (Collection<GKInstance>) entityInst.getAttributeValuesList(hasCandidate))
+				for (GKInstance candidateInst :
+					(Collection<GKInstance>) entityInst.getAttributeValuesList(hasCandidate))
 				{
 					if (checkForSpeciesAttribute(candidateInst))
 					{
@@ -47,7 +49,8 @@ public class SpeciesCheckUtility {
 			return false;
 		} else if (entityInst.getSchemClass().isa(Polymer))
 		{
-			for (GKInstance repeatedUnitInst : (Collection<GKInstance>) entityInst.getAttributeValuesList(repeatedUnit))
+			for (GKInstance repeatedUnitInst :
+				(Collection<GKInstance>) entityInst.getAttributeValuesList(repeatedUnit))
 			{
 				if (checkForSpeciesAttribute(repeatedUnitInst))
 				{
