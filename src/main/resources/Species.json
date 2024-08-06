@@ -279,11 +279,11 @@
 			]
 		},
 		"alt_refdb":{
-			"access":"http:\/\/flybase.net\/.bin\/fbidq.html?###ID###",
+			"access":"https:\/\/flybase.org\/.bin\/fbidq.html?###ID###",
 			"dbname":[
-				"Flybase"
+				"FlyBase"
 			],
-			"url":"http:\/\/www.flybase.net"
+			"url":"https:\/\/www.flybase.org"
 		},
 		"mart_group":"dmelanogaster_gene_ensembl",
 		"name":[
