@@ -19,8 +19,9 @@ import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
-import static org.gk.model.ReactomeJavaConstants.*;
+//import static org.gk.model.ReactomeJavaConstants.*;
 
+import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.InvalidAttributeException;
 import org.gk.schema.SchemaClass;
@@ -54,9 +55,8 @@ public class EventsInferrer {
 	private static GKInstance speciesInst;
 	private static Map<GKInstance,GKInstance> manualEventToNonHumanSource = new HashMap<>();
 	private static List<GKInstance> manualHumanEvents = new ArrayList<>();
-	private static StableIdentifierGenerator stableIdentifierGenerator;
+	//private static StableIdentifierGenerator stableIdentifierGenerator;
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
-	private static final String INFERRED_EVIDENCE_TYPE_DISPLAY_NAME = "inferred by electronic annotation";
 
 	public EventsInferrer(ConfigProperties configProperties, String speciesCode) throws IOException {
 		this.configProperties = configProperties;
@@ -71,10 +71,9 @@ public class EventsInferrer {
 		// Parse Species information (found in Species.json config file)
 		logger.info("Beginning orthoinference of " + getSpeciesName());
 
-		stableIdentifierGenerator =
-			new StableIdentifierGenerator(configProperties, speciesCode);
+//		stableIdentifierGenerator =
+//			new StableIdentifierGenerator(configProperties, speciesCode);
 		// Set static variables (DB/Species Instances, mapping files) that will be repeatedly used
-		setInstanceEdits(configProperties.getPersonId());
 		try {
 			readAndSetHomologueMappingFile(speciesCode, "hsap");
 			readAndSetGeneNameMappingFile(speciesCode);
@@ -104,10 +103,6 @@ public class EventsInferrer {
 		} else {
 			EWASInferrer.setAltRefDbToFalse();
 		}
-		createAndSetSpeciesInstance();
-		setSummationInstance();
-		setEvidenceTypeInstance();
-		OrthologousEntityGenerator.setComplexSummationInstance();
 
 /**
  *  Start of ReactionlikeEvent inference. Retrieves all human ReactionlikeEvents, and attempts to infer each for the species.
@@ -138,15 +133,15 @@ public class EventsInferrer {
 			// without re-inferring instances.
 			List<GKInstance> previouslyInferredInstances = new ArrayList<GKInstance>();
 			previouslyInferredInstances.addAll(
-				checkIfPreviouslyInferred(reactionInst, orthologousEvent, previouslyInferredInstances));
+				checkIfPreviouslyInferred(reactionInst, ReactomeJavaConstants.orthologousEvent, previouslyInferredInstances));
 			previouslyInferredInstances.addAll(
-				checkIfPreviouslyInferred(reactionInst, inferredFrom, previouslyInferredInstances));
+				checkIfPreviouslyInferred(reactionInst, ReactomeJavaConstants.inferredFrom, previouslyInferredInstances));
 			if (previouslyInferredInstances.size() > 0) {
 				GKInstance prevInfInst = previouslyInferredInstances.get(0);
-				if (prevInfInst.getAttributeValue(disease) == null) {
-					GKInstance evidenceTypeInst = (GKInstance) prevInfInst.getAttributeValue(evidenceType);
+				if (prevInfInst.getAttributeValue(ReactomeJavaConstants.disease) == null) {
+					GKInstance evidenceTypeInst = (GKInstance) prevInfInst.getAttributeValue(ReactomeJavaConstants.evidenceType);
 					if (evidenceTypeInst != null &&
-						evidenceTypeInst.getDisplayName().contains(INFERRED_EVIDENCE_TYPE_DISPLAY_NAME)) {
+						evidenceTypeInst.getDisplayName().contains("electronic")) {
 						getReactionInferrer().addAlreadyInferredEvents(reactionInst, prevInfInst);
 					} else {
 						logger.info("Inferred RlE already exists, skipping inference");
@@ -176,9 +171,9 @@ public class EventsInferrer {
 		logger.info("Finished orthoinference of " + getSpeciesName());
 	}
 
-	public StableIdentifierGenerator getStableIdentifierGenerator() {
-		return stableIdentifierGenerator;
-	}
+//	public StableIdentifierGenerator getStableIdentifierGenerator() {
+//		return stableIdentifierGenerator;
+//	}
 
 	private GKInstance getHumanSpeciesInstance() throws Exception {
 		Collection<GKInstance> sourceSpeciesInst = (Collection<GKInstance>)
@@ -243,9 +238,9 @@ public class EventsInferrer {
 		GKInstance reactionInst, String attribute, List<GKInstance> previouslyInferredInstances)
 		throws InvalidAttributeException, Exception {
 		for (GKInstance attributeInst : (Collection<GKInstance>) reactionInst.getAttributeValuesList(attribute)) {
-			GKInstance reactionSpeciesInst = (GKInstance) attributeInst.getAttributeValue(species);
+			GKInstance reactionSpeciesInst = (GKInstance) attributeInst.getAttributeValue(ReactomeJavaConstants.species);
 			if (reactionSpeciesInst.getDBID() == speciesInst.getDBID() &&
-				attributeInst.getAttributeValue(isChimeric) == null) {
+				attributeInst.getAttributeValue(ReactomeJavaConstants.isChimeric) == null) {
 				previouslyInferredInstances.add(attributeInst);
 			}
 		}
@@ -305,64 +300,6 @@ public class EventsInferrer {
 		br.close();
 		fr.close();
 		return homologueMappings;
-	}
-
-	// Find the instance specific to this species
-	private void createAndSetSpeciesInstance() throws Exception {
-		SchemaClass referenceDb = getCurrentDBA().getSchema().getClassByName(Species);
-		speciesInst = new GKInstance(referenceDb);
-		speciesInst.setDbAdaptor(getCurrentDBA());
-		speciesInst.addAttributeValue(created, instanceEditInst);
-		speciesInst.addAttributeValue(name, getSpeciesName());
-		speciesInst.addAttributeValue(_displayName, getSpeciesName());
-		speciesInst = InstanceUtilities.checkForIdenticalInstances(speciesInst, null);
-		logger.info("Using species instance: " + speciesInst);
-		OrthologousEntityGenerator.setSpeciesInstance(speciesInst);
-		EWASInferrer.setSpeciesInstance(speciesInst);
-		InstanceUtilities.setSpeciesInstance(speciesInst);
-	}
-	// Create and set static Summation instance
-	private void setSummationInstance() throws Exception {
-		GKInstance summationInst = new GKInstance(getCurrentDBA().getSchema().getClassByName(Summation));
-		summationInst.setDbAdaptor(getCurrentDBA());
-		summationInst.addAttributeValue(created, instanceEditInst);
-		String summationText = "This event has been computationally inferred from an event that has been" +
-			" demonstrated in another species.<p>The inference is based on the homology mapping from PANTHER." +
-			" Briefly, reactions for which all involved PhysicalEntities (in input, output and catalyst) have a" +
-			" mapped orthologue/paralogue (for complexes at least 75% of components must have a mapping) are" +
-			" inferred to the other species. High level events are also inferred for these events to allow for" +
-			" easier navigation.<p><a href='/electronic_inference_compara.html' target = 'NEW'>More details and" +
-			" caveats of the event inference in Reactome.</a> For details on PANTHER see also:" +
-			" <a href='http://www.pantherdb.org/about.jsp' target='NEW'>http://www.pantherdb.org/about.jsp</a>";
-		summationInst.addAttributeValue(text, summationText);
-		summationInst.addAttributeValue(_displayName, summationText);
-		summationInst = InstanceUtilities.checkForIdenticalInstances(summationInst, null);
-		getReactionInferrer().setSummationInstance(summationInst);
-		PathwaysInferrer.setSummationInstance(summationInst);
-	}
-
-	// Create and set static EvidenceType instance
-	private void setEvidenceTypeInstance() throws Exception {
-		GKInstance evidenceTypeInst = new GKInstance(getCurrentDBA().getSchema().getClassByName(EvidenceType));
-		evidenceTypeInst.setDbAdaptor(getCurrentDBA());
-		evidenceTypeInst.addAttributeValue(created, instanceEditInst);
-		String evidenceTypeText = INFERRED_EVIDENCE_TYPE_DISPLAY_NAME;
-		evidenceTypeInst.addAttributeValue(name, evidenceTypeText);
-		evidenceTypeInst.addAttributeValue(name, "IEA");
-		evidenceTypeInst.addAttributeValue(_displayName, evidenceTypeText);
-		evidenceTypeInst = InstanceUtilities.checkForIdenticalInstances(evidenceTypeInst, null);
-
-		getReactionInferrer().setEvidenceTypeInstance(evidenceTypeInst);
-		PathwaysInferrer.setEvidenceTypeInstance(evidenceTypeInst);
-	}
-
-	private void setInstanceEdits(int personId) throws Exception {
-		instanceEditInst = InstanceEditUtils.createInstanceEdit(getCurrentDBA(), personId, "org.reactome.orthoinference");
-		logger.info("Instance edit: " + instanceEditInst);
-		InstanceUtilities.setInstanceEdit(instanceEditInst);
-		OrthologousEntityGenerator.setInstanceEdit(instanceEditInst);
-		EWASInferrer.setInstanceEdit(instanceEditInst);
-		PathwaysInferrer.setInstanceEdit(instanceEditInst);
 	}
 
 	/**

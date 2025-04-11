@@ -22,6 +22,10 @@ import org.json.simple.JSONObject;
 public class EWASInferrer {
 
 	private static final Logger logger = LogManager.getLogger();
+
+	private ConfigProperties configProperties;
+	private String speciesCode;
+
 	private static MySQLAdaptor dba;
 	static boolean altRefDbExists = false;
 	private static String altRefDbId;
@@ -38,9 +42,14 @@ public class EWASInferrer {
 	private static Map<String, List<String>> wormbaseMappings = new HashMap<>();
 	private static Map<String, String> geneNameMappings = new HashMap<>();
 
+	public EWASInferrer(ConfigProperties configProperties, String speciesCode) {
+		this.configProperties = configProperties;
+		this.speciesCode = speciesCode;
+	}
+
 	// Creates an array of inferred EWAS instances from the homologue mappings file (hsap_species_mapping.txt).
 	@SuppressWarnings("unchecked")
-	public static List<GKInstance> inferEWAS(GKInstance ewasInst) throws InvalidAttributeException, Exception {
+	public List<GKInstance> inferEWAS(GKInstance ewasInst) throws InvalidAttributeException, Exception {
 		List<GKInstance> infEWASInstances = new ArrayList<>();
 		String referenceEntityId = ((GKInstance) ewasInst.getAttributeValue(referenceEntity))
 			.getAttributeValue(identifier).toString();

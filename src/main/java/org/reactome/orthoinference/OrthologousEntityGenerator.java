@@ -21,10 +21,12 @@ import org.gk.schema.SchemaClass;
 public class OrthologousEntityGenerator {
 	
 	private static final Logger logger = LogManager.getLogger();
+
+	private EWASInferrer ewasInferrer;
+	private Utils utils;
+	private GKInstance complexSummationInst;
+
 	private static MySQLAdaptor dba;
-	private static GKInstance instanceEditInst;
-	private static GKInstance complexSummationInst;
-	private static GKInstance speciesInst;
 	private static GKInstance nullInst = null;
 	private static Map<GKInstance, GKInstance> orthologousEntityIdenticals = new HashMap<>();
 	private static Map<GKInstance, GKInstance> homolEWASIdenticals = new HashMap<>();
@@ -34,6 +36,8 @@ public class OrthologousEntityGenerator {
 	private static Map<String,GKInstance> complexIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> entitySetIdenticals = new HashMap<>();
 
+
+
 /** The heart of the OrthoInference process. This function takes PhysicalEntity (PE) instances and will infer those
  *  that are EWAS', Complexes/Polymers, or EntitySets.  The function's arguments are an incoming PE instance and an
  *  override attribute. Instances that are comprised of PE's will often recursively call this createOrthoEntity
@@ -42,7 +46,13 @@ public class OrthologousEntityGenerator {
  *  (i.e. 'ghost instances' from Perl script), which allow a PE to be inferred without having to commit a 'real'
  *  instance to the DB.
 */
-	public static GKInstance createOrthoEntity(GKInstance entityInst, boolean override) throws Exception {
+	public OrthologousEntityGenerator(ConfigProperties configProperties, String speciesCode) {
+		this.ewasInferrer = new EWASInferrer(configProperties, speciesCode);
+		this.utils = new Utils(configProperties, speciesCode);
+		this.complexSummationInst = getComplexSummationInstance();
+	}
+
+	public GKInstance createOrthoEntity(GKInstance entityInst, boolean override) throws Exception {
 		logger.info("Attempting PE inference: " + entityInst);
 		GKInstance infEntityInst = null;
 		if (!entityInst.getSchemClass().isValidAttribute(species)) {
@@ -108,11 +118,10 @@ public class OrthologousEntityGenerator {
 	// Function that first tries to infer any EWAS' associated with the instance. For those that have more than 1
 	// returned EWAS instance, it's re-structured to a DefinedSet instance. If there is no EWAS instances inferred,
 	// it will either return null or, if override is set, return a mock instance.
-	private static GKInstance createInfEWAS(GKInstance ewasInst, boolean override)
-		throws InvalidAttributeException, Exception {
+	private GKInstance createInfEWAS(GKInstance ewasInst, boolean override) throws Exception {
 		if (homolEWASIdenticals.get(ewasInst) == null) {
 			// Attempt to infer the EWAS 
-			List<GKInstance> infEWASInstances = EWASInferrer.inferEWAS(ewasInst);
+			List<GKInstance> infEWASInstances = getEWASInferrer().inferEWAS(ewasInst);
 			// If number of EWAS instances is greater than 1, then it is considered a DefinedSet. A new inferred
 			// instance with definedSet class is created.
 			if (infEWASInstances.size() > 1) {
@@ -120,7 +129,7 @@ public class OrthologousEntityGenerator {
 				SchemaClass definedSetClass = dba.getSchema().getClassByName(DefinedSet);
 				GKInstance infDefinedSetInst = new GKInstance(definedSetClass);
 				infDefinedSetInst.setDbAdaptor(dba);
-				infDefinedSetInst.addAttributeValue(created, instanceEditInst);
+				infDefinedSetInst.addAttributeValue(created, getUtils().getInstanceEdit());
 				String definedSetName = "Homologues of " + ewasInst.getAttributeValue(name);
 				infDefinedSetInst.addAttributeValue(name, definedSetName);
 				
@@ -132,7 +141,7 @@ public class OrthologousEntityGenerator {
 					infDefinedSetInst.addAttributeValue(compartment, newCompartmentInst);
 				}
 				
-				infDefinedSetInst.addAttributeValue(species, speciesInst);
+				infDefinedSetInst.addAttributeValue(species, getUtils().getSpeciesInstance());
 				infDefinedSetInst.addAttributeValue(hasMember, infEWASInstances);
 				String definedSetDisplayName = (String) infDefinedSetInst.getAttributeValue(name) +
 					" [" +((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
@@ -173,7 +182,7 @@ public class OrthologousEntityGenerator {
 	// and calls 'createOrthoEntity' for each one. Complex/Polymer instances are also subject to the
 	// 'countDistinctProteins' function. The result from this needs to have at least 75% of total proteins to be
 	// inferrable for inference to continue.
-	private static GKInstance createInfComplexPolymer(GKInstance complexInst, boolean override)
+	private GKInstance createInfComplexPolymer(GKInstance complexInst, boolean override)
 		throws InvalidAttributeException, InvalidAttributeValueException, Exception {
 		if (complexPolymerIdenticals.get(complexInst) == null) {
 			List<Integer> complexProteinCounts = ProteinCountUtility.getDistinctProteinCounts(complexInst);
@@ -258,7 +267,7 @@ public class OrthologousEntityGenerator {
 	// that also happen to be included in a Set.  This means they should be subject  to the stringency of a typical
 	// instance, rather then using override to create mock instances that allow an instance to be inferred more easily.
 	@SuppressWarnings("unchecked")
-	private static GKInstance createInfEntitySet(GKInstance entitySetInst, boolean override)
+	private GKInstance createInfEntitySet(GKInstance entitySetInst, boolean override)
 		throws InvalidAttributeException, Exception {
 		if (inferredEntitySetIdenticals.get(entitySetInst) == null) {
 			// Equivalent to infer_members function in infer_events.pl
@@ -333,7 +342,7 @@ public class OrthologousEntityGenerator {
 							SchemaClass definedSetClass = dba.getSchema().getClassByName(DefinedSet);
 							GKInstance infDefinedSetInst = new GKInstance(definedSetClass);
 							infDefinedSetInst.setDbAdaptor(dba);
-							infDefinedSetInst.addAttributeValue(created, instanceEditInst);
+							infDefinedSetInst.addAttributeValue(created, getUtils().getInstanceEdit());
 							infDefinedSetInst.setAttributeValue(name, infEntitySetInst.getAttributeValuesList(name));
 							infDefinedSetInst.setAttributeValue(hasMember, infMembersList);
 							if (entitySetInst.getSchemClass().isValidAttribute(compartment) &&
@@ -349,7 +358,7 @@ public class OrthologousEntityGenerator {
 									}
 								}
 							}
-							infDefinedSetInst.addAttributeValue(species, speciesInst);
+							infDefinedSetInst.addAttributeValue(species, getUtils().getSpeciesInstance());
 							infEntitySetInst = infDefinedSetInst;
 							logger.info("Successfully converted to DefinedSet");
 						}
@@ -409,27 +418,24 @@ public class OrthologousEntityGenerator {
 		}
 		return inferredEntitySetIdenticals.get(entitySetInst);
 	}
-	
-	public static void setAdaptor(MySQLAdaptor dbAdaptor) {
-		dba = dbAdaptor;
-	}
-	
-	public static void setSpeciesInstance(GKInstance speciesInstCopy) {
-		speciesInst = speciesInstCopy;
-	}
-	
-	public static void setInstanceEdit(GKInstance instanceEditCopy) {
-		instanceEditInst = instanceEditCopy;
-	}
-	
-	public static void setComplexSummationInstance() throws Exception {
-		complexSummationInst = new GKInstance(dba.getSchema().getClassByName(Summation));
+
+	public GKInstance getComplexSummationInstance() throws Exception {
+		GKInstance complexSummationInst = new GKInstance(dba.getSchema().getClassByName(Summation));
 		complexSummationInst.setDbAdaptor(dba);
-		complexSummationInst.addAttributeValue(created, instanceEditInst);
+		complexSummationInst.addAttributeValue(created, getUtils().getInstanceEdit());
 		String complexSummationText = "This complex/polymer has been computationally inferred (based on PANTHER) " +
 			"from a complex/polymer involved in an event that has been demonstrated in another species.";
 		complexSummationInst.addAttributeValue(text, complexSummationText);
 		complexSummationInst.setAttributeValue(_displayName, complexSummationText);
 		complexSummationInst = InstanceUtilities.checkForIdenticalInstances(complexSummationInst, null);
+		return complexSummationInst;
+	}
+
+	private EWASInferrer getEWASInferrer() {
+		return this.ewasInferrer;
+	}
+
+	private Utils getUtils() {
+		return this.utils;
 	}
 }

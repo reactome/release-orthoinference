@@ -12,6 +12,7 @@ import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.GKSchemaAttribute;
 import org.gk.schema.GKSchemaClass;
 import org.gk.schema.SchemaClass;
+import org.reactome.release.common.database.InstanceEditUtils;
 
 // GenerateInstance is meant to act as a catch-all for functions that are instance-oriented, such as creating, mocking,
 // or identical-checking.
@@ -23,7 +24,13 @@ public class InstanceUtilities {
 	private static GKInstance instanceEditInst;
 	private static Map<String,GKInstance> mockedIdenticals = new HashMap<>();
 	private static final long DISEASE_PATHWAY_DB_ID = 1643685L;
-	
+
+	public static GKInstance getInstanceEditInst() {
+		if (instanceEditInst == null) {
+			instanceEditInst = InstanceEditUtils.createInstanceEdit(getCurrentDBA(), personId, "org.reactome.orthoinference");
+		}
+	}
+
 	// Creates new instance that will be inferred based on the incoming instances class
 	public static GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception {
 		String reactionClass = instanceToBeInferred.getSchemClass().getName();

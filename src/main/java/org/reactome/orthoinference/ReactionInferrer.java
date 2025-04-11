@@ -24,13 +24,11 @@ public class ReactionInferrer {
 
 	private ConfigProperties configProperties;
 	private String speciesCode;
+	private OrthologousEntityGenerator orthologousEntityGenerator;
+	private Utils utils;
 
 	private MySQLAdaptor dba;
 	private static String dateOfRelease = "";
-	//private static String eligibleFilehandle;
-	//private static String inferredFilehandle;
-	private static GKInstance summationInst;
-	private static GKInstance evidenceTypeInst;
 	private static Map<GKInstance, GKInstance> inferredCatalyst = new HashMap<>();
 	private static Map<GKInstance, GKInstance> inferredEvent = new HashMap<>();
 	private static Integer eligibleCount = 0;
@@ -41,6 +39,9 @@ public class ReactionInferrer {
 	public ReactionInferrer(ConfigProperties configProperties, String speciesCode) throws IOException {
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
+
+		this.orthologousEntityGenerator = new OrthologousEntityGenerator(configProperties, speciesCode);
+		this.utils = new Utils(configProperties, speciesCode);
 
 		this.dba = dba;
 		this.skipInstanceChecker = new SkipInstanceChecker(dba);
@@ -65,8 +66,8 @@ public class ReactionInferrer {
 			infReactionInst.addAttributeValue(name, reactionInst.getAttributeValuesList(name));
 			infReactionInst.addAttributeValue(
 				goBiologicalProcess, reactionInst.getAttributeValue(goBiologicalProcess));
-			infReactionInst.addAttributeValue(summation, summationInst);
-			infReactionInst.addAttributeValue(evidenceType, evidenceTypeInst);
+			infReactionInst.addAttributeValue(summation, getUtils().getSummationInstance());
+			infReactionInst.addAttributeValue(evidenceType, getUtils().getEvidenceType());
 			infReactionInst.addAttributeValue(_displayName, reactionInst.getAttributeValue(_displayName));
 
 			// This function finds the total number of distinct proteins associated with an instance, as well as the
@@ -179,7 +180,7 @@ public class ReactionInferrer {
 		logger.info(attribute.substring(0,1).toUpperCase() + attribute.substring(1) + " instances: " +
 			attributeInstances);
 		for (GKInstance attributeInst : attributeInstances) {
-			GKInstance infAttributeInst = OrthologousEntityGenerator.createOrthoEntity(attributeInst, false);
+			GKInstance infAttributeInst = getOrthologousEntityGenerator().createOrthoEntity(attributeInst, false);
 			if (infAttributeInst == null) {
 				return false;
 			}
@@ -210,7 +211,7 @@ public class ReactionInferrer {
 				GKInstance catalystPEInst = (GKInstance) catalystInst.getAttributeValue(physicalEntity);
 				if (catalystPEInst != null) {
 					logger.info("Catalyst PE instance: " + catalystPEInst);
-					GKInstance infCatalystPEInst = OrthologousEntityGenerator.createOrthoEntity(
+					GKInstance infCatalystPEInst = getOrthologousEntityGenerator().createOrthoEntity(
 						catalystPEInst, false);
 					if (infCatalystPEInst != null) {
 						infCatalystInst.addAttributeValue(physicalEntity, infCatalystPEInst);
@@ -227,7 +228,7 @@ public class ReactionInferrer {
 					logger.info("Active unit instance(s): " + activeUnitInstances);
 					for (GKInstance activeUnitInst : activeUnitInstances) {
 						logger.info("Active Unit instance: " + activeUnitInst);
-						GKInstance infActiveUnitInst = OrthologousEntityGenerator.createOrthoEntity(
+						GKInstance infActiveUnitInst = getOrthologousEntityGenerator().createOrthoEntity(
 							activeUnitInst, false);
 						if (infActiveUnitInst != null) {
 							activeUnits.add(infActiveUnitInst);
@@ -263,7 +264,7 @@ public class ReactionInferrer {
 				logger.info("Regulator: " + regulatorInst);
 				GKInstance infRegulatorInst = null;
 				if (regulatorInst.getSchemClass().isa(PhysicalEntity)) {
-					infRegulatorInst = OrthologousEntityGenerator.createOrthoEntity(regulatorInst, false);
+					infRegulatorInst = getOrthologousEntityGenerator().createOrthoEntity(regulatorInst, false);
 				} else if (regulatorInst.getSchemClass().isa(CatalystActivity)) {
 					// This has never happened since running the new orthoinference (JCook 2019)
 					logger.warn(regulatorInst + " is a CatalystActivity, which is unexpected -- " +
@@ -305,23 +306,7 @@ public class ReactionInferrer {
 	public void setAdaptor(MySQLAdaptor dbAdaptor) {
 		dba = dbAdaptor;
 	}
-	
-//	public void setEligibleFilename(String eligibleFilename) {
-//		eligibleFilehandle = eligibleFilename;
-//	}
-//
-//	public void setInferredFilename(String inferredFilename) {
-//		inferredFilehandle = inferredFilename;
-//	}
 
-	public void setEvidenceTypeInstance(GKInstance evidenceTypeInstCopy) {
-		evidenceTypeInst = evidenceTypeInstCopy;
-	}
-	
-	public void setSummationInstance(GKInstance summationInstCopy) {
-		summationInst = summationInstCopy;
-	}
-	
 	public Map<GKInstance, GKInstance> getInferredEvent() {
 		return inferredEvent;
 	}
@@ -358,5 +343,13 @@ public class ReactionInferrer {
 
 	private String getSpeciesCode() {
 		return this.speciesCode;
+	}
+
+	private OrthologousEntityGenerator getOrthologousEntityGenerator() {
+		return this.orthologousEntityGenerator;
+	}
+
+	private Utils getUtils() {
+		return this.utils;
 	}
 }
