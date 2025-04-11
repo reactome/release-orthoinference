@@ -62,7 +62,7 @@ public class OrthologousPathwayDiagramGeneratorTest {
     @Before
     public void setUp() {
         MockitoAnnotations.initMocks(this);
-        testDiagramGenerator = new OrthologousPathwayDiagramGenerator(mockAdaptor, mockPrevAdaptor, mockSpeciesInst, mockId, mockId);
+        testDiagramGenerator = new OrthologousPathwayDiagramGenerator(mockAdaptor, mockPrevAdaptor, mockSpeciesInst, mockSpeciesInst, mockId);
     }
     @Test
     public void generateOrthologousPathwayDiagramsTest() throws Exception {
@@ -86,13 +86,13 @@ public class OrthologousPathwayDiagramGeneratorTest {
     @Test
     public void sameSpeciesReturnsTrue() throws Exception {
         Mockito.when(mockPathwayInst.getAttributeValue(ReactomeJavaConstants.species)).thenReturn(mockSpeciesInst);
-        assertThat(testDiagramGenerator.isSameSpecies(mockPathwayInst, mockSpeciesInst), is(equalTo(true)));
+        assertThat(testDiagramGenerator.pathwayHasSpecies(mockPathwayInst, mockSpeciesInst), is(equalTo(true)));
     }
 
     @Test
     public void differentSpeciesReturnsFalse() throws Exception {
         Mockito.when(mockPathwayInst.getAttributeValue(ReactomeJavaConstants.species)).thenReturn(mockSpeciesInst2);
-        assertThat(testDiagramGenerator.isSameSpecies(mockPathwayInst, mockSpeciesInst), is(equalTo(false)));
+        assertThat(testDiagramGenerator.pathwayHasSpecies(mockPathwayInst, mockSpeciesInst), is(equalTo(false)));
     }
 
     @Test

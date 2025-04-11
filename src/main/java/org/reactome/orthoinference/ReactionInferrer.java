@@ -1,6 +1,8 @@
 package org.reactome.orthoinference;
 
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -19,10 +21,14 @@ import org.gk.schema.InvalidAttributeException;
 public class ReactionInferrer {
 
 	private static final Logger logger = LogManager.getLogger();
-	private static MySQLAdaptor dba;
+
+	private ConfigProperties configProperties;
+	private String speciesCode;
+
+	private MySQLAdaptor dba;
 	private static String dateOfRelease = "";
-	private static String eligibleFilehandle;
-	private static String inferredFilehandle;
+	//private static String eligibleFilehandle;
+	//private static String inferredFilehandle;
 	private static GKInstance summationInst;
 	private static GKInstance evidenceTypeInst;
 	private static Map<GKInstance, GKInstance> inferredCatalyst = new HashMap<>();
@@ -30,13 +36,24 @@ public class ReactionInferrer {
 	private static Integer eligibleCount = 0;
 	private static Integer inferredCount = 0;
 	private static List<GKInstance> inferrableHumanEvents = new ArrayList<>();
-	
+	private SkipInstanceChecker skipInstanceChecker;
+
+	public ReactionInferrer(ConfigProperties configProperties, String speciesCode) throws IOException {
+		this.configProperties = configProperties;
+		this.speciesCode = speciesCode;
+
+		this.dba = dba;
+		this.skipInstanceChecker = new SkipInstanceChecker(dba);
+
+		initializeEligibleAndInferredFiles();
+	}
+
 	// Infers PhysicalEntity instances of input, output, catalyst activity, and regulations that are associated with
 	// incoming reactionInst.
-	public static void inferReaction(GKInstance reactionInst) throws Exception {
+	public void inferReaction(GKInstance reactionInst) throws Exception {
 		// Checks if an instance's inference should be skipped, based on a variety of factors such as a manual skip
 		// list, if it's chimeric, etc.
-		if (SkipInstanceChecker.checkIfInstanceShouldBeSkipped(reactionInst)) {
+		if (skipInstanceChecker.checkIfInstanceShouldBeSkipped(reactionInst)) {
 			return;
 		}
 		logger.info("Passed skip tests, RlE eligible for inference");
@@ -65,7 +82,11 @@ public class ReactionInferrer {
 				// Having passed all tests/filters until now, the reaction is recorded in the 'eligible reactions'
 				// file, meaning inference is continued.
 				eligibleCount++;
-				Files.write(Paths.get(eligibleFilehandle), eligibleEventName.getBytes(), StandardOpenOption.APPEND);
+				Files.write(
+					getEligibleFile(),
+					eligibleEventName.getBytes(),
+					StandardOpenOption.APPEND
+				);
 				// Attempt to infer all PhysicalEntities associated with this reaction's Input, Output,
 				// CatalystActivity and RegulatedBy attributes.  Failure to successfully infer any of these attributes
 				// will end inference for this reaction.
@@ -126,7 +147,10 @@ public class ReactionInferrer {
 							String inferredEvent = infReactionInst.getAttributeValue(DB_ID).toString() + "\t" +
 								infReactionInst.getDisplayName() + "\n";
 							Files.write(
-								Paths.get(inferredFilehandle), inferredEvent.getBytes(), StandardOpenOption.APPEND);
+								getInferredFile(),
+								inferredEvent.getBytes(),
+								StandardOpenOption.APPEND, StandardOpenOption.CREATE
+							);
 						} else {
 							logger.info("Catalyst inference unsuccessful -- terminating inference for " +
 								reactionInst);
@@ -146,7 +170,7 @@ public class ReactionInferrer {
 	// Function used to create inferred PhysicalEntities contained in the 'input' or 'output' attributes of the current
 	// reaction instance.
 	@SuppressWarnings("unchecked")
-	private static boolean inferReactionInputsOrOutputs(
+	private boolean inferReactionInputsOrOutputs(
 		GKInstance reactionInst, GKInstance infReactionInst, String attribute) throws Exception {
 		List<GKInstance> infAttributeInstances = new ArrayList<>();
 		Collection<GKInstance> attributeInstances =
@@ -169,7 +193,7 @@ public class ReactionInferrer {
 	// Function used to create inferred catalysts associated with the current reaction instance.
 	// Infers all PhysicalEntity's associated with the reaction's 'catalystActivity' and 'activeUnit' attributes
 	@SuppressWarnings("unchecked")
-	private static boolean inferReactionCatalysts(GKInstance reactionInst, GKInstance infReactionInst)
+	private boolean inferReactionCatalysts(GKInstance reactionInst, GKInstance infReactionInst)
 		throws Exception {
 		Collection<GKInstance> catalystInstances =
 			(Collection<GKInstance>) reactionInst.getAttributeValuesList(catalystActivity);
@@ -226,7 +250,7 @@ public class ReactionInferrer {
 	@SuppressWarnings("unchecked")
 	// Function used to infer regulation instances. Logic existed for regulators that had CatalystActivity and
 	// Event instances, but they have never come up in the many times this has been run.
-	private static List<GKInstance> inferReactionRegulations(GKInstance reactionInst) throws Exception {
+	private List<GKInstance> inferReactionRegulations(GKInstance reactionInst) throws Exception {
 		List<GKInstance> inferredRegulations = new ArrayList<>();
 		Collection<GKInstance> regulationInstances =
 			(Collection<GKInstance>) reactionInst.getAttributeValuesList("regulatedBy");
@@ -274,48 +298,65 @@ public class ReactionInferrer {
 		return inferredRegulations;
 	}
 	
-	public static void setReleaseDate(String dateOfReleaseCopy) {
+	public void setReleaseDate(String dateOfReleaseCopy) {
 		dateOfRelease = dateOfReleaseCopy;
 	}
 	
-	public static void setAdaptor(MySQLAdaptor dbAdaptor) {
+	public void setAdaptor(MySQLAdaptor dbAdaptor) {
 		dba = dbAdaptor;
 	}
 	
-	public static void setEligibleFilename(String eligibleFilename) {
-		eligibleFilehandle = eligibleFilename;
-	}
-	
-	public static void setInferredFilename(String inferredFilename) {
-		inferredFilehandle = inferredFilename;
-	}
-	
-	public static void setEvidenceTypeInstance(GKInstance evidenceTypeInstCopy) {
+//	public void setEligibleFilename(String eligibleFilename) {
+//		eligibleFilehandle = eligibleFilename;
+//	}
+//
+//	public void setInferredFilename(String inferredFilename) {
+//		inferredFilehandle = inferredFilename;
+//	}
+
+	public void setEvidenceTypeInstance(GKInstance evidenceTypeInstCopy) {
 		evidenceTypeInst = evidenceTypeInstCopy;
 	}
 	
-	public static void setSummationInstance(GKInstance summationInstCopy) {
+	public void setSummationInstance(GKInstance summationInstCopy) {
 		summationInst = summationInstCopy;
 	}
 	
-	public static Map<GKInstance, GKInstance> getInferredEvent() {
+	public Map<GKInstance, GKInstance> getInferredEvent() {
 		return inferredEvent;
 	}
 	
-	public static List<GKInstance> getInferrableHumanEvents() {
+	public List<GKInstance> getInferrableHumanEvents() {
 		return inferrableHumanEvents;
 	}
 
-	public static int getEligibleCount() {
+	public int getEligibleCount() {
 		return eligibleCount;
 	}
 	
-	public static int getInferredCount() {
+	public int getInferredCount() {
 		return inferredCount;
 	}
 
-	public static void addAlreadyInferredEvents(GKInstance reactionInst, GKInstance previouslyInferredReactionInst) {
+	public void addAlreadyInferredEvents(GKInstance reactionInst, GKInstance previouslyInferredReactionInst) {
 		inferredEvent.put(reactionInst, previouslyInferredReactionInst);
 		inferrableHumanEvents.add(reactionInst);
+	}
+
+	private void initializeEligibleAndInferredFiles() throws IOException {
+		Files.deleteIfExists(getEligibleFile());
+		Files.deleteIfExists(getInferredFile());
+	}
+
+	private Path getEligibleFile() {
+		return Paths.get("eligible_" + getSpeciesCode() + "_75.txt");
+	}
+
+	private Path getInferredFile() {
+		return Paths.get("inferred_" + getSpeciesCode() + "_75.txt");
+	}
+
+	private String getSpeciesCode() {
+		return this.speciesCode;
 	}
 }

@@ -26,13 +26,12 @@ public class InstanceUtilities {
 	
 	// Creates new instance that will be inferred based on the incoming instances class
 	public static GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception {
-		GKInstance inferredInst = null;
 		String reactionClass = instanceToBeInferred.getSchemClass().getName();
 		if (reactionClass.matches(ReferenceIsoform)) {
 			reactionClass = ReferenceGeneProduct;
 		}
 		SchemaClass instanceClass = dba.getSchema().getClassByName(reactionClass);
-		inferredInst = new GKInstance(instanceClass);
+		GKInstance inferredInst = new GKInstance(instanceClass);
 		inferredInst.setDbAdaptor(dba);
 		inferredInst.addAttributeValue(created, instanceEditInst);
 		if (instanceToBeInferred.getSchemClass().isValidAttribute(compartment) &&

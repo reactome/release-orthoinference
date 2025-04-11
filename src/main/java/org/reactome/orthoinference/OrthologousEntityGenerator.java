@@ -60,7 +60,7 @@ public class OrthologousEntityGenerator {
 		}
 
 		// Checks that a species attribute exists in either the current instance or in constituent instances.
-		if (!SpeciesCheckUtility.checkForSpeciesAttribute(entityInst)) {
+		if (!SpeciesCheckUtility.hasOrContainsSpeciesAttribute(entityInst)) {
 			logger.info("No species attribute found in PE, using original instance");
 			infEntityInst = entityInst;
 		// Will either infer an EWAS or return a mock GEE instance if needed (i.e. if override is currently 'True')

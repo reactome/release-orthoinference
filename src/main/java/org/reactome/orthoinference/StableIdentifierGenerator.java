@@ -3,14 +3,14 @@ package org.reactome.orthoinference;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
+import org.gk.model.InstanceDisplayNameGenerator;
+import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
+import org.json.simple.parser.ParseException;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.gk.model.ReactomeJavaConstants.*;
+import java.io.IOException;
+import java.sql.SQLException;
+import java.util.*;
 
 /*
  *  All PhysicalEntitys, ReactionlikeEvents and Pathways are routed to this class to generate their stable identifiers
@@ -19,59 +19,87 @@ public class StableIdentifierGenerator {
     private static final Logger logger = LogManager.getLogger();
     private static Map<String,Integer> seenOrthoIds = new HashMap<>();
 
-    private MySQLAdaptor dba;
-    private String speciesAbbreviation;
+    private ConfigProperties configProperties;
+    private String speciesCode;
 
-    public StableIdentifierGenerator(MySQLAdaptor dba, String speciesAbbreviation) {
-        this.dba = dba;
-        this.speciesAbbreviation = speciesAbbreviation;
+    public StableIdentifierGenerator(ConfigProperties configProperties, String speciesCode) {
+        this.configProperties = configProperties;
+        this.speciesCode = speciesCode;
     }
 
     public GKInstance generateOrthologousStableId(GKInstance inferredInst, GKInstance originalInst) throws Exception {
 
         // Sometimes there already exists a StableIdentifier value for an instance, if there are multiple instances
         // that can create one instance.
-        GKInstance orthoStableIdentifierInst = null;
-        if (inferredInst.getAttributeValue(stableIdentifier) == null) {
-            // All Human PhysicalEntitys and Events will have a StableIdentifier instance in the stableIdentifier
-            // attribute
-            GKInstance stableIdentifierInst = (GKInstance) originalInst.getAttributeValue(stableIdentifier);
-            logger.info("Generating orthologous stable identifier for " + stableIdentifierInst.getDisplayName());
-            if (stableIdentifierInst == null) {
-                String missingStableIdentifierMsg = "No stable identifier instance found for " + originalInst;
-                logger.fatal(missingStableIdentifierMsg);
-                throw new RuntimeException(missingStableIdentifierMsg);
-            }
-
-            // For now, Human is hard-coded as the source species, so we replace the stableIdentifier source species
-            // based on that assumption
-            String sourceIdentifier = (String) stableIdentifierInst.getAttributeValue(identifier);
-            String targetIdentifier = sourceIdentifier.replace("HSA", speciesAbbreviation);
-            // Paralogs will have the same base stable identifier, but we want to denote when that happens.
-            // We pull the value from `seenOrthoIds`, increment it and then add it to the stable identifier name
-            // (eg: R-MMU-123456-2)
-            int paralogCount = Optional.ofNullable(seenOrthoIds.get(targetIdentifier)).orElse(0) + 1;
-            seenOrthoIds.put(targetIdentifier, paralogCount);
-            if (paralogCount > 1) {
-                targetIdentifier += "-" + paralogCount;
-            }
-
-            // Check that the stable identifier instance does not already exist in DB
-            Collection<GKInstance> existingStableIdentifier = (Collection<GKInstance>)
-                dba.fetchInstanceByAttribute("StableIdentifier", "identifier", "=", targetIdentifier);
-            
-            if (existingStableIdentifier.size() == 0) {
-                // Create new StableIdentifier instance
-                orthoStableIdentifierInst =
-                    createOrthologousStableIdentifierInstance(stableIdentifierInst, targetIdentifier);
-                dba.storeInstance(orthoStableIdentifierInst);
-            } else {
-                orthoStableIdentifierInst = existingStableIdentifier.iterator().next();
-            }
-
-            // Populate inferred instance with new StableIdentifier instance
-            logger.info("Stable identifier generated: " + orthoStableIdentifierInst.getDisplayName());
+        if (inferredInst.getAttributeValue(ReactomeJavaConstants.stableIdentifier) != null) {
+            return null;
         }
+
+        // All Human PhysicalEntitys and Events will have a StableIdentifier instance in the stableIdentifier
+        // attribute
+        GKInstance stableIdentifierInst =
+            (GKInstance) originalInst.getAttributeValue(ReactomeJavaConstants.stableIdentifier);
+        if (stableIdentifierInst == null) {
+            logAndThrow("No stable identifier instance found for " + originalInst);
+        }
+
+        logger.info("Generating orthologous stable identifier for " + stableIdentifierInst.getDisplayName());
+
+
+        GKInstance orthoStableIdentifierInst = getOrthoStableIdentiferInstance(stableIdentifierInst);
+
+        // Populate inferred instance with new StableIdentifier instance
+        logger.info("Stable identifier generated: " + orthoStableIdentifierInst.getDisplayName());
+
+        return orthoStableIdentifierInst;
+    }
+
+    private GKInstance getOrthoStableIdentiferInstance(GKInstance stableIdentifierInst)
+        throws Exception {
+
+        String targetIdentifier = getTargetIdentifier(stableIdentifierInst);
+
+        // Check that the stable identifier instance does not already exist in DB
+        List<GKInstance> existingStableIdentifiers = getExistingStableIdentifiers(targetIdentifier);
+        if (existingStableIdentifiers.isEmpty()) {
+            return createAndStoreOrthoStableIdentifier(stableIdentifierInst, targetIdentifier);
+        }
+        return existingStableIdentifiers.get(0);
+    }
+
+    private String getTargetIdentifier(GKInstance stableIdentifierInst) throws Exception {
+        // For now, Human is hard-coded as the source species, so we replace the stableIdentifier source species
+        // based on that assumption
+        String sourceIdentifier = (String) stableIdentifierInst.getAttributeValue(ReactomeJavaConstants.identifier);
+        String targetIdentifier = sourceIdentifier.replace("HSA", getSpeciesAbbreviation());
+        // Paralogs will have the same base stable identifier, but we want to denote when that happens.
+        // We pull the value from `seenOrthoIds`, increment it and then add it to the stable identifier name
+        // (eg: R-MMU-123456-2)
+        int paralogCount = Optional.ofNullable(seenOrthoIds.get(targetIdentifier)).orElse(0) + 1;
+        seenOrthoIds.put(targetIdentifier, paralogCount);
+        if (paralogCount > 1) {
+            targetIdentifier += "-" + paralogCount;
+        }
+
+        return targetIdentifier;
+    }
+
+    private List<GKInstance> getExistingStableIdentifiers(String targetIdentifier) throws Exception {
+        Collection<GKInstance> existingStableIdentifiers = (Collection<GKInstance>)
+            getDBA().fetchInstanceByAttribute("StableIdentifier", "identifier", "=", targetIdentifier);
+        if (existingStableIdentifiers == null) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(existingStableIdentifiers);
+    }
+
+    private GKInstance createAndStoreOrthoStableIdentifier(GKInstance stableIdentifierInst, String targetIdentifier)
+        throws Exception {
+
+        GKInstance orthoStableIdentifierInst =
+            createOrthologousStableIdentifierInstance(stableIdentifierInst, targetIdentifier);
+        getDBA().storeInstance(orthoStableIdentifierInst);
+
         return orthoStableIdentifierInst;
     }
 
@@ -80,11 +108,28 @@ public class StableIdentifierGenerator {
         GKInstance stableIdentifierInst, String targetIdentifier) throws Exception {
 
         GKInstance orthoStableIdentifierInst = InstanceUtilities.createNewInferredGKInstance(stableIdentifierInst);
-        orthoStableIdentifierInst.addAttributeValue(identifier, targetIdentifier);
-        String identifierVersionNumber = "1";
-        orthoStableIdentifierInst.addAttributeValue(identifierVersion, identifierVersionNumber);
-        String orthoStableIdentifierName = targetIdentifier + "." + identifierVersionNumber;
-        orthoStableIdentifierInst.setDisplayName(orthoStableIdentifierName);
+        orthoStableIdentifierInst.addAttributeValue(ReactomeJavaConstants.identifier, targetIdentifier);
+        orthoStableIdentifierInst.addAttributeValue(ReactomeJavaConstants.identifierVersion, "1");
+
+        InstanceDisplayNameGenerator.setDisplayName(orthoStableIdentifierInst);
+
         return orthoStableIdentifierInst;
+    }
+
+    private MySQLAdaptor getDBA() throws SQLException {
+        return this.configProperties.getCurrentDBA();
+    }
+
+    private String getSpeciesAbbreviation() throws IOException, ParseException {
+        return this.configProperties.getSpeciesConfig().getAbbreviation(getSpeciesCode());
+    }
+
+    private String getSpeciesCode() {
+        return this.speciesCode;
+    }
+
+    private void logAndThrow(String errorMessage) {
+        logger.fatal(errorMessage);
+        throw new RuntimeException(errorMessage);
     }
 }

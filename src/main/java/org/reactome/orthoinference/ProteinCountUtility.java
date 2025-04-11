@@ -1,16 +1,12 @@
 package org.reactome.orthoinference;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.gk.model.ClassAttributeFollowingInstruction;
 import org.gk.model.GKInstance;
 import org.gk.model.InstanceUtilities;
-import static org.gk.model.ReactomeJavaConstants.*;
+import org.gk.model.ReactomeJavaConstants;
+
 
 public class ProteinCountUtility {
 	
@@ -27,37 +23,8 @@ public class ProteinCountUtility {
 	*/
 	
 	public static List<Integer> getDistinctProteinCounts (GKInstance instanceToBeInferred) throws Exception {
-		// Perform an AttributeQueryRequest with specified input attributes (ReactionlikeEvent, CatalystActivity,
-		// Complex, Polymer, EWAS) and output attributes (ReferenceGeneProduct, EntitySet).
-		List<ClassAttributeFollowingInstruction> classesToFollow = new ArrayList<>();
-		classesToFollow.add(new ClassAttributeFollowingInstruction(
-			ReactionlikeEvent, new String[]{input, output, catalystActivity}, new String[]{}));
-		classesToFollow.add(new ClassAttributeFollowingInstruction(
-			CatalystActivity, new String[]{physicalEntity}, new String[]{}));
-		classesToFollow.add(new ClassAttributeFollowingInstruction(
-			Complex, new String[]{hasComponent}, new String[]{}));
-		classesToFollow.add(new ClassAttributeFollowingInstruction(
-			Polymer, new String[]{repeatedUnit}, new String[]{}));
-		classesToFollow.add(new ClassAttributeFollowingInstruction(
-			EntityWithAccessionedSequence, new String[]{referenceEntity}, new String[]{}));
-		
-		String[] outClasses = new String[] {ReferenceGeneProduct, EntitySet};
-		@SuppressWarnings("unchecked")
-		Collection<GKInstance> followedInstances = InstanceUtilities.followInstanceAttributes(
-			instanceToBeInferred, classesToFollow, outClasses);
-		
-		// Sort instances by DB ID
-		List<Long> dbIds = new ArrayList<>();
-		Collection<GKInstance> sortedFollowedInstances = new ArrayList<>();
-		Map<Long,GKInstance> instances = new HashMap<>();
-		for (GKInstance instance : followedInstances) {
-			dbIds.add(instance.getDBID());
-			instances.put(instance.getDBID(), instance);
-		}
-		Collections.sort(dbIds);
-		for (Long id : dbIds) {
-			sortedFollowedInstances.add(instances.get(id));
-		}
+
+
 		
 		// With the output instances saved in followedInstances, begin the protein count process, which is based on
 		// the homologue mappings (orthopairs) files.
@@ -65,12 +32,16 @@ public class ProteinCountUtility {
 		int total = 0;
 		int inferrable = 0;
 		int max = 0;
+
+		// Perform an AttributeQueryRequest with specified input attributes (ReactionlikeEvent, CatalystActivity,
+		// Complex, Polymer, EWAS) and output attributes (ReferenceGeneProduct, EntitySet).
+		Collection<GKInstance> sortedFollowedInstances = getSortedFollowedInstances(instanceToBeInferred);
 		// If it is a ReferenceGene Product, the inferrable and max values are incremented depending on the number
 		// of homologue mappings, while total is incremented for each entity.
 		for (GKInstance entityInst : sortedFollowedInstances) {
-			if (entityInst.getSchemClass().isa(ReferenceGeneProduct)) {
+			if (isReferenceGeneProduct(entityInst)) {
 				int count = 0;
-				String identifierName = entityInst.getAttributeValue(identifier).toString();
+				String identifierName = entityInst.getAttributeValue(ReactomeJavaConstants.identifier).toString();
 				if (homologueMappings.get(identifierName) != null) {
 					count = homologueMappings.get(identifierName).length;
 				}
@@ -83,37 +54,26 @@ public class ProteinCountUtility {
 				}
 			}
 		}
+
 		// For EntitySets, another AttributeQueryRequest is completed. This time the output classes are
 		// Complex, Polymer, and ReferenceSequence.
 		for (GKInstance entityInst : sortedFollowedInstances) {
-			if (entityInst.getSchemClass().isa(EntitySet)) {
+			if (isEntitySet(entityInst)) {
 				List<ClassAttributeFollowingInstruction> entitySetsInstancesToFollow = new ArrayList<ClassAttributeFollowingInstruction>();
 				entitySetsInstancesToFollow.add(new ClassAttributeFollowingInstruction(
-					DefinedSet, new String[]{hasMember}, new String[]{}));
+					ReactomeJavaConstants.DefinedSet, new String[]{ReactomeJavaConstants.hasMember}, new String[]{}));
 				entitySetsInstancesToFollow.add(new ClassAttributeFollowingInstruction(
-					CandidateSet, new String[]{hasMember}, new String[]{}));
+					ReactomeJavaConstants.CandidateSet, new String[]{ReactomeJavaConstants.hasMember}, new String[]{}));
 				entitySetsInstancesToFollow.add(new ClassAttributeFollowingInstruction(
-					EntityWithAccessionedSequence, new String[]{referenceEntity}, new String[]{}));
-				
-				String[] entitySetsOutClasses = new String[] {Complex, Polymer, ReferenceSequence};
+					ReactomeJavaConstants.EntityWithAccessionedSequence, new String[]{ReactomeJavaConstants.referenceEntity}, new String[]{}));
+
+				String[] entitySetsOutClasses = new String[] {ReactomeJavaConstants.Complex, ReactomeJavaConstants.Polymer, ReactomeJavaConstants.ReferenceSequence};
 				@SuppressWarnings("unchecked")
 				Collection<GKInstance> entitySetsFollowedInstances = InstanceUtilities.followInstanceAttributes(
 					entityInst, entitySetsInstancesToFollow, entitySetsOutClasses);
+				Collection<GKInstance> entitySetsSortedInstances = sortInstancesByDbId(entitySetsFollowedInstances);
 				
-				// Sort instances by DB ID
-				List<Long> entitySetsDbIds = new ArrayList<>();
-				Collection<GKInstance> entitySetsSortedInstances = new ArrayList<>();
-				Map<Long,GKInstance> entitySetInstances = new HashMap<>();
-				for (GKInstance instance : entitySetsFollowedInstances) {
-					entitySetsDbIds.add(instance.getDBID());
-					entitySetInstances.put(instance.getDBID(), instance);
-				}
-				Collections.sort(entitySetsDbIds);
-				for (Long id : entitySetsDbIds) {
-					entitySetsSortedInstances.add(entitySetInstances.get(id));
-				}
-				
-				if (entitySetsFollowedInstances.size() == 0 && entityInst.getSchemClass().isa(CandidateSet)) {
+				if (entitySetsFollowedInstances.size() == 0 && entityInst.getSchemClass().isa(ReactomeJavaConstants.CandidateSet)) {
 					// Protein counts are incremented depending on the number and types of candidates
 					List<Integer> checkedCandidateInstances = getCandidateProteinCounts(
 						entityInst, sortedFollowedInstances);
@@ -134,8 +94,8 @@ public class ProteinCountUtility {
 					outerloop:
 					for (GKInstance physicalEntityInst : entitySetsSortedInstances) {
 						for (GKInstance earlyFollowedInst : sortedFollowedInstances) {
-							if (physicalEntityInst.getAttributeValue(DB_ID) ==
-								earlyFollowedInst.getAttributeValue(DB_ID)) {
+							if (physicalEntityInst.getAttributeValue(ReactomeJavaConstants.DB_ID) ==
+								earlyFollowedInst.getAttributeValue(ReactomeJavaConstants.DB_ID)) {
 								continue outerloop;
 							}
 						}
@@ -150,8 +110,8 @@ public class ProteinCountUtility {
 					int flag = 0;
 					int flagInferred = 0;
 					for (GKInstance physicalEntityInst : entitySetsSortedInstances) {
-						if (physicalEntityInst.getSchemClass().isa(Complex) ||
-							physicalEntityInst.getSchemClass().isa(Polymer)) {
+						if (physicalEntityInst.getSchemClass().isa(ReactomeJavaConstants.Complex) ||
+							physicalEntityInst.getSchemClass().isa(ReactomeJavaConstants.Polymer)) {
 							List<Integer> complexProteinCounts = getDistinctProteinCounts(physicalEntityInst);
 							if (complexProteinCounts != null) {
 								int subTotal = complexProteinCounts.get(0);
@@ -167,9 +127,9 @@ public class ProteinCountUtility {
 									max = subMax;
 								}
 							}
-						} else if (physicalEntityInst.getSchemClass().isa(ReferenceGeneProduct)) {
+						} else if (physicalEntityInst.getSchemClass().isa(ReactomeJavaConstants.ReferenceGeneProduct)) {
 							flag = 1;
-							String identifierName = physicalEntityInst.getAttributeValue(identifier).toString();
+							String identifierName = physicalEntityInst.getAttributeValue(ReactomeJavaConstants.identifier).toString();
 							int count = 0;
 							if (homologueMappings.get(identifierName) != null) {
 								count = homologueMappings.get(identifierName).length;
@@ -194,6 +154,17 @@ public class ProteinCountUtility {
 		distinctProteinCounts.add(max);
 		return distinctProteinCounts;
 	}
+
+	private static Collection<GKInstance> getSortedFollowedInstances(GKInstance instanceToBeInferred)
+		throws Exception {
+
+		String[] outClasses = new String[] {ReactomeJavaConstants.ReferenceGeneProduct, ReactomeJavaConstants.EntitySet};
+		@SuppressWarnings("unchecked")
+		Collection<GKInstance> followedInstances = InstanceUtilities.followInstanceAttributes(
+			instanceToBeInferred, getClassesToFollow(), outClasses);
+		return sortInstancesByDbId(followedInstances);
+	}
+
 	// Function that determines protein counts of CandidateSets. Incoming arguments are the candidateSet of interest,
 	// as well as the output array from the very first AttributeQueryRequest (AQR).
 	// This 'output array from the first AQR' is used to prevent redundant counts, such as if a Candidate instance has
@@ -201,7 +172,7 @@ public class ProteinCountUtility {
 	private static List<Integer> getCandidateProteinCounts(
 		GKInstance candidateSetInst, Collection<GKInstance> sortedFollowedInstances) throws Exception {
 		List<Integer> checkedCandidateCounts = new ArrayList<>();
-		if (candidateSetInst.getAttributeValue(hasCandidate) != null) {
+		if (hasCandidates(candidateSetInst)) {
 			// AttributeQueryRequest for candidateSets, where the output instances are Complex, Polymer, and
 			// ReferenceSequence
 			int candidateTotal = 0;
@@ -210,30 +181,19 @@ public class ProteinCountUtility {
 			int flag = 0;
 			List<ClassAttributeFollowingInstruction> candidateSetInstancesToFollow = new ArrayList<>();
 			candidateSetInstancesToFollow.add(new ClassAttributeFollowingInstruction(
-				CandidateSet, new String[]{hasCandidate}, new String[]{}));
+				ReactomeJavaConstants.CandidateSet, new String[]{ReactomeJavaConstants.hasCandidate}, new String[]{}));
 			candidateSetInstancesToFollow.add(new ClassAttributeFollowingInstruction(
-				EntityWithAccessionedSequence, new String[]{referenceEntity}, new String[]{}));
-			String[] candidateSetOutClasses = new String[] {Complex, Polymer, ReferenceSequence};
+				ReactomeJavaConstants.EntityWithAccessionedSequence, new String[]{ReactomeJavaConstants.referenceEntity}, new String[]{}));
+			String[] candidateSetOutClasses = new String[] {ReactomeJavaConstants.Complex, ReactomeJavaConstants.Polymer, ReactomeJavaConstants.ReferenceSequence};
 			@SuppressWarnings("unchecked")
 			Collection<GKInstance> candidateSetFollowedInstances = InstanceUtilities.followInstanceAttributes(
 				candidateSetInst, candidateSetInstancesToFollow, candidateSetOutClasses);
-			
-			List<Long> dbIdsCandidateSet = new ArrayList<>();
-			Collection<GKInstance> sortedCandidateSetFollowedInstances = new ArrayList<>();
-			Map<Long,GKInstance> candidateSetInstances = new HashMap<>();
-			for (GKInstance instance : candidateSetFollowedInstances) {
-				dbIdsCandidateSet.add(instance.getDBID());
-				candidateSetInstances.put(instance.getDBID(), instance);
-			}
-			Collections.sort(dbIdsCandidateSet);
-			for (Long id : dbIdsCandidateSet) {
-				sortedCandidateSetFollowedInstances.add(candidateSetInstances.get(id));
-			}
-			
+			Collection<GKInstance> sortedCandidateSetFollowedInstances = sortInstancesByDbId(candidateSetFollowedInstances);
+
 			boolean uncountedInstances = false;
 			for (GKInstance physicalEntityInst : sortedCandidateSetFollowedInstances) {
 				for (GKInstance earlyFollowedInst : sortedFollowedInstances) {
-					if (physicalEntityInst.getAttributeValue(DB_ID) == earlyFollowedInst.getAttributeValue(DB_ID)) {
+					if (physicalEntityInst.getAttributeValue(ReactomeJavaConstants.DB_ID) == earlyFollowedInst.getAttributeValue(ReactomeJavaConstants.DB_ID)) {
 						continue;
 					}
 				}
@@ -245,8 +205,7 @@ public class ProteinCountUtility {
 			// For instances that are Complex or Polymer, the total, inferrable and max are incremented according to
 			// the results of a recursive countDistinctProteins call.
 			for (GKInstance physicalEntityInst : sortedCandidateSetFollowedInstances) {
-				if (physicalEntityInst.getSchemClass().isa(Complex) ||
-					physicalEntityInst.getSchemClass().isa(Polymer)) {
+				if (isComplex(physicalEntityInst) || isPolymer(physicalEntityInst)) {
 					List<Integer> candidateComplexCounts = getDistinctProteinCounts(physicalEntityInst);
 					if (candidateComplexCounts.size() > 0) {
 						if (candidateComplexCounts.get(0) > 0 && candidateComplexCounts.get(1) == 0) {
@@ -263,9 +222,9 @@ public class ProteinCountUtility {
 						}
 					}
 					// ReferenceGeneProduct instances can only have an inferrable of 1 (So says the Perl version)
-				} else if (physicalEntityInst.getSchemClass().isa(ReferenceGeneProduct)) {
+				} else if (physicalEntityInst.getSchemClass().isa(ReactomeJavaConstants.ReferenceGeneProduct)) {
 					candidateTotal = 1;
-					String identifierName = physicalEntityInst.getAttributeValue(identifier).toString();
+					String identifierName = physicalEntityInst.getAttributeValue(ReactomeJavaConstants.identifier).toString();
 					int count = 0;
 					if (homologueMappings.get(identifierName) != null) {
 						count = homologueMappings.get(identifierName).length;
@@ -298,7 +257,83 @@ public class ProteinCountUtility {
 		}
 		return checkedCandidateCounts;
 	}
-	
+
+	private static List<ClassAttributeFollowingInstruction> getClassesToFollow() {
+		Map<String, List<String>> classToAttributesToFollow = getClassToAttributesToFollow();
+
+		List<ClassAttributeFollowingInstruction> classesToFollow = new ArrayList<>();
+		for (String classToFollow : classToAttributesToFollow.keySet()) {
+			List<String> attributesToFollow = classToAttributesToFollow.get(classToFollow);
+			classesToFollow.add(new ClassAttributeFollowingInstruction(
+				classToFollow, attributesToFollow.toArray(new String[0]), new String[]{}
+			));
+		}
+		return classesToFollow;
+	}
+
+	private static Map<String, List<String>> getClassToAttributesToFollow() {
+		Map<String, List<String>> classToAttributesToFollow = new LinkedHashMap<>();
+
+		classToAttributesToFollow.put(
+			ReactomeJavaConstants.ReactionlikeEvent,
+			Arrays.asList(ReactomeJavaConstants.input, ReactomeJavaConstants.output, ReactomeJavaConstants.catalystActivity)
+		);
+		classToAttributesToFollow.put(
+			ReactomeJavaConstants.CatalystActivity,
+			Collections.singletonList(ReactomeJavaConstants.physicalEntity)
+		);
+		classToAttributesToFollow.put(
+			ReactomeJavaConstants.Complex,
+			Collections.singletonList(ReactomeJavaConstants.hasComponent)
+		);
+		classToAttributesToFollow.put(
+			ReactomeJavaConstants.Polymer,
+			Collections.singletonList(ReactomeJavaConstants.repeatedUnit)
+		);
+		classToAttributesToFollow.put(
+			ReactomeJavaConstants.EntityWithAccessionedSequence,
+			Collections.singletonList(ReactomeJavaConstants.referenceEntity)
+		);
+		return classToAttributesToFollow;
+	}
+
+	private static boolean isReferenceGeneProduct(GKInstance entity) {
+		return entity.getSchemClass().isa(ReactomeJavaConstants.ReferenceGeneProduct);
+	}
+
+	private static boolean isEntitySet(GKInstance entity) {
+		return entity.getSchemClass().isa(ReactomeJavaConstants.EntitySet);
+	}
+
+	private static boolean isComplex(GKInstance physicalEntity) {
+		return physicalEntity.getSchemClass().isa(ReactomeJavaConstants.Complex);
+	}
+
+	private static boolean isPolymer(GKInstance physicalEntity) {
+		return physicalEntity.getSchemClass().isa(ReactomeJavaConstants.Polymer);
+	}
+
+	private static boolean hasCandidates(GKInstance candidateSet) throws Exception {
+		return candidateSet.getAttributeValue(ReactomeJavaConstants.hasCandidate) != null;
+	}
+
+	private static Collection<GKInstance> sortInstancesByDbId(Collection<GKInstance> unsortedInstances) {
+		// Sort instances by DB ID
+		List<Long> dbIds = new ArrayList<>();
+		Collection<GKInstance> sortedInstances = new ArrayList<>();
+		Map<Long,GKInstance> dbIdToInstance = new HashMap<>();
+		for (GKInstance instance : unsortedInstances) {
+			dbIds.add(instance.getDBID());
+			dbIdToInstance.put(instance.getDBID(), instance);
+		}
+		Collections.sort(dbIds);
+		for (Long id : dbIds) {
+			sortedInstances.add(dbIdToInstance.get(id));
+		}
+
+		return sortedInstances;
+	}
+
 	public static void setHomologueMappingFile(Map<String, String[]> homologueMappingsCopy) {
 		homologueMappings = homologueMappingsCopy;
 	}
