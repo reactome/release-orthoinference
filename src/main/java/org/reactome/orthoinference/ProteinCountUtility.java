@@ -9,9 +9,6 @@ import org.gk.model.ReactomeJavaConstants;
 
 
 public class ProteinCountUtility {
-	
-	private static Map<String, String[]> homologueMappings = new HashMap<>();
-	
 	/** This function is meant to emulate the count_distinct_proteins function found in infer_events.pl.
 	 A crucial note is that the Perl version seems to be depend on the order by which instance groups are taken from
 	 the DB. Often the DB IDs are ordered smallest to largest, but other times it is a consistent yet 'random' order.
@@ -23,9 +20,6 @@ public class ProteinCountUtility {
 	*/
 	
 	public static List<Integer> getDistinctProteinCounts (GKInstance instanceToBeInferred) throws Exception {
-
-
-		
 		// With the output instances saved in followedInstances, begin the protein count process, which is based on
 		// the homologue mappings (orthopairs) files.
 		List<Integer> distinctProteinCounts = new ArrayList<>();
@@ -42,8 +36,8 @@ public class ProteinCountUtility {
 			if (isReferenceGeneProduct(entityInst)) {
 				int count = 0;
 				String identifierName = entityInst.getAttributeValue(ReactomeJavaConstants.identifier).toString();
-				if (homologueMappings.get(identifierName) != null) {
-					count = homologueMappings.get(identifierName).length;
+				if (getMappings().getHomologues(identifierName) != null) {
+					count = getMappings().getHomologues(identifierName).length;
 				}
 				total++;
 				if (count > max) {
@@ -131,8 +125,8 @@ public class ProteinCountUtility {
 							flag = 1;
 							String identifierName = physicalEntityInst.getAttributeValue(ReactomeJavaConstants.identifier).toString();
 							int count = 0;
-							if (homologueMappings.get(identifierName) != null) {
-								count = homologueMappings.get(identifierName).length;
+							if (getMappings().getHomologues(identifierName) != null) {
+								count = getMappings().getHomologues(identifierName).length;
 							}
 							if (count > max) {
 								max = count;
@@ -226,8 +220,8 @@ public class ProteinCountUtility {
 					candidateTotal = 1;
 					String identifierName = physicalEntityInst.getAttributeValue(ReactomeJavaConstants.identifier).toString();
 					int count = 0;
-					if (homologueMappings.get(identifierName) != null) {
-						count = homologueMappings.get(identifierName).length;
+					if (getMappings().getHomologues(identifierName) != null) {
+						count = getMappings().getHomologues(identifierName).length;
 					}
 					if (count > 0) {
 						candidateInferrable = 1;
@@ -334,7 +328,7 @@ public class ProteinCountUtility {
 		return sortedInstances;
 	}
 
-	public static void setHomologueMappingFile(Map<String, String[]> homologueMappingsCopy) {
-		homologueMappings = homologueMappingsCopy;
+	private static Mappings getMappings() {
+		return Mappings.getInstance();
 	}
 }
