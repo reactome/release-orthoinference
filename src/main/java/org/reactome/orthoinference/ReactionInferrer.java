@@ -16,7 +16,6 @@ import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
 import org.gk.persistence.MySQLAdaptor;
-import org.gk.schema.InvalidAttributeException;
 
 public class ReactionInferrer {
 
@@ -24,6 +23,7 @@ public class ReactionInferrer {
 
 	private ConfigProperties configProperties;
 	private String speciesCode;
+	private StableIdentifierGenerator stableIdentifierGenerator;
 	private OrthologousEntityGenerator orthologousEntityGenerator;
 	private Utils utils;
 
@@ -41,6 +41,7 @@ public class ReactionInferrer {
 		this.speciesCode = speciesCode;
 
 		this.orthologousEntityGenerator = new OrthologousEntityGenerator(configProperties, speciesCode);
+		this.stableIdentifierGenerator = new StableIdentifierGenerator(configProperties, speciesCode);
 		this.utils = new Utils(configProperties, speciesCode);
 
 		this.dba = dba;
@@ -111,7 +112,7 @@ public class ReactionInferrer {
 							// FetchIdenticalInstances would just return the instance being inferred. Since this step
 							// is meant to always add a new inferred instance, the storeInstance method is just called
 							// here.
-							GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator()
+							GKInstance orthoStableIdentifierInst = getStableIdentifierGenerator()
 								.generateOrthologousStableId(infReactionInst, reactionInst);
 							infReactionInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
 							dba.storeInstance(infReactionInst);
@@ -347,6 +348,10 @@ public class ReactionInferrer {
 
 	private OrthologousEntityGenerator getOrthologousEntityGenerator() {
 		return this.orthologousEntityGenerator;
+	}
+
+	private StableIdentifierGenerator getStableIdentifierGenerator() {
+		return this.stableIdentifierGenerator;
 	}
 
 	private Utils getUtils() {
