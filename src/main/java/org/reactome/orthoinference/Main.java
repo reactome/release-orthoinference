@@ -42,6 +42,8 @@ public class Main {
 		props.load(Files.newInputStream(Paths.get(getPathToConfig())));
 		configProperties = new ConfigProperties(props);
 
+		Mappings.init("hsap", getSpeciesCode(), getPathToOrthopairs());
+
 		EventsInferrer eventsInferrer = new EventsInferrer(configProperties, getSpeciesCode());
 		eventsInferrer.inferEvents();
 	}
@@ -52,5 +54,9 @@ public class Main {
 
 	private String getSpeciesCode() {
 		return this.speciesCode;
+	}
+
+	private String getPathToOrthopairs() {
+		return getConfigProperties().getPathToOrthopairs();
 	}
 }
