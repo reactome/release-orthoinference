@@ -1,33 +1,22 @@
 package org.reactome.orthoinference;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.URL;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.sql.SQLException;
 import java.util.*;
-import java.util.zip.GZIPInputStream;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
-//import static org.gk.model.ReactomeJavaConstants.*;
 
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.InvalidAttributeException;
-import org.gk.schema.SchemaClass;
-import org.json.simple.JSONObject;
+
 import org.json.simple.parser.ParseException;
-import org.reactome.release.common.database.InstanceEditUtils;
 
 /**
  *
@@ -51,7 +40,6 @@ public class EventsInferrer {
 	private ReactionInferrer reactionInferrer;
 	private PathwaysInferrer pathwaysInferrer;
 
-	private static GKInstance instanceEditInst;
 	private static GKInstance speciesInst;
 	private static Map<GKInstance,GKInstance> manualEventToNonHumanSource = new HashMap<>();
 	private static List<GKInstance> manualHumanEvents = new ArrayList<>();
@@ -68,49 +56,14 @@ public class EventsInferrer {
 
 	@SuppressWarnings("unchecked")
 	public void inferEvents() throws Exception {
-		// Parse Species information (found in Species.json config file)
 		logger.info("Beginning orthoinference of " + getSpeciesName());
-
-//		stableIdentifierGenerator =
-//			new StableIdentifierGenerator(configProperties, speciesCode);
-		// Set static variables (DB/Species Instances, mapping files) that will be repeatedly used
-		try {
-			readAndSetHomologueMappingFile(speciesCode, "hsap");
-			readAndSetGeneNameMappingFile(speciesCode);
-		} catch (Exception e) {
-			logger.fatal("Unable to locate " + getSpeciesName() +" mapping file: hsap_" + speciesCode + "_mapping.tsv. " +
-				"Orthology prediction not possible.");
-			e.printStackTrace();
-			System.exit(1);
-		}
-		EWASInferrer.readENSGMappingFile(speciesCode, configProperties.getPathToOrthopairs());
-		EWASInferrer.fetchAndSetUniprotDbInstance();
-		if (isFungiSpecies(speciesCode)) {
-			EWASInferrer.fetchOrCreateFungiEnsemblDatabase(getCurrentDBA());
-		} else if (isProtistSpecies(speciesCode)) {
-			EWASInferrer.fetchOrCreateProtistsEnsemblDatabase(getCurrentDBA());
-		} else {
-			EWASInferrer.fetchOrCreateMainEnsemblDatabase(getCurrentDBA());
-		}
-
-//		EWASInferrer.createEnsemblProteinDbInstance(speciesName, refDbUrl, refDbProteinUrl);
-//		EWASInferrer.createEnsemblGeneDBInstance(speciesName, refDbUrl, refDbGeneUrl);
-
-		JSONObject altRefDbJSON = getAltRefDBJSON();
-		if (altRefDbJSON != null) {
-			logger.info("Alternate DB exists for " + getSpeciesName());
-			EWASInferrer.createAlternateReferenceDBInstance(altRefDbJSON);
-		} else {
-			EWASInferrer.setAltRefDbToFalse();
-		}
 
 /**
  *  Start of ReactionlikeEvent inference. Retrieves all human ReactionlikeEvents, and attempts to infer each for the species.
  */
 		// Gets DB instance of source species (human)
 		GKInstance humanSpeciesInstance = getHumanSpeciesInstance();
-		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(
-			getCurrentDBA(), getPrevDBA(), speciesInst, humanSpeciesInstance, configProperties.getPersonId());
+
 		// Gets Reaction instances of source species (human)
 		Collection<GKInstance> reactionInstances = (Collection<GKInstance>)
 			getCurrentDBA().fetchInstanceByAttribute("ReactionlikeEvent", "species", "=", humanSpeciesInstance.getDBID());
@@ -166,6 +119,9 @@ public class EventsInferrer {
 		}
 		PathwaysInferrer.setInferredEvent(getReactionInferrer().getInferredEvent());
 		PathwaysInferrer.inferPathways(getReactionInferrer().getInferrableHumanEvents());
+
+		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(
+			getCurrentDBA(), getPrevDBA(), speciesInst, humanSpeciesInstance, configProperties.getPersonId());
 		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
 		outputReport(speciesCode, configProperties.getReleaseVersion());
 		logger.info("Finished orthoinference of " + getSpeciesName());
@@ -185,40 +141,17 @@ public class EventsInferrer {
 		return sourceSpeciesInst.iterator().next();
 	}
 
-	/**
-	 * Create mapping of UniProt accessions to species-specific gene names, and then set this mapping for use in
-	 * EWASInferrer.
-	 * @param species String - 4-letter shortened version of species name (eg: Homo sapiens --> hsap).
-	 * @throws IOException - Thrown if file is not found.
-	 */
-	private void readAndSetGeneNameMappingFile(String species) throws IOException {
-		Map<String, String> geneNameMappings = readGeneNameMappingFile(species);
-
-		EWASInferrer.setGeneNameMappingFile(geneNameMappings);
-	}
-
-	/**
-	 * Read in the {species}_gene_name_mapping.tsv file and create a Map of UniProt identifiers to gene names.
-	 * @param species String - 4-letter shortened version of species name (eg: Homo sapiens --> hsap).
-	 * @return pathToOrthopairs String - Path to directory containing orthopairs files.
-	 * @throws IOException - Thrown if file is not found.
-	 */
-	private Map<String, String> readGeneNameMappingFile(String species)
-		throws IOException {
-
-		Path geneNameMappingFilePath = Paths.get(configProperties.getPathToOrthopairs(), species + "_gene_name_mapping.tsv");
-		Map<String, String> geneNameMappings = new HashMap<>();
-		for (String line : Files.readAllLines(geneNameMappingFilePath)) {
-			String[] tabSplit = line.split("\t");
-			if (tabSplit.length == 2) {
-				String uniprotId = tabSplit[0];
-				String geneName = tabSplit[1];
-				geneNameMappings.put(uniprotId, geneName);
-			}
-		}
-
-		return geneNameMappings;
-	}
+//	/**
+//	 * Create mapping of UniProt accessions to species-specific gene names, and then set this mapping for use in
+//	 * EWASInferrer.
+//	 * @param species String - 4-letter shortened version of species name (eg: Homo sapiens --> hsap).
+//	 * @throws IOException - Thrown if file is not found.
+//	 */
+//	private void readAndSetGeneNameMappingFile(String species) throws IOException {
+//		Map<String, String> geneNameMappings = readGeneNameMappingFile(species);
+//
+//		EWASInferrer.setGeneNameMappingFile(geneNameMappings);
+//	}
 
 	private void createNewFile(String filename) throws IOException {
 		File file = new File(filename);
@@ -272,75 +205,12 @@ public class EventsInferrer {
 //
 //	}
 
-	private void readAndSetHomologueMappingFile(String species, String fromSpecies)
-		throws IOException {
-		Map<String,String[]> homologueMappings = readHomologueMappingFile(species, fromSpecies);
-		ProteinCountUtility.setHomologueMappingFile(homologueMappings);
-		EWASInferrer.setHomologueMappingFile(homologueMappings);
-	}
-
-	// Read the species-specific orthopair 'mapping' file, and create a HashMap with the contents
-	private Map<String, String[]> readHomologueMappingFile(String toSpecies, String fromSpecies)
-		throws IOException {
-
-		String orthopairsFileName = fromSpecies + "_" + toSpecies + "_mapping.tsv";
-		String orthopairsFilePath = Paths.get(configProperties.getPathToOrthopairs(), orthopairsFileName).toString();
-		logger.info("Reading in " + orthopairsFilePath);
-		FileReader fr = new FileReader(orthopairsFilePath);
-		BufferedReader br = new BufferedReader(fr);
-
-		Map<String, String[]> homologueMappings = new HashMap<>();
-		String currentLine;
-		while ((currentLine = br.readLine()) != null) {
-			String[] tabSplit = currentLine.split("\t");
-			String mapKey = tabSplit[0];
-			String[] spaceSplit = tabSplit[1].split(" ");
-			homologueMappings.put(mapKey, spaceSplit);
-		}
-		br.close();
-		fr.close();
-		return homologueMappings;
-	}
-
-	/**
-	 * Download the Wormbase file that contains the WBGene IDs mapped to gene names, and then create a mapping of IDs
-	 * to names.
-	 * @param wormbaseUrl -- URL to Wormbase file to be downloaded and processed.
-	 * @return -- Map<String, List,<String>> of WBGene IDs to gene names.
-	 * @throws IOException
-	 */
-	private Map<String, List<String>> downloadAndProcessWormbaseFile(URL wormbaseUrl) throws IOException {
-		File wormbaseFile = Paths.get(wormbaseUrl.toString()).getFileName().toFile();
-		Map<String, List<String>> wormbaseMappings = new HashMap<>();
-		FileUtils.copyURLToFile(wormbaseUrl, wormbaseFile);
-		BufferedReader br = new BufferedReader(
-			new InputStreamReader(new GZIPInputStream(new FileInputStream(wormbaseFile))));
-		String line = null;
-		while ((line = br.readLine()) != null) {
-			String wormbaseGeneId = line.split(",")[1];
-			String wormbaseGeneName = line.split(",")[2];
-			if (!wormbaseGeneId.isEmpty() && !wormbaseGeneName.isEmpty()) {
-				if (wormbaseMappings.containsKey(wormbaseGeneId)) {
-					wormbaseMappings.get(wormbaseGeneId).add(wormbaseGeneName);
-				} else {
-					wormbaseMappings.computeIfAbsent(wormbaseGeneId, k -> new ArrayList<>()).add(wormbaseGeneName);
-				}
-			}
-		}
-		br.close();
-		wormbaseFile.delete();
-		return wormbaseMappings;
-	}
-
-	private boolean isProtistSpecies(String speciesCode) {
-		final List<String> protistsSpeciesCodes = Arrays.asList("ddis", "pfal");
-		return protistsSpeciesCodes.contains(speciesCode);
-	}
-
-	private boolean isFungiSpecies(String speciesCode) {
-		final List<String> fungiSpeciesCodes = Arrays.asList("scer", "spom");
-		return fungiSpeciesCodes.contains(speciesCode);
-	}
+//	private void readAndSetHomologueMappingFile(String species, String fromSpecies)
+//		throws IOException {
+//		Map<String,String[]> homologueMappings = readHomologueMappingFile(species, fromSpecies);
+//		ProteinCountUtility.setHomologueMappingFile(homologueMappings);
+//		EWASInferrer.setHomologueMappingFile(homologueMappings);
+//	}
 
 	private ConfigProperties getConfigProperties() {
 		return this.configProperties;
@@ -356,10 +226,6 @@ public class EventsInferrer {
 
 	private String getSpeciesName() throws IOException, ParseException {
 		return getConfigProperties().getSpeciesConfig().getSpeciesName(getSpeciesCode());
-	}
-
-	private JSONObject getAltRefDBJSON() throws IOException, ParseException {
-		return getConfigProperties().getSpeciesConfig().getAltRefDbJSON(getSpeciesCode());
 	}
 
 	private MySQLAdaptor getCurrentDBA() throws SQLException {
