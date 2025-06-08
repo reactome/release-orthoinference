@@ -1,5 +1,6 @@
 package org.reactome.orthoinference;
 
+import java.sql.SQLException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -15,18 +16,22 @@ import org.gk.persistence.MySQLAdaptor;
 public class PathwaysInferrer {
 
 	private static final Logger logger = LogManager.getLogger();
-	private static MySQLAdaptor dba;
-	private static String dateOfRelease = "";
-	private static GKInstance summationInst;
-	private static GKInstance evidenceTypeInst;
-	private static GKInstance instanceEditInst;
+
+	private ConfigProperties configProperties;
+	private Utils utils;
+
 	private static List<GKInstance> updatedInferrableHumanEvents = new ArrayList<>();
 	private static Map<GKInstance, GKInstance> sourceInstanceToInferredInstance = new HashMap<>();
 	//private static GKInstance diseasePathwayInst;
 
+	public PathwaysInferrer(ConfigProperties configProperties, String speciesCode) {
+		this.configProperties = configProperties;
+		this.utils = new Utils(configProperties, speciesCode);
+	}
+
 	// This class populates species pathways with the instances that have been inferred.
 	// This was copied heavily from the Perl, so my explanations are a little sparse here.
-	public static void inferPathways(List<GKInstance> inferrableHumanReactionLikeEvents) throws Exception {
+	public void inferPathways(List<GKInstance> inferrableHumanReactionLikeEvents) throws Exception {
 		//diseasePathwayInst = getDiseaseInstance();
 
 		logger.info("Beginning Pathway inference");
@@ -69,7 +74,7 @@ public class PathwaysInferrer {
 	@SuppressWarnings("unchecked")
 	// This generates the inferred Pathway of an inferred RlE. It iterates, inferring parent Pathways until reaching
 	// the TopLevelPathway.  Inferred Reactions are not added to the Pathway at this step.
-	private static void createInferredPathwayHierarchy(GKInstance humanEvent) throws Exception {
+	private void createInferredPathwayHierarchy(GKInstance humanEvent) throws Exception {
 		List<GKInstance> humanPathwayReferralInstances =
 			safeList(humanEvent.getReferers(ReactomeJavaConstants.hasEvent));
 
@@ -91,20 +96,20 @@ public class PathwaysInferrer {
 		}
 	}
 
-	private static boolean hasNotBeenInferred(GKInstance sourcePathwayReferralInst) {
+	private boolean hasNotBeenInferred(GKInstance sourcePathwayReferralInst) {
 		return sourceInstanceToInferredInstance.get(sourcePathwayReferralInst) == null;
 	}
 
-	private static void inferPathway(GKInstance humanPathway) throws Exception {
+	private void inferPathway(GKInstance humanPathway) throws Exception {
 		GKInstance inferredPathway = InstanceUtilities.createNewInferredGKInstance(humanPathway);
 		inferredPathway.addAttributeValue(
 			ReactomeJavaConstants.name, humanPathway.getAttributeValuesList(ReactomeJavaConstants.name));
-		inferredPathway.addAttributeValue(ReactomeJavaConstants.summation, summationInst);
+		inferredPathway.addAttributeValue(ReactomeJavaConstants.summation, getUtils().getSummationInstance());
 		if (inferredPathway.getSchemClass().isValidAttribute(ReactomeJavaConstants.releaseDate)) {
-			inferredPathway.addAttributeValue(ReactomeJavaConstants.releaseDate, dateOfRelease);
+			inferredPathway.addAttributeValue(ReactomeJavaConstants.releaseDate, getConfigProperties().getDateOfRelease());
 		}
 		inferredPathway.addAttributeValue(ReactomeJavaConstants.inferredFrom, humanPathway);
-		inferredPathway.addAttributeValue(ReactomeJavaConstants.evidenceType, evidenceTypeInst);
+		inferredPathway.addAttributeValue(ReactomeJavaConstants.evidenceType, getUtils().getEvidenceType());
 		for (GKInstance goBioProcessInst : getGoBiologicalProcess(humanPathway)) {
 			inferredPathway.addAttributeValue(ReactomeJavaConstants.goBiologicalProcess, goBioProcessInst);
 		}
@@ -115,17 +120,17 @@ public class PathwaysInferrer {
 		}
 		inferredPathway.setDisplayName(humanPathway.getDisplayName());
 		sourceInstanceToInferredInstance.put(humanPathway, inferredPathway);
-		GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator()
+		GKInstance orthoStableIdentifierInst = getUtils().getStableIdentifierGenerator()
 			.generateOrthologousStableId(inferredPathway, humanPathway);
 		inferredPathway.addAttributeValue(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
-		dba.storeInstance(inferredPathway);
+		getCurrentDBA().storeInstance(inferredPathway);
 
 		// This was replaced with addAttributeValueIfNecessary due to a bug where a Pathway instance's
 		// 'OrthologousEvent' attribute was being replaced, instead of being added to the existing array when the
 		// script was executed from a jar (rather than from Eclipse) (Justin Cook 2018)
 		humanPathway = InstanceUtilities.addAttributeValueIfNecessary(
 			humanPathway, inferredPathway, ReactomeJavaConstants.orthologousEvent);
-		dba.updateInstanceAttribute(humanPathway, ReactomeJavaConstants.orthologousEvent);
+		getCurrentDBA().updateInstanceAttribute(humanPathway, ReactomeJavaConstants.orthologousEvent);
 
 		//TODO: At this point, sourcePathwayReferralInst is always a Pathway.
 		// Perhaps move to its own data structure? Holdout from Perl...
@@ -134,7 +139,7 @@ public class PathwaysInferrer {
 
 	// This populates the hasEvent slot of all inferred Pathways that were just generated with corresponding inferred
 	// reactions
-	private static void addInferredEventsToInferredPathways() throws Exception {
+	private void addInferredEventsToInferredPathways() throws Exception {
 		Set<Long> seenInferredPathway = new HashSet<>();
 		for (GKInstance humanPathwayInst : getPathways(updatedInferrableHumanEvents)) {
 			if (seenInferredPathway.contains(humanPathwayInst.getDBID())) {
@@ -160,7 +165,7 @@ public class PathwaysInferrer {
 				sourceInstanceToInferredInstance.remove(humanPathwayInst);
 				sourceInstanceToInferredInstance.put(humanPathwayInst, inferredPathwayInst);
 			}
-			dba.updateInstanceAttribute(
+			getCurrentDBA().updateInstanceAttribute(
 				sourceInstanceToInferredInstance.get(humanPathwayInst), ReactomeJavaConstants.hasEvent);
 
 			seenInferredPathway.add(humanPathwayInst.getDBID());
@@ -168,7 +173,7 @@ public class PathwaysInferrer {
 	}
 
 	// Collect inferred Events associated with source Event
-	private static List<GKInstance> getInferredEventInstances(GKInstance humanPathwayInst) throws Exception {
+	private List<GKInstance> getInferredEventInstances(GKInstance humanPathwayInst) throws Exception {
 		List<GKInstance> inferredEventInstances = new ArrayList<>();
 		for (GKInstance eventInst :
 			(Collection<GKInstance>) humanPathwayInst.getAttributeValuesList(ReactomeJavaConstants.hasEvent)) {
@@ -181,7 +186,7 @@ public class PathwaysInferrer {
 
 
 	@SuppressWarnings("unchecked")
-	private static void inferPrecedingEvents() throws Exception {
+	private void inferPrecedingEvents() throws Exception {
 		Set<GKInstance> seenPrecedingEvent = new HashSet<>();
 		for (GKInstance inferrableEventInst : updatedInferrableHumanEvents) {
 			if (!seenPrecedingEvent.contains(inferrableEventInst)) {
@@ -214,7 +219,7 @@ public class PathwaysInferrer {
 					if (!updatedPrecedingEventInstances.isEmpty()) {
 						sourceInstanceToInferredInstance.get(inferrableEventInst).addAttributeValue(
 							ReactomeJavaConstants.precedingEvent, updatedPrecedingEventInstances);
-						dba.updateInstanceAttribute(sourceInstanceToInferredInstance.get(inferrableEventInst),
+						getCurrentDBA().updateInstanceAttribute(sourceInstanceToInferredInstance.get(inferrableEventInst),
 							ReactomeJavaConstants.precedingEvent);
 					}
 				}
@@ -223,25 +228,25 @@ public class PathwaysInferrer {
 		}
 	}
 
-	private static void updateModifiedAttributeIfNecessary() throws Exception {
+	private void updateModifiedAttributeIfNecessary() throws Exception {
 
 		Set<Long> seenInstanceEditInst = new HashSet<>();
 		for (GKInstance humanPathwayInst : updatedInferrableHumanEvents) {
 			if (!seenInstanceEditInst.contains(humanPathwayInst.getDBID())) {
 				GKInstance createdInst = (GKInstance) humanPathwayInst.getAttributeValue(ReactomeJavaConstants.created);
 				if (createdInst == null ||
-					!createdInst.getDBID().toString().matches(instanceEditInst.getDBID().toString())) {
+					!createdInst.getDBID().toString().matches(getUtils().getInstanceEdit().getDBID().toString())) {
 
 					boolean modifiedExists = false;
 					for (GKInstance modifiedInst :
 						(Collection<GKInstance>) humanPathwayInst.getAttributeValuesList(ReactomeJavaConstants.modified)) {
-						if (modifiedInst.getDBID().toString().matches(instanceEditInst.getDBID().toString())) {
+						if (modifiedInst.getDBID().toString().matches(getUtils().getInstanceEdit().getDBID().toString())) {
 							modifiedExists = true;
 						}
 					}
 					if (!modifiedExists) {
-						humanPathwayInst.addAttributeValue(ReactomeJavaConstants.modified, instanceEditInst);
-						dba.updateInstanceAttribute(humanPathwayInst, ReactomeJavaConstants.modified);
+						humanPathwayInst.addAttributeValue(ReactomeJavaConstants.modified, getUtils().getInstanceEdit());
+						getCurrentDBA().updateInstanceAttribute(humanPathwayInst, ReactomeJavaConstants.modified);
 					}
 					seenInstanceEditInst.add(humanPathwayInst.getDBID());
 				}
@@ -249,40 +254,32 @@ public class PathwaysInferrer {
 		}
 	}
 
-	private static Collection<GKInstance> getGoBiologicalProcess(GKInstance humanPathway) throws Exception {
+	private Collection<GKInstance> getGoBiologicalProcess(GKInstance humanPathway) throws Exception {
 		return (Collection<GKInstance>) humanPathway.getAttributeValuesList(ReactomeJavaConstants.goBiologicalProcess);
 	}
 
-	private static List<GKInstance> getPathways(List<GKInstance> events) {
-		return events.stream().filter(PathwaysInferrer::isPathway).collect(Collectors.toList());
+	private List<GKInstance> getPathways(List<GKInstance> events) {
+		return events.stream().filter(this::isPathway).collect(Collectors.toList());
 	}
 
-	private static boolean isPathway(GKInstance event) {
+	private boolean isPathway(GKInstance event) {
 		return event.getSchemClass().isValidAttribute(ReactomeJavaConstants.hasEvent);
 	}
 
-	public static void setAdaptor(MySQLAdaptor dbAdaptor) {
-		dba = dbAdaptor;
-	}
-
-	public static void setReleaseDate(String dateOfReleaseCopy) {
-		dateOfRelease = dateOfReleaseCopy;
-	}
-
-	public static void setSummationInstance(GKInstance summationInstCopy) {
-		summationInst = summationInstCopy;
-	}
-
-	public static void setEvidenceTypeInstance(GKInstance evidenceTypeInstCopy) {
-		evidenceTypeInst = evidenceTypeInstCopy;
-	}
-
-	public static void setInstanceEdit(GKInstance instanceEditCopy) {
-		instanceEditInst = instanceEditCopy;
-	}
-
-	public static void setInferredEvent(Map<GKInstance,GKInstance> inferredEventCopy) {
+	public void setInferredEvent(Map<GKInstance,GKInstance> inferredEventCopy) {
 		sourceInstanceToInferredInstance = inferredEventCopy;
+	}
+
+	private Utils getUtils() {
+		return this.utils;
+	}
+
+	private ConfigProperties getConfigProperties() {
+		return this.configProperties;
+	}
+
+	private MySQLAdaptor getCurrentDBA() throws SQLException {
+		return getConfigProperties().getCurrentDBA();
 	}
 
 //	private static GKInstance getDiseaseInstance() throws Exception {
