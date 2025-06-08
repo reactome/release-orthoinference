@@ -46,7 +46,7 @@ public class OrthologousEntityGenerator {
  *  (i.e. 'ghost instances' from Perl script), which allow a PE to be inferred without having to commit a 'real'
  *  instance to the DB.
 */
-	public OrthologousEntityGenerator(ConfigProperties configProperties, String speciesCode) {
+	public OrthologousEntityGenerator(ConfigProperties configProperties, String speciesCode) throws Exception {
 		this.ewasInferrer = new EWASInferrer(configProperties, speciesCode);
 		this.utils = new Utils(configProperties, speciesCode);
 		this.complexSummationInst = getComplexSummationInstance();
