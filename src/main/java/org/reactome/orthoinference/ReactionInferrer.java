@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -14,7 +15,7 @@ import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
-import static org.gk.model.ReactomeJavaConstants.*;
+import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
 
 public class ReactionInferrer {
@@ -23,11 +24,9 @@ public class ReactionInferrer {
 
 	private ConfigProperties configProperties;
 	private String speciesCode;
-	private StableIdentifierGenerator stableIdentifierGenerator;
 	private OrthologousEntityGenerator orthologousEntityGenerator;
 	private Utils utils;
 
-	private MySQLAdaptor dba;
 	private static String dateOfRelease = "";
 	private static Map<GKInstance, GKInstance> inferredCatalyst = new HashMap<>();
 	private static Map<GKInstance, GKInstance> inferredEvent = new HashMap<>();
@@ -36,16 +35,14 @@ public class ReactionInferrer {
 	private static List<GKInstance> inferrableHumanEvents = new ArrayList<>();
 	private SkipInstanceChecker skipInstanceChecker;
 
-	public ReactionInferrer(ConfigProperties configProperties, String speciesCode) throws IOException {
+	public ReactionInferrer(ConfigProperties configProperties, String speciesCode) throws Exception {
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
 
 		this.orthologousEntityGenerator = new OrthologousEntityGenerator(configProperties, speciesCode);
-		this.stableIdentifierGenerator = new StableIdentifierGenerator(configProperties, speciesCode);
 		this.utils = new Utils(configProperties, speciesCode);
 
-		this.dba = dba;
-		this.skipInstanceChecker = new SkipInstanceChecker(dba);
+		this.skipInstanceChecker = new SkipInstanceChecker(getCurrentDBA());
 
 		initializeEligibleAndInferredFiles();
 	}
@@ -64,12 +61,12 @@ public class ReactionInferrer {
 			///// The beginning of an inference process:
 			// Creates inferred instance of reaction.
 			GKInstance infReactionInst = InstanceUtilities.createNewInferredGKInstance(reactionInst);
-			infReactionInst.addAttributeValue(name, reactionInst.getAttributeValuesList(name));
+			infReactionInst.addAttributeValue(ReactomeJavaConstants.name, reactionInst.getAttributeValuesList(ReactomeJavaConstants.name));
 			infReactionInst.addAttributeValue(
-				goBiologicalProcess, reactionInst.getAttributeValue(goBiologicalProcess));
-			infReactionInst.addAttributeValue(summation, getUtils().getSummationInstance());
-			infReactionInst.addAttributeValue(evidenceType, getUtils().getEvidenceType());
-			infReactionInst.addAttributeValue(_displayName, reactionInst.getAttributeValue(_displayName));
+				ReactomeJavaConstants.goBiologicalProcess, reactionInst.getAttributeValue(ReactomeJavaConstants.goBiologicalProcess));
+			infReactionInst.addAttributeValue(ReactomeJavaConstants.summation, getUtils().getSummationInstance());
+			infReactionInst.addAttributeValue(ReactomeJavaConstants.evidenceType, getUtils().getEvidenceType());
+			infReactionInst.addAttributeValue(ReactomeJavaConstants._displayName, reactionInst.getAttributeValue(ReactomeJavaConstants._displayName));
 
 			// This function finds the total number of distinct proteins associated with an instance, as well as the
 			// number that can be inferred.  Total proteins are stored in reactionProteinCounts[0], inferrable proteins
@@ -79,7 +76,7 @@ public class ReactionInferrer {
 			int reactionTotalProteinCounts = reactionProteinCounts.get(0);
 			if (reactionTotalProteinCounts > 0) {
 				logger.info("Total protein count for RlE: " + reactionTotalProteinCounts);
-				String eligibleEventName = reactionInst.getAttributeValue(DB_ID).toString() + "\t" +
+				String eligibleEventName = reactionInst.getAttributeValue(ReactomeJavaConstants.DB_ID).toString() + "\t" +
 					reactionInst.getDisplayName() + "\n";
 				// Having passed all tests/filters until now, the reaction is recorded in the 'eligible reactions'
 				// file, meaning inference is continued.
@@ -93,9 +90,9 @@ public class ReactionInferrer {
 				// CatalystActivity and RegulatedBy attributes.  Failure to successfully infer any of these attributes
 				// will end inference for this reaction.
 				logger.info("Inferring inputs...");
-				if (inferReactionInputsOrOutputs(reactionInst, infReactionInst, input)) {
+				if (inferReactionInputsOrOutputs(reactionInst, infReactionInst, ReactomeJavaConstants.input)) {
 					logger.info("Inferring outputs...");
-					if (inferReactionInputsOrOutputs(reactionInst, infReactionInst, output)) {
+					if (inferReactionInputsOrOutputs(reactionInst, infReactionInst, ReactomeJavaConstants.output)) {
 						logger.info("Inferring catalysts...");
 						if (inferReactionCatalysts(reactionInst, infReactionInst)) {
 							// Many reactions are not regulated at all, meaning inference is attempted but will not
@@ -106,28 +103,28 @@ public class ReactionInferrer {
 							if (inferredRegulations.size() == 1 && inferredRegulations.get(0) == null) {
 								return;
 							}
-							if (infReactionInst.getSchemClass().isValidAttribute(releaseDate)) {
-								infReactionInst.addAttributeValue(releaseDate, dateOfRelease);
+							if (infReactionInst.getSchemClass().isValidAttribute(ReactomeJavaConstants.releaseDate)) {
+								infReactionInst.addAttributeValue(ReactomeJavaConstants.releaseDate, dateOfRelease);
 							}
 							// FetchIdenticalInstances would just return the instance being inferred. Since this step
 							// is meant to always add a new inferred instance, the storeInstance method is just called
 							// here.
-							GKInstance orthoStableIdentifierInst = getStableIdentifierGenerator()
+							GKInstance orthoStableIdentifierInst = getUtils().getStableIdentifierGenerator()
 								.generateOrthologousStableId(infReactionInst, reactionInst);
-							infReactionInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
-							dba.storeInstance(infReactionInst);
+							infReactionInst.addAttributeValue(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
+							getCurrentDBA().storeInstance(infReactionInst);
 							logger.info("Inferred RlE instance: " + infReactionInst);
 
-							if (infReactionInst.getSchemClass().isValidAttribute(inferredFrom)) {
+							if (infReactionInst.getSchemClass().isValidAttribute(ReactomeJavaConstants.inferredFrom)) {
 								infReactionInst = InstanceUtilities.addAttributeValueIfNecessary(
-									infReactionInst, reactionInst, inferredFrom);
-								dba.updateInstanceAttribute(infReactionInst, inferredFrom);
+									infReactionInst, reactionInst, ReactomeJavaConstants.inferredFrom);
+								getCurrentDBA().updateInstanceAttribute(infReactionInst, ReactomeJavaConstants.inferredFrom);
 							}
 							infReactionInst = InstanceUtilities.addAttributeValueIfNecessary(
-								infReactionInst, reactionInst, orthologousEvent);
-							dba.updateInstanceAttribute(infReactionInst, orthologousEvent);
-							reactionInst.addAttributeValue(orthologousEvent, infReactionInst);
-							dba.updateInstanceAttribute(reactionInst, orthologousEvent);
+								infReactionInst, reactionInst, ReactomeJavaConstants.orthologousEvent);
+							getCurrentDBA().updateInstanceAttribute(infReactionInst, ReactomeJavaConstants.orthologousEvent);
+							reactionInst.addAttributeValue(ReactomeJavaConstants.orthologousEvent, infReactionInst);
+							getCurrentDBA().updateInstanceAttribute(reactionInst, ReactomeJavaConstants.orthologousEvent);
 							
 							inferredEvent.put(reactionInst, infReactionInst);
 							
@@ -139,14 +136,14 @@ public class ReactionInferrer {
 									infRegulation = InstanceUtilities.checkForIdenticalInstances(
 										infRegulation, null);
 									infReactionInst.addAttributeValue("regulatedBy", infRegulation);
-									dba.updateInstanceAttribute(infReactionInst, "regulatedBy");
+									getCurrentDBA().updateInstanceAttribute(infReactionInst, "regulatedBy");
 								}
 							}
 							// After successfully adding a new inferred instance to the DB, it is recorded in the
 							// 'inferred reactions' file
 							inferredCount++;
 							inferrableHumanEvents.add(reactionInst);
-							String inferredEvent = infReactionInst.getAttributeValue(DB_ID).toString() + "\t" +
+							String inferredEvent = infReactionInst.getAttributeValue(ReactomeJavaConstants.DB_ID).toString() + "\t" +
 								infReactionInst.getDisplayName() + "\n";
 							Files.write(
 								getInferredFile(),
@@ -198,7 +195,7 @@ public class ReactionInferrer {
 	private boolean inferReactionCatalysts(GKInstance reactionInst, GKInstance infReactionInst)
 		throws Exception {
 		Collection<GKInstance> catalystInstances =
-			(Collection<GKInstance>) reactionInst.getAttributeValuesList(catalystActivity);
+			(Collection<GKInstance>) reactionInst.getAttributeValuesList(ReactomeJavaConstants.catalystActivity);
 		logger.info("Total CatalystActivity instances: " + catalystInstances.size());
 		if (catalystInstances.size() > 0) {
 			logger.info("Catalyst instance(s): " + catalystInstances);
@@ -207,15 +204,15 @@ public class ReactionInferrer {
 			logger.info("Attempting catalyst inference: " + catalystInst);
 			if (inferredCatalyst.get(catalystInst) == null) {
 				GKInstance infCatalystInst = InstanceUtilities.createNewInferredGKInstance(catalystInst);
-				infCatalystInst.setDbAdaptor(dba);
-				infCatalystInst.addAttributeValue(activity, catalystInst.getAttributeValue(activity));
-				GKInstance catalystPEInst = (GKInstance) catalystInst.getAttributeValue(physicalEntity);
+				infCatalystInst.setDbAdaptor(getCurrentDBA());
+				infCatalystInst.addAttributeValue(ReactomeJavaConstants.activity, catalystInst.getAttributeValue(ReactomeJavaConstants.activity));
+				GKInstance catalystPEInst = (GKInstance) catalystInst.getAttributeValue(ReactomeJavaConstants.physicalEntity);
 				if (catalystPEInst != null) {
 					logger.info("Catalyst PE instance: " + catalystPEInst);
 					GKInstance infCatalystPEInst = getOrthologousEntityGenerator().createOrthoEntity(
 						catalystPEInst, false);
 					if (infCatalystPEInst != null) {
-						infCatalystInst.addAttributeValue(physicalEntity, infCatalystPEInst);
+						infCatalystInst.addAttributeValue(ReactomeJavaConstants.physicalEntity, infCatalystPEInst);
 					} else {
 						return false;
 					}
@@ -223,7 +220,7 @@ public class ReactionInferrer {
 
 				List<GKInstance> activeUnits = new ArrayList<>();
 				Collection<GKInstance> activeUnitInstances =
-					(Collection<GKInstance>) catalystInst.getAttributeValuesList(activeUnit);
+					(Collection<GKInstance>) catalystInst.getAttributeValuesList(ReactomeJavaConstants.activeUnit);
 				logger.info("Total active unit instances: " + activeUnitInstances);
 				if (activeUnitInstances.size() > 0) {
 					logger.info("Active unit instance(s): " + activeUnitInstances);
@@ -236,14 +233,14 @@ public class ReactionInferrer {
 						}
 					}
 				}
-				infCatalystInst.addAttributeValue(activeUnit, activeUnits);
-				infCatalystInst.addAttributeValue(_displayName, catalystInst.getAttributeValue(_displayName));
+				infCatalystInst.addAttributeValue(ReactomeJavaConstants.activeUnit, activeUnits);
+				infCatalystInst.addAttributeValue(ReactomeJavaConstants._displayName, catalystInst.getAttributeValue(ReactomeJavaConstants._displayName));
 				infCatalystInst = InstanceUtilities.checkForIdenticalInstances(infCatalystInst, null);
 				inferredCatalyst.put(catalystInst, infCatalystInst);
 			} else {
 				logger.info("Inferred catalyst already exists");
 			}
-			infReactionInst.addAttributeValue(catalystActivity, inferredCatalyst.get(catalystInst));
+			infReactionInst.addAttributeValue(ReactomeJavaConstants.catalystActivity, inferredCatalyst.get(catalystInst));
 		}
 		logger.info("Completed catalyst inference");
 		return true;
@@ -261,24 +258,24 @@ public class ReactionInferrer {
 			logger.info("Regulation instances: " + regulationInstances);
 			for (GKInstance regulationInst : regulationInstances) {
 				logger.info("Attempting Regulation inference: " + regulationInst);
-				GKInstance regulatorInst = (GKInstance) regulationInst.getAttributeValue(regulator);
+				GKInstance regulatorInst = (GKInstance) regulationInst.getAttributeValue(ReactomeJavaConstants.regulator);
 				logger.info("Regulator: " + regulatorInst);
 				GKInstance infRegulatorInst = null;
-				if (regulatorInst.getSchemClass().isa(PhysicalEntity)) {
+				if (regulatorInst.getSchemClass().isa(ReactomeJavaConstants.PhysicalEntity)) {
 					infRegulatorInst = getOrthologousEntityGenerator().createOrthoEntity(regulatorInst, false);
-				} else if (regulatorInst.getSchemClass().isa(CatalystActivity)) {
+				} else if (regulatorInst.getSchemClass().isa(ReactomeJavaConstants.CatalystActivity)) {
 					// This has never happened since running the new orthoinference (JCook 2019)
 					logger.warn(regulatorInst + " is a CatalystActivity, which is unexpected -- " +
 						"refer to infer_events.pl");
 					System.exit(0);
-				} else if (regulatorInst.getSchemClass().isa(Event)) {
+				} else if (regulatorInst.getSchemClass().isa(ReactomeJavaConstants.Event)) {
 					// This has never happened since running the new orthoinference (JCook 2019)
 					logger.warn(regulatorInst + " is an Event, which is unexpected -- " +
 						"refer to infer_events.pl");
 					System.exit(0);
 				}
 				if (infRegulatorInst == null) {
-					if (regulationInst.getSchemClass().isa(Requirement)) {
+					if (regulationInst.getSchemClass().isa(ReactomeJavaConstants.Requirement)) {
 						logger.info("Regulation is a 'Requirement' and regulation inference was unsuccessful -- " +
 							"terminating inference for " + reactionInst);
 						inferredRegulations.clear();
@@ -290,22 +287,14 @@ public class ReactionInferrer {
 					}
 				}
 				GKInstance infRegulationInst = InstanceUtilities.createNewInferredGKInstance(regulationInst);
-				infRegulationInst.setDbAdaptor(dba);
-				infRegulationInst.addAttributeValue(regulator, infRegulatorInst);
-				infRegulationInst.addAttributeValue(_displayName, regulationInst.getAttributeValue(_displayName));
+				infRegulationInst.setDbAdaptor(getCurrentDBA());
+				infRegulationInst.addAttributeValue(ReactomeJavaConstants.regulator, infRegulatorInst);
+				infRegulationInst.addAttributeValue(ReactomeJavaConstants._displayName, regulationInst.getAttributeValue(ReactomeJavaConstants._displayName));
 				inferredRegulations.add(infRegulationInst);
 				logger.info("Completed regulator inference");
 			}
 		}
 		return inferredRegulations;
-	}
-	
-	public void setReleaseDate(String dateOfReleaseCopy) {
-		dateOfRelease = dateOfReleaseCopy;
-	}
-	
-	public void setAdaptor(MySQLAdaptor dbAdaptor) {
-		dba = dbAdaptor;
 	}
 
 	public Map<GKInstance, GKInstance> getInferredEvent() {
@@ -350,11 +339,15 @@ public class ReactionInferrer {
 		return this.orthologousEntityGenerator;
 	}
 
-	private StableIdentifierGenerator getStableIdentifierGenerator() {
-		return this.stableIdentifierGenerator;
-	}
-
 	private Utils getUtils() {
 		return this.utils;
+	}
+
+	private ConfigProperties getConfigProperties() {
+		return this.configProperties;
+	}
+
+	private MySQLAdaptor getCurrentDBA() throws SQLException {
+		return getConfigProperties().getCurrentDBA();
 	}
 }
