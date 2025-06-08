@@ -3,12 +3,15 @@ package org.reactome.orthoinference;
 import org.gk.model.GKInstance;
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
+import org.gk.schema.GKSchemaAttribute;
+import org.gk.schema.GKSchemaClass;
 import org.gk.schema.SchemaClass;
 import org.json.simple.parser.ParseException;
 import org.reactome.release.common.database.InstanceEditUtils;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.Collection;
 
 public class Utils {
 
@@ -20,9 +23,13 @@ public class Utils {
     private GKInstance evidenceType;
     private GKInstance summation;
 
+    private StableIdentifierGenerator stableIdentifierGenerator;
+
     public Utils(ConfigProperties configProperties, String speciesCode) {
         this.configProperties = configProperties;
         this.speciesCode = speciesCode;
+
+        this.stableIdentifierGenerator = new StableIdentifierGenerator(configProperties, speciesCode);
     }
 
     // Find the instance specific to this species
@@ -81,6 +88,10 @@ public class Utils {
             summation = InstanceUtilities.checkForIdenticalInstances(summation, null);
         }
         return summation;
+    }
+
+    public StableIdentifierGenerator getStableIdentifierGenerator() {
+        return stableIdentifierGenerator;
     }
 
     private ConfigProperties getConfigProperties() {
