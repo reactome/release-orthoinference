@@ -2,6 +2,13 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>2.7.15</version>
+		<relativePath/> <!-- lookup parent from repository -->
+	</parent>
+
 	<groupId>org.reactome.datapipeline</groupId>
 	<artifactId>orthoinference</artifactId>
 	<version>1.0.2-SNAPSHOT</version>
@@ -45,6 +52,17 @@
 	<dependencies>
 		<!-- Main dependencies -->
 		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+
+		<dependency>
 			<groupId>org.jcommander</groupId>
 			<artifactId>jcommander</artifactId>
 			<version>2.0</version>
@@ -76,6 +94,11 @@
 			<artifactId>release-common-lib</artifactId>
 			<version>2.0.0</version>
 		</dependency>
+		<dependency>
+			<groupId>org.reactome.base</groupId>
+			<artifactId>reactome-base</artifactId>
+			<version>2.2.3-SNAPSHOT</version>
+		</dependency>
 
 		<!-- Test dependencies -->
 		<dependency>
@@ -106,6 +129,11 @@
 
 	<build>
 		<plugins>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+			</plugin>
+
 			<!-- sets the Java compiler version targeted by Maven -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
