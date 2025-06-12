@@ -17,6 +17,8 @@ import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.InvalidAttributeException;
 
 import org.json.simple.parser.ParseException;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
 /**
  *
@@ -30,12 +32,13 @@ import org.json.simple.parser.ParseException;
  * during the 'Orthopairs' step of the Reactome release process.  After all inference attempts for each RlE has been
  * completed in an organism, the pathways that contain the reactions are filled with these newly inferred ones.
  */
-
+@Component
 public class EventsInferrer {
 	private static final Logger logger = LogManager.getLogger();
 
 	private ConfigProperties configProperties;
 	private String speciesCode;
+	private GKInstance speciesInstance;
 
 	private ReactionInferrer reactionInferrer;
 	private PathwaysInferrer pathwaysInferrer;
@@ -46,14 +49,15 @@ public class EventsInferrer {
 	private static List<GKInstance> manualHumanEvents = new ArrayList<>();
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
 
-	public EventsInferrer(ConfigProperties configProperties, String speciesCode) throws Exception {
+	public EventsInferrer(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String speciesCode, @Qualifier("speciesInst") GKInstance speciesInstance, ReactionInferrer reactionInferrer, PathwaysInferrer pathwaysInferrer, Utils utils) throws Exception {
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
+		this.speciesInstance = speciesInstance;
 
-		this.reactionInferrer = new ReactionInferrer(configProperties, speciesCode);
-		this.pathwaysInferrer = new PathwaysInferrer(configProperties, speciesCode);
+		this.reactionInferrer = reactionInferrer;
+		this.pathwaysInferrer = pathwaysInferrer;
 
-		this.utils = new Utils(configProperties, speciesCode);
+		this.utils = utils;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -124,7 +128,7 @@ public class EventsInferrer {
 		getPathwaysInferrer().inferPathways(getReactionInferrer().getInferrableHumanEvents());
 
 		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(
-			getCurrentDBA(), getPrevDBA(), getUtils().getSpeciesInstance(), humanSpeciesInstance, configProperties.getPersonId());
+			getCurrentDBA(), getPrevDBA(), speciesInstance, humanSpeciesInstance, configProperties.getPersonId());
 		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
 		outputReport(speciesCode, configProperties.getReleaseVersion());
 		logger.info("Finished orthoinference of " + getSpeciesName());
@@ -175,7 +179,7 @@ public class EventsInferrer {
 		throws InvalidAttributeException, Exception {
 		for (GKInstance attributeInst : (Collection<GKInstance>) reactionInst.getAttributeValuesList(attribute)) {
 			GKInstance reactionSpeciesInst = (GKInstance) attributeInst.getAttributeValue(ReactomeJavaConstants.species);
-			if (reactionSpeciesInst.getDBID() == getUtils().getSpeciesInstance().getDBID() &&
+			if (reactionSpeciesInst.getDBID() == speciesInstance.getDBID() &&
 				attributeInst.getAttributeValue(ReactomeJavaConstants.isChimeric) == null) {
 				previouslyInferredInstances.add(attributeInst);
 			}
@@ -183,7 +187,7 @@ public class EventsInferrer {
 		return previouslyInferredInstances;
 	}
 
-	private void outputReport(String species, String releaseVersion) throws IOException {
+	private void outputReport(String species, int releaseVersion) throws IOException {
 		int eligibleCount = getReactionInferrer().getEligibleCount();
 		int inferredCount = getReactionInferrer().getInferredCount();
 		float percentInferred = (float) 100 * inferredCount / eligibleCount;

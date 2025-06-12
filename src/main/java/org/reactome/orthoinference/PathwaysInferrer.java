@@ -12,21 +12,25 @@ import static org.reactome.util.general.CollectionUtils.safeList;
 
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
+import org.springframework.stereotype.Component;
 
+@Component
 public class PathwaysInferrer {
 
 	private static final Logger logger = LogManager.getLogger();
 
 	private ConfigProperties configProperties;
+	private InstanceUtilities instanceUtilities;
 	private Utils utils;
 
 	private static List<GKInstance> updatedInferrableHumanEvents = new ArrayList<>();
 	private static Map<GKInstance, GKInstance> sourceInstanceToInferredInstance = new HashMap<>();
 	//private static GKInstance diseasePathwayInst;
 
-	public PathwaysInferrer(ConfigProperties configProperties, String speciesCode) {
+	public PathwaysInferrer(ConfigProperties configProperties, InstanceUtilities instanceUtilities, Utils utils) {
 		this.configProperties = configProperties;
-		this.utils = new Utils(configProperties, speciesCode);
+		this.instanceUtilities = instanceUtilities;
+		this.utils = utils;
 	}
 
 	// This class populates species pathways with the instances that have been inferred.
@@ -88,7 +92,7 @@ public class PathwaysInferrer {
 			// Pathways that have been inferred already are skipped, as are Pathways that are only children of the
 			// Disease TopLevelPathway.
 			if (hasNotBeenInferred(humanPathwayReferralInstance) &&
-				!InstanceUtilities.onlyInDiseasePathway(humanPathwayReferralInstance)) {
+				!instanceUtilities.onlyInDiseasePathway(humanPathwayReferralInstance)) {
 
 				inferPathway(humanPathwayReferralInstance);
 			}
@@ -101,7 +105,7 @@ public class PathwaysInferrer {
 	}
 
 	private void inferPathway(GKInstance humanPathway) throws Exception {
-		GKInstance inferredPathway = InstanceUtilities.createNewInferredGKInstance(humanPathway);
+		GKInstance inferredPathway = instanceUtilities.createNewInferredGKInstance(humanPathway);
 		inferredPathway.addAttributeValue(
 			ReactomeJavaConstants.name, humanPathway.getAttributeValuesList(ReactomeJavaConstants.name));
 		inferredPathway.addAttributeValue(ReactomeJavaConstants.summation, getUtils().getSummationInstance());
@@ -128,7 +132,7 @@ public class PathwaysInferrer {
 		// This was replaced with addAttributeValueIfNecessary due to a bug where a Pathway instance's
 		// 'OrthologousEvent' attribute was being replaced, instead of being added to the existing array when the
 		// script was executed from a jar (rather than from Eclipse) (Justin Cook 2018)
-		humanPathway = InstanceUtilities.addAttributeValueIfNecessary(
+		humanPathway = instanceUtilities.addAttributeValueIfNecessary(
 			humanPathway, inferredPathway, ReactomeJavaConstants.orthologousEvent);
 		getCurrentDBA().updateInstanceAttribute(humanPathway, ReactomeJavaConstants.orthologousEvent);
 
@@ -160,7 +164,7 @@ public class PathwaysInferrer {
 			logger.info("Adding " + inferredEventInstances.size() + " inferred Event(s) to " +
 				"inferred Pathway: " + sourceInstanceToInferredInstance.get(humanPathwayInst));
 			for (GKInstance infEventInst : inferredEventInstances) {
-				inferredPathwayInst = InstanceUtilities.addAttributeValueIfNecessary(
+				inferredPathwayInst = instanceUtilities.addAttributeValueIfNecessary(
 					inferredPathwayInst, infEventInst, ReactomeJavaConstants.hasEvent);
 				sourceInstanceToInferredInstance.remove(humanPathwayInst);
 				sourceInstanceToInferredInstance.put(humanPathwayInst, inferredPathwayInst);
@@ -235,17 +239,17 @@ public class PathwaysInferrer {
 			if (!seenInstanceEditInst.contains(humanPathwayInst.getDBID())) {
 				GKInstance createdInst = (GKInstance) humanPathwayInst.getAttributeValue(ReactomeJavaConstants.created);
 				if (createdInst == null ||
-					!createdInst.getDBID().toString().matches(getUtils().getInstanceEdit().getDBID().toString())) {
+					!createdInst.getDBID().toString().matches(getInstanceEdit().getDBID().toString())) {
 
 					boolean modifiedExists = false;
 					for (GKInstance modifiedInst :
 						(Collection<GKInstance>) humanPathwayInst.getAttributeValuesList(ReactomeJavaConstants.modified)) {
-						if (modifiedInst.getDBID().toString().matches(getUtils().getInstanceEdit().getDBID().toString())) {
+						if (modifiedInst.getDBID().toString().matches(getInstanceEdit().getDBID().toString())) {
 							modifiedExists = true;
 						}
 					}
 					if (!modifiedExists) {
-						humanPathwayInst.addAttributeValue(ReactomeJavaConstants.modified, getUtils().getInstanceEdit());
+						humanPathwayInst.addAttributeValue(ReactomeJavaConstants.modified, getInstanceEdit());
 						getCurrentDBA().updateInstanceAttribute(humanPathwayInst, ReactomeJavaConstants.modified);
 					}
 					seenInstanceEditInst.add(humanPathwayInst.getDBID());
@@ -280,6 +284,10 @@ public class PathwaysInferrer {
 
 	private MySQLAdaptor getCurrentDBA() throws SQLException {
 		return getConfigProperties().getCurrentDBA();
+	}
+
+	private GKInstance getInstanceEdit() throws Exception {
+		return this.instanceUtilities.getInstanceEdit();
 	}
 
 //	private static GKInstance getDiseaseInstance() throws Exception {

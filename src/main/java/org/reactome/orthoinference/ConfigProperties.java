@@ -1,6 +1,12 @@
 package org.reactome.orthoinference;
 
 import org.gk.persistence.MySQLAdaptor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
 
 import java.sql.SQLException;
 import java.util.Properties;
@@ -9,54 +15,96 @@ import java.util.Properties;
  * @author Joel Weiser (joel.weiser@oicr.on.ca)
  *         Created 1/9/2024
  */
+@Configuration
 public class ConfigProperties {
-    private Properties props;
+    @Value("${user}")
+    private String user;
+    @Value("${password}")
+    private String password;
+    @Value("${currentDbName}")
+    private String currentDbName;
+    @Value("${previousDbName}")
+    private String previousDbName;
+    @Value("${host}")
+    private String host;
+    @Value("${port}")
+    private int port;
 
-    public ConfigProperties(Properties props) {
-        this.props = props;
-    }
+    @Value("${pathToSpeciesConfig}")
+    private String pathToSpeciesConfig;
+    @Value("${pathToOrthopairs}")
+    private String pathToOrthopairs;
 
+    @Value("${dateOfRelease}")
+    private String dateOfRelease;
+    @Value("${releaseNumber}")
+    private int releaseNumber;
+    @Value("${personId}")
+    private long personId;
+
+    @Value("${sourceSpeciesCode}")
+    private String sourceSpeciesCode;
+
+    public ConfigProperties() {}
+
+    @Bean(name = "currentDBA")
     public MySQLAdaptor getCurrentDBA() throws SQLException {
-        String dbName = props.getProperty("release_current.name");
-        return getDBA(props, dbName);
+        return getDBA(currentDbName);
     }
 
+    @Bean(name = "previousDBA")
     public MySQLAdaptor getPreviousDBA() throws SQLException {
-        String previousDbName = props.getProperty("release_previous.name");
-        return getDBA(props, previousDbName);
+        return getDBA(previousDbName);
     }
 
-    public String getReleaseVersion() {
-        return props.getProperty("releaseNumber");
+    @Bean(name = "releaseVersion")
+    public int getReleaseVersion() {
+        return this.releaseNumber;
     }
 
+    @Bean(name = "pathToSpeciesConfig")
+    public String getPathToSpeciesConfig() {
+        return this.pathToSpeciesConfig;
+    }
+
+    @Bean(name = "pathToOrthopairs")
     public String getPathToOrthopairs() {
-        return props.getProperty("pathToOrthopairs", "orthopairs");
+        return this.pathToOrthopairs != null ? this.pathToOrthopairs : "orthopairs";
     }
 
+    @Bean
     public SpeciesConfig getSpeciesConfig() {
-        String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig", "src/main/resources/Species.json");
+        String pathToSpeciesConfig = this.pathToSpeciesConfig != null ?
+            this.pathToSpeciesConfig : "src/main/resources/Species.json";
         return new SpeciesConfig(pathToSpeciesConfig);
     }
 
+    @Bean(name = "dateOfRelease")
     public String getDateOfRelease() {
-        return props.getProperty("dateOfRelease");
+        return this.dateOfRelease;
     }
 
-    public int getPersonId() {
-        return Integer.valueOf(props.getProperty("personId"));
+    @Bean(name = "personId")
+    public long getPersonId() {
+        return this.personId;
     }
 
-    private MySQLAdaptor getDBA(Properties props, String dbName) throws SQLException {
-        String username = props.getProperty("release.database.user");
-        String password = props.getProperty("release.database.password");
-        String host = props.getProperty("release.database.host");
-        int port = Integer.valueOf(props.getProperty("release.database.port"));
-
-        return new MySQLAdaptor(host,username,dbName,password,port);
+    @Bean(name = "sourceSpeciesCode")
+    public String getSourceSpeciesCode() {
+        return this.sourceSpeciesCode;
     }
 
-    private Properties getProps() {
-        return this.props;
+    @Bean(name = "targetSpeciesCode")
+    public String speciesCode(ApplicationArguments args) {
+        final String speciesCodeArgName = "speciesCode";
+        if (!args.containsOption(speciesCodeArgName) || args.getOptionValues(speciesCodeArgName).isEmpty()) {
+            throw new IllegalArgumentException("Missing required command-line argument: --" + speciesCodeArgName);
+        }
+
+        return args.getOptionValues(speciesCodeArgName).get(0);
+    }
+
+    private MySQLAdaptor getDBA(String dbName) throws SQLException {
+        return new MySQLAdaptor(this.host,dbName,this.user,this.password,this.port);
     }
 }

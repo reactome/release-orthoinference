@@ -6,6 +6,8 @@ import org.gk.persistence.MySQLAdaptor;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.ParseException;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -17,10 +19,12 @@ import java.util.List;
  * @author Joel Weiser (joel.weiser@oicr.on.ca)
  * Created 5/5/2025
  */
+@Component
 public class ReferenceDatabase {
 
 	private ConfigProperties configProperties;
 	private String speciesCode;
+	private InstanceUtilities instanceUtilities;
 	private Utils utils;
 
 	private GKInstance ensemblDBInst;
@@ -30,10 +34,11 @@ public class ReferenceDatabase {
 	private boolean altRefDbExists;
 	private String altRefDbId;
 
-	public ReferenceDatabase(ConfigProperties configProperties, String speciesCode) {
+	public ReferenceDatabase(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String speciesCode, InstanceUtilities instanceUtilities, Utils utils) {
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
-		this.utils = new Utils(configProperties, speciesCode);
+		this.instanceUtilities = instanceUtilities;
+		this.utils = utils;
 	}
 
 	public void setEnsEMBLDatabase() throws Exception {
@@ -158,7 +163,7 @@ public class ReferenceDatabase {
 		alternateDbInst.addAttributeValue(ReactomeJavaConstants.url, altRefDbJSON.get("url"));
 		alternateDbInst.addAttributeValue(ReactomeJavaConstants.accessUrl, altRefDbJSON.get("access"));
 		alternateDbInst.setAttributeValue(ReactomeJavaConstants._displayName, ((JSONArray) altRefDbJSON.get("dbname")).get(0));
-		alternateDbInst = InstanceUtilities.checkForIdenticalInstances(alternateDbInst, null);
+		alternateDbInst = instanceUtilities.checkForIdenticalInstances(alternateDbInst, null);
 		if (altRefDbJSON.get("alt_id") != null)
 		{
 			altRefDbId = (String) altRefDbJSON.get("alt_id");
@@ -171,7 +176,7 @@ public class ReferenceDatabase {
 	}
 
 	private GKInstance getInstanceEdit() throws Exception {
-		return this.utils.getInstanceEdit();
+		return this.instanceUtilities.getInstanceEdit();
 	}
 
 	private ConfigProperties getConfigProperties() {

@@ -1,5 +1,6 @@
 package org.reactome.orthoinference;
 
+import java.io.IOException;
 import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
@@ -12,21 +13,68 @@ import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.GKSchemaAttribute;
 import org.gk.schema.GKSchemaClass;
 import org.gk.schema.SchemaClass;
+import org.json.simple.parser.ParseException;
+import org.reactome.release.common.database.InstanceEditUtils;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.stereotype.Component;
 
 // GenerateInstance is meant to act as a catch-all for functions that are instance-oriented, such as creating, mocking,
 // or identical-checking.
+@Component
 public class InstanceUtilities {
 
 	private static final Logger logger = LogManager.getLogger();
 
-	private static MySQLAdaptor dba;
-	private static GKInstance speciesInst;
-	private static GKInstance instanceEditInst;
-	private static Map<String,GKInstance> mockedIdenticals = new HashMap<>();
-	private static final long DISEASE_PATHWAY_DB_ID = 1643685L;
+	private final long DISEASE_PATHWAY_DB_ID = 1643685L;
+
+	private MySQLAdaptor dba;
+	private long personId;
+	private String targetSpeciesCode;
+	private SpeciesConfig speciesConfig;
+
+	private GKInstance speciesInst;
+	private GKInstance instanceEdit;
+	private Map<String,GKInstance> mockedIdenticals = new HashMap<>();
+
+	public InstanceUtilities(
+		@Qualifier("currentDBA") MySQLAdaptor dba,
+		@Qualifier("personId") long personId,
+		@Qualifier("targetSpeciesCode") String targetSpeciesCode,
+		SpeciesConfig speciesConfig
+	) {
+		this.dba = dba;
+		this.personId = personId;
+		this.targetSpeciesCode = targetSpeciesCode;
+		this.speciesConfig = speciesConfig;
+	}
+
+	@Bean(name = "instanceEditInst")
+	public GKInstance getInstanceEdit() throws Exception {
+		if (instanceEdit == null) {
+			instanceEdit = InstanceEditUtils.createInstanceEdit(
+				dba, personId, "org.reactome.orthoinference");
+		}
+		return instanceEdit;
+	}
+
+	// Find the instance specific to this species
+	@Bean(name = "speciesInst")
+	public GKInstance getSpeciesInstance() throws Exception {
+		if (speciesInst == null) {
+			SchemaClass referenceDb = dba.getSchema().getClassByName(ReactomeJavaConstants.Species);
+			speciesInst = new GKInstance(referenceDb);
+			speciesInst.setDbAdaptor(dba);
+			speciesInst.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
+			speciesInst.addAttributeValue(ReactomeJavaConstants.name, getSpeciesName());
+			speciesInst.addAttributeValue(ReactomeJavaConstants._displayName, getSpeciesName());
+			speciesInst = checkForIdenticalInstances(speciesInst, null);
+		}
+		return speciesInst;
+	}
 
 	// Creates new instance that will be inferred based on the incoming instances class
-	public static GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception {
+	public GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception {
 		String reactionClass = instanceToBeInferred.getSchemClass().getName();
 		if (reactionClass.matches(ReactomeJavaConstants.ReferenceIsoform)) {
 			reactionClass = ReactomeJavaConstants.ReferenceGeneProduct;
@@ -34,7 +82,7 @@ public class InstanceUtilities {
 		SchemaClass instanceClass = dba.getSchema().getClassByName(reactionClass);
 		GKInstance inferredInst = new GKInstance(instanceClass);
 		inferredInst.setDbAdaptor(dba);
-		inferredInst.addAttributeValue(ReactomeJavaConstants.created, instanceEditInst);
+		inferredInst.addAttributeValue(ReactomeJavaConstants.created, instanceEdit);
 		if (instanceToBeInferred.getSchemClass().isValidAttribute(ReactomeJavaConstants.compartment) &&
 			instanceToBeInferred.getAttributeValue(ReactomeJavaConstants.compartment) != null) {
 			for (Object compartmentInst : instanceToBeInferred.getAttributeValuesList(ReactomeJavaConstants.compartment)) {
@@ -59,7 +107,7 @@ public class InstanceUtilities {
 	// them being a GO_CellularComponent. This function is the workaround, producing a Compartment instance that
 	// contains all the same attribute values.
 	@SuppressWarnings("unchecked")
-	public static GKInstance createCompartmentInstance(GKInstance compartmentInstGk) throws Exception {
+	public GKInstance createCompartmentInstance(GKInstance compartmentInstGk) throws Exception {
 		logger.warn(compartmentInstGk + " is a " + compartmentInstGk.getSchemClass() + " instead of a Compartment" +
 			" -- creating new Compartment instance");
 		SchemaClass compartmentClass = dba.getSchema().getClassByName(ReactomeJavaConstants.Compartment);
@@ -80,11 +128,11 @@ public class InstanceUtilities {
 
 	// Equivalent to create_ghost from Perl; Returns a mock homologue that is needed in cases where an inference is
 	// rejected, but the component isn't essential for the inference to be completed.
-	public static GKInstance createMockGKInstance(GKInstance instanceToBeMocked) throws Exception {
+	public GKInstance createMockGKInstance(GKInstance instanceToBeMocked) throws Exception {
 		SchemaClass genomeEncodedEntityClass = dba.getSchema().getClassByName(ReactomeJavaConstants.GenomeEncodedEntity);
 		GKInstance mockedInst = new GKInstance(genomeEncodedEntityClass);
 		mockedInst.setDbAdaptor(dba);
-		mockedInst.addAttributeValue(ReactomeJavaConstants.created, instanceEditInst);
+		mockedInst.addAttributeValue(ReactomeJavaConstants.created, instanceEdit);
 		String mockedInstName = (String) instanceToBeMocked.getAttributeValue(ReactomeJavaConstants.name);
 		mockedInst.addAttributeValue(ReactomeJavaConstants.name, "Ghost homologue of " + mockedInstName);
 		mockedInst.addAttributeValue(ReactomeJavaConstants._displayName, "Ghost homologue of " +
@@ -109,7 +157,7 @@ public class InstanceUtilities {
 	}
 
 	// Checks that equivalent instances don't already exist in the DB, substituting if they do
-	public static GKInstance checkForIdenticalInstances(GKInstance inferredInst, GKInstance originalInst)
+	public GKInstance checkForIdenticalInstances(GKInstance inferredInst, GKInstance originalInst)
 		throws Exception {
 		@SuppressWarnings("unchecked")
 		Collection<GKInstance> identicalInstances = dba.fetchIdenticalInstances(inferredInst);
@@ -123,9 +171,9 @@ public class InstanceUtilities {
 			}
 		} else {
 			if (inferredInst.getSchemClass().isa(ReactomeJavaConstants.PhysicalEntity)) {
-				GKInstance orthoStableIdentifierInst = getUtils().getStableIdentifierGenerator()
-					.generateOrthologousStableId(inferredInst, originalInst);
-				inferredInst.addAttributeValue(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
+//				GKInstance orthoStableIdentifierInst = getUtils().getStableIdentifierGenerator()
+//					.generateOrthologousStableId(inferredInst, originalInst);
+//				inferredInst.addAttributeValue(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
 			}
 			dba.storeInstance(inferredInst);
 			return inferredInst;
@@ -133,7 +181,7 @@ public class InstanceUtilities {
 	}
 	// Checks if the instanceToCheck already contains the instanceToUse in the multi-value attribute
 	@SuppressWarnings("unchecked")
-	public static GKInstance addAttributeValueIfNecessary(GKInstance instanceToBeCheckedForExistingAttribute,
+	public GKInstance addAttributeValueIfNecessary(GKInstance instanceToBeCheckedForExistingAttribute,
 														  GKInstance instanceContainingAttributeToBeChecked,
 														  String attribute) throws Exception {
 		// Original version of this function had two checks: For 'multivalue attribute' and for 'instance-type object'. 
@@ -165,7 +213,7 @@ public class InstanceUtilities {
 	// This allows for identical instances held in memory to be used before trying to use fetchIdenticalInstances,
 	// which is expensive.
 	@SuppressWarnings("unchecked")
-	public static String getCacheKey(GKSchemaClass instanceClass, GKInstance inferredInst) throws Exception {
+	public String getCacheKey(GKSchemaClass instanceClass, GKInstance inferredInst) throws Exception {
 		String key = "";
 		for (GKSchemaAttribute definingAttr : (Collection<GKSchemaAttribute>) instanceClass.getDefiningAttributes()) {
 			if (definingAttr.isMultiple()) {
@@ -204,7 +252,7 @@ public class InstanceUtilities {
 	 * @return boolean -- true if only parent is Disease Pathway, false if not.
 	 * @throws Exception -- Thrown by MySQLAdaptor.
 	 */
-	public static boolean onlyInDiseasePathway(GKInstance eventInst) throws Exception {
+	public boolean onlyInDiseasePathway(GKInstance eventInst) throws Exception {
 		Set<Long> topLevelPathwayDbIds = getTopLevelPathwayDbIds(eventInst);
 		return topLevelPathwayDbIds.size() == 1 && topLevelPathwayDbIds.contains(DISEASE_PATHWAY_DB_ID);
 	}
@@ -217,7 +265,7 @@ public class InstanceUtilities {
 	 * @return -- Set<GKInstance> containing a list of all TopLevelPathway DbIds for incoming Event instance.
 	 * @throws Exception -- Thrown by MySQLAdaptor.
 	 */
-	private static Set<Long> getTopLevelPathwayDbIds(GKInstance pathway) throws Exception {
+	private Set<Long> getTopLevelPathwayDbIds(GKInstance pathway) throws Exception {
 		List<GKInstance> parentPathways = safeList(pathway.getReferers(ReactomeJavaConstants.Event));
 		if (parentPathways.isEmpty()) {
 			return new HashSet<>(Arrays.asList(pathway.getDBID()));
@@ -231,19 +279,23 @@ public class InstanceUtilities {
 		return topLevelPathwayDbIds;
 	}
 	
-	public static void setAdaptor(MySQLAdaptor dbAdaptor) {
+	public void setAdaptor(MySQLAdaptor dbAdaptor) {
 		dba = dbAdaptor;
 	}
 
-	public static void setSpeciesInstance(GKInstance speciesInstCopy) {
+	public void setSpeciesInstance(GKInstance speciesInstCopy) {
 		speciesInst = speciesInstCopy;
 	}
 
-	public static void setInstanceEdit(GKInstance instanceEditCopy) {
-		instanceEditInst = instanceEditCopy;
+	public void setInstanceEdit(GKInstance instanceEditCopy) {
+		instanceEdit = instanceEditCopy;
 	}
 
-	public static long getDiseasePathwayDbId() {
+	public long getDiseasePathwayDbId() {
 		return DISEASE_PATHWAY_DB_ID;
+	}
+
+	private String getSpeciesName() throws IOException, ParseException {
+		return this.speciesConfig.getSpeciesName(this.targetSpeciesCode);
 	}
 }

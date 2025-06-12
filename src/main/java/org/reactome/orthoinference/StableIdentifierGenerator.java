@@ -7,6 +7,8 @@ import org.gk.model.InstanceDisplayNameGenerator;
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
 import org.json.simple.parser.ParseException;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -15,16 +17,19 @@ import java.util.*;
 /*
  *  All PhysicalEntitys, ReactionlikeEvents and Pathways are routed to this class to generate their stable identifiers
  */
+@Component
 public class StableIdentifierGenerator {
     private static final Logger logger = LogManager.getLogger();
     private static Map<String,Integer> seenOrthoIds = new HashMap<>();
 
     private ConfigProperties configProperties;
     private String speciesCode;
+    private InstanceUtilities instanceUtilities;
 
-    public StableIdentifierGenerator(ConfigProperties configProperties, String speciesCode) {
+    public StableIdentifierGenerator(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String speciesCode, InstanceUtilities instanceUtilities) {
         this.configProperties = configProperties;
         this.speciesCode = speciesCode;
+        this.instanceUtilities = instanceUtilities;
     }
 
     public GKInstance generateOrthologousStableId(GKInstance inferredInst, GKInstance originalInst) throws Exception {
@@ -107,7 +112,7 @@ public class StableIdentifierGenerator {
     private GKInstance createOrthologousStableIdentifierInstance(
         GKInstance stableIdentifierInst, String targetIdentifier) throws Exception {
 
-        GKInstance orthoStableIdentifierInst = InstanceUtilities.createNewInferredGKInstance(stableIdentifierInst);
+        GKInstance orthoStableIdentifierInst = instanceUtilities.createNewInferredGKInstance(stableIdentifierInst);
         orthoStableIdentifierInst.addAttributeValue(ReactomeJavaConstants.identifier, targetIdentifier);
         orthoStableIdentifierInst.addAttributeValue(ReactomeJavaConstants.identifierVersion, "1");
 

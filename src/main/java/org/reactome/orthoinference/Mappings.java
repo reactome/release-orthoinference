@@ -1,5 +1,8 @@
 package org.reactome.orthoinference;
 
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
@@ -15,32 +18,30 @@ import java.util.Map;
  * @author Joel Weiser (joel.weiser@oicr.on.ca)
  * Created 5/7/2025
  */
+@Component
 public class Mappings {
-	private static Mappings mappings;
+	//private static Mappings mappings;
 
 	private Map<String, String[]> homologueMappings;
 	private Map<String, List<String>> ensgMappings;
 	private Map<String, String> geneNameMappings;
 
-	private Mappings(String sourceSpecies, String targetSpecies, String pathToOrthopairs) throws IOException {
+	public Mappings(
+		@Qualifier("sourceSpeciesCode") String sourceSpecies,
+		@Qualifier("targetSpeciesCode") String targetSpecies,
+		@Qualifier("pathToOrthopairs") String pathToOrthopairs) throws IOException {
+
 		this.homologueMappings = readHomologueMappingFile(targetSpecies, sourceSpecies, pathToOrthopairs);
 		this.ensgMappings = readENSGMappingFile(targetSpecies, pathToOrthopairs);
 		this.geneNameMappings = readGeneNameMappingFile(targetSpecies, pathToOrthopairs);
 	}
 
-	public static synchronized void init(String sourceSpecies, String targetSpecies, String pathToOrthopairs) throws IOException {
-		if (mappings != null) {
-			throw new IllegalStateException("Already initialized");
-		}
-		mappings = new Mappings(sourceSpecies, targetSpecies, pathToOrthopairs);
-	}
-
-	public static Mappings getInstance() {
-		if (mappings == null) {
-			throw new IllegalStateException("Not initialized yet");
-		}
-		return mappings;
-	}
+//	public static Mappings getInstance() {
+//		if (mappings == null) {
+//			throw new IllegalStateException("Not initialized yet");
+//		}
+//		return mappings;
+//	}
 
 	public Map<String, String[]> getHomologueMappings() {
 		return this.homologueMappings;

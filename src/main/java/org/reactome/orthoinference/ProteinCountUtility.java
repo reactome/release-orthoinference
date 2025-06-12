@@ -6,20 +6,17 @@ import org.gk.model.ClassAttributeFollowingInstruction;
 import org.gk.model.GKInstance;
 import org.gk.model.InstanceUtilities;
 import org.gk.model.ReactomeJavaConstants;
+import org.springframework.stereotype.Component;
 
-
+@Component
 public class ProteinCountUtility {
-	/** This function is meant to emulate the count_distinct_proteins function found in infer_events.pl.
-	 A crucial note is that the Perl version seems to be depend on the order by which instance groups are taken from
-	 the DB. Often the DB IDs are ordered smallest to largest, but other times it is a consistent yet 'random' order.
-	 What that means is that every time the Perl version will pull the instances out in the exact same order, but there
-	 isn't a clear pattern (such as DB ID order) that is followed. Since this happens as well with the Java code,
-	 sometimes the protein counts will differ from the Perl protein counts. The vast majority of the time this isn't
-	 true, but this still suggests the protein count functionality should be re-written, for consistency's sake.
-	 See the bottom of ProteinCount.checkCandidates for further elaboration. 
-	*/
+	private Mappings mappings;
+
+	public ProteinCountUtility(Mappings mappings) {
+		this.mappings = mappings;
+	}
 	
-	public static List<Integer> getDistinctProteinCounts (GKInstance instanceToBeInferred) throws Exception {
+	public List<Integer> getDistinctProteinCounts (GKInstance instanceToBeInferred) throws Exception {
 		// With the output instances saved in followedInstances, begin the protein count process, which is based on
 		// the homologue mappings (orthopairs) files.
 		List<Integer> distinctProteinCounts = new ArrayList<>();
@@ -149,7 +146,7 @@ public class ProteinCountUtility {
 		return distinctProteinCounts;
 	}
 
-	private static Collection<GKInstance> getSortedFollowedInstances(GKInstance instanceToBeInferred)
+	private Collection<GKInstance> getSortedFollowedInstances(GKInstance instanceToBeInferred)
 		throws Exception {
 
 		String[] outClasses = new String[] {ReactomeJavaConstants.ReferenceGeneProduct, ReactomeJavaConstants.EntitySet};
@@ -163,7 +160,7 @@ public class ProteinCountUtility {
 	// as well as the output array from the very first AttributeQueryRequest (AQR).
 	// This 'output array from the first AQR' is used to prevent redundant counts, such as if a Candidate instance has
 	// already undergone a protein count.
-	private static List<Integer> getCandidateProteinCounts(
+	private List<Integer> getCandidateProteinCounts(
 		GKInstance candidateSetInst, Collection<GKInstance> sortedFollowedInstances) throws Exception {
 		List<Integer> checkedCandidateCounts = new ArrayList<>();
 		if (hasCandidates(candidateSetInst)) {
@@ -252,7 +249,7 @@ public class ProteinCountUtility {
 		return checkedCandidateCounts;
 	}
 
-	private static List<ClassAttributeFollowingInstruction> getClassesToFollow() {
+	private List<ClassAttributeFollowingInstruction> getClassesToFollow() {
 		Map<String, List<String>> classToAttributesToFollow = getClassToAttributesToFollow();
 
 		List<ClassAttributeFollowingInstruction> classesToFollow = new ArrayList<>();
@@ -265,7 +262,7 @@ public class ProteinCountUtility {
 		return classesToFollow;
 	}
 
-	private static Map<String, List<String>> getClassToAttributesToFollow() {
+	private Map<String, List<String>> getClassToAttributesToFollow() {
 		Map<String, List<String>> classToAttributesToFollow = new LinkedHashMap<>();
 
 		classToAttributesToFollow.put(
@@ -291,27 +288,27 @@ public class ProteinCountUtility {
 		return classToAttributesToFollow;
 	}
 
-	private static boolean isReferenceGeneProduct(GKInstance entity) {
+	private boolean isReferenceGeneProduct(GKInstance entity) {
 		return entity.getSchemClass().isa(ReactomeJavaConstants.ReferenceGeneProduct);
 	}
 
-	private static boolean isEntitySet(GKInstance entity) {
+	private boolean isEntitySet(GKInstance entity) {
 		return entity.getSchemClass().isa(ReactomeJavaConstants.EntitySet);
 	}
 
-	private static boolean isComplex(GKInstance physicalEntity) {
+	private boolean isComplex(GKInstance physicalEntity) {
 		return physicalEntity.getSchemClass().isa(ReactomeJavaConstants.Complex);
 	}
 
-	private static boolean isPolymer(GKInstance physicalEntity) {
+	private boolean isPolymer(GKInstance physicalEntity) {
 		return physicalEntity.getSchemClass().isa(ReactomeJavaConstants.Polymer);
 	}
 
-	private static boolean hasCandidates(GKInstance candidateSet) throws Exception {
+	private boolean hasCandidates(GKInstance candidateSet) throws Exception {
 		return candidateSet.getAttributeValue(ReactomeJavaConstants.hasCandidate) != null;
 	}
 
-	private static Collection<GKInstance> sortInstancesByDbId(Collection<GKInstance> unsortedInstances) {
+	private Collection<GKInstance> sortInstancesByDbId(Collection<GKInstance> unsortedInstances) {
 		// Sort instances by DB ID
 		List<Long> dbIds = new ArrayList<>();
 		Collection<GKInstance> sortedInstances = new ArrayList<>();
@@ -328,7 +325,7 @@ public class ProteinCountUtility {
 		return sortedInstances;
 	}
 
-	private static Mappings getMappings() {
-		return Mappings.getInstance();
+	private Mappings getMappings() {
+		return this.mappings;
 	}
 }

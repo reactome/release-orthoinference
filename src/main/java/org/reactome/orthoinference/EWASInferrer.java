@@ -12,27 +12,39 @@ import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.GKSchemaClass;
 import org.gk.schema.SchemaClass;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
+@Component
 public class EWASInferrer {
 
 	private static final Logger logger = LogManager.getLogger();
 
 	private ConfigProperties configProperties;
-	private String speciesCode;
 	private ReferenceDatabase referenceDatabase;
 	private Mappings mappings;
+	private GKInstance speciesInstance;
+	private InstanceUtilities instanceUtilities;
 	private Utils utils;
 
 	private static Map<String, GKInstance> referenceGeneProductIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> ewasIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> residueIdenticals = new HashMap<>();
 
-	public EWASInferrer(ConfigProperties configProperties, String speciesCode) {
+	public EWASInferrer(
+		ConfigProperties configProperties,
+		ReferenceDatabase referenceDatabase,
+		Mappings mappings,
+		@Qualifier("speciesInst") GKInstance speciesInstance,
+		InstanceUtilities instanceUtilities,
+		Utils utils
+	) {
 		this.configProperties = configProperties;
-		this.speciesCode = speciesCode;
-		this.referenceDatabase = new ReferenceDatabase(configProperties, speciesCode);
-		this.mappings = Mappings.getInstance();
-		this.utils = new Utils(configProperties, speciesCode);
+		this.referenceDatabase = referenceDatabase;
+		this.mappings = mappings;
+		this.speciesInstance = speciesInstance;
+		this.instanceUtilities = instanceUtilities;
+		this.utils = utils;
 	}
 
 	// Creates an array of inferred EWAS instances from the homologue mappings file (hsap_species_mapping.txt).
@@ -73,7 +85,7 @@ public class EWASInferrer {
 		GKInstance infReferenceGeneProductInst = referenceGeneProductIdenticals.get(homologueId);
 
 		// Creating inferred EWAS
-		GKInstance infEWASInst = InstanceUtilities.createNewInferredGKInstance(ewasInst);
+		GKInstance infEWASInst = instanceUtilities.createNewInferredGKInstance(ewasInst);
 		infEWASInst.addAttributeValue(ReactomeJavaConstants.referenceEntity, infReferenceGeneProductInst);
 
 		inferStartAndEndCoordinates(ewasInst, infEWASInst);
@@ -102,7 +114,7 @@ public class EWASInferrer {
 		for (GKInstance modifiedResidueInst : getModifiedResidues(ewasInst)) {
 			logger.info("Inferring ModifiedResidue: " + modifiedResidueInst);
 			String infModifiedResidueDisplayName = "";
-			GKInstance infModifiedResidueInst = InstanceUtilities.createNewInferredGKInstance(modifiedResidueInst);
+			GKInstance infModifiedResidueInst = instanceUtilities.createNewInferredGKInstance(modifiedResidueInst);
 			infModifiedResidueInst.addAttributeValue(ReactomeJavaConstants.referenceSequence, infReferenceGeneProductInst);
 			infModifiedResidueDisplayName += infReferenceGeneProductInst.getDisplayName();
 			for (int coordinateValue :
@@ -186,12 +198,12 @@ public class EWASInferrer {
 			}
 			// Caching based on an instance's defining attributes. This reduces the number of
 			// 'checkForIdenticalInstance' calls, which slows things.
-			String cacheKey = InstanceUtilities.getCacheKey(
+			String cacheKey = instanceUtilities.getCacheKey(
 				(GKSchemaClass) infModifiedResidueInst.getSchemClass(), infModifiedResidueInst);
 			if (residueIdenticals.get(cacheKey) != null) {
 				infModifiedResidueInst = residueIdenticals.get(cacheKey);
 			} else {
-				infModifiedResidueInst = InstanceUtilities.checkForIdenticalInstances(
+				infModifiedResidueInst = instanceUtilities.checkForIdenticalInstances(
 					infModifiedResidueInst, null);
 				residueIdenticals.put(cacheKey, infModifiedResidueInst);
 			}
@@ -201,18 +213,18 @@ public class EWASInferrer {
 		infEWASInst.addAttributeValue(ReactomeJavaConstants.hasModifiedResidue, infModifiedResidueInstances);
 		// Caching based on an instance's defining attributes. This reduces the number of
 		// 'checkForIdenticalInstance' calls, which slows things.
-		String cacheKey = InstanceUtilities.getCacheKey(
+		String cacheKey = instanceUtilities.getCacheKey(
 			(GKSchemaClass) infEWASInst.getSchemClass(), infEWASInst);
 		if (ewasIdenticals.get(cacheKey) != null) {
 			infEWASInst = ewasIdenticals.get(cacheKey);
 		} else {
-			infEWASInst = InstanceUtilities.checkForIdenticalInstances(infEWASInst, ewasInst);
+			infEWASInst = instanceUtilities.checkForIdenticalInstances(infEWASInst, ewasInst);
 			ewasIdenticals.put(cacheKey, infEWASInst);
 		}
 
-		infEWASInst = InstanceUtilities.addAttributeValueIfNecessary(infEWASInst, ewasInst, ReactomeJavaConstants.inferredFrom);
+		infEWASInst = instanceUtilities.addAttributeValueIfNecessary(infEWASInst, ewasInst, ReactomeJavaConstants.inferredFrom);
 		getCurrentDBA().updateInstanceAttribute(infEWASInst, ReactomeJavaConstants.inferredFrom);
-		ewasInst = InstanceUtilities.addAttributeValueIfNecessary(ewasInst, infEWASInst, ReactomeJavaConstants.inferredTo);
+		ewasInst = instanceUtilities.addAttributeValueIfNecessary(ewasInst, infEWASInst, ReactomeJavaConstants.inferredTo);
 		getCurrentDBA().updateInstanceAttribute(ewasInst, ReactomeJavaConstants.inferredTo);
 		logger.info("Successfully inferred EWAS instance for " + homologue + " homologue");
 		return infEWASInst;
@@ -239,7 +251,7 @@ public class EWASInferrer {
 	private GKInstance inferReferenceGeneProduct(GKInstance ewasInst, String homologue) throws Exception {
 		String homologueId = getHomologueId(homologue);
 
-		GKInstance infReferenceGeneProductInst = InstanceUtilities.createNewInferredGKInstance(
+		GKInstance infReferenceGeneProductInst = instanceUtilities.createNewInferredGKInstance(
 			(GKInstance) ewasInst.getAttributeValue(ReactomeJavaConstants.referenceEntity));
 		infReferenceGeneProductInst.addAttributeValue(ReactomeJavaConstants.identifier, homologueId);
 		// Reference DB can differ between homologue mappings, but can be differentiated by the
@@ -252,7 +264,7 @@ public class EWASInferrer {
 		List<GKInstance> inferredReferenceDNAInstances = createReferenceDNASequences(homologueId);
 		infReferenceGeneProductInst.addAttributeValue(ReactomeJavaConstants.referenceGene, inferredReferenceDNAInstances);
 
-		infReferenceGeneProductInst.addAttributeValue(ReactomeJavaConstants.species, getSpeciesInstance());
+		infReferenceGeneProductInst.addAttributeValue(ReactomeJavaConstants.species, speciesInstance);
 		String referenceGeneProductSource = getReferenceDatabase().getReferenceDatabaseSourceName(getHomologueSource(homologue));
 		infReferenceGeneProductInst.setAttributeValue(
 			ReactomeJavaConstants._displayName, referenceGeneProductSource + ":" + homologueId);
@@ -263,7 +275,7 @@ public class EWASInferrer {
 		}
 
 		logger.info("ReferenceGeneProduct instance created");
-		infReferenceGeneProductInst = InstanceUtilities.checkForIdenticalInstances(
+		infReferenceGeneProductInst = instanceUtilities.checkForIdenticalInstances(
 			infReferenceGeneProductInst, null);
 		return infReferenceGeneProductInst;
 	}
@@ -330,9 +342,9 @@ public class EWASInferrer {
 		referenceDNAInst.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
 		referenceDNAInst.addAttributeValue(ReactomeJavaConstants.identifier, ensgId);
 		referenceDNAInst.addAttributeValue(ReactomeJavaConstants.referenceDatabase, getReferenceDatabase().getEnsemblDBInst());
-		referenceDNAInst.addAttributeValue(ReactomeJavaConstants.species, getSpeciesInstance());
+		referenceDNAInst.addAttributeValue(ReactomeJavaConstants.species, speciesInstance);
 		referenceDNAInst.setAttributeValue(ReactomeJavaConstants._displayName, "ENSEMBL:" + ensgId);
-		referenceDNAInst = InstanceUtilities.checkForIdenticalInstances(referenceDNAInst, null);
+		referenceDNAInst = instanceUtilities.checkForIdenticalInstances(referenceDNAInst, null);
 		return referenceDNAInst;
 	}
 
@@ -348,10 +360,10 @@ public class EWASInferrer {
 		alternateRefDNAInst.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
 		alternateRefDNAInst.addAttributeValue(ReactomeJavaConstants.identifier, altDbIdentifier);
 		alternateRefDNAInst.addAttributeValue(ReactomeJavaConstants.referenceDatabase, getReferenceDatabase().getAlternateReferenceDatabase());
-		alternateRefDNAInst.addAttributeValue(ReactomeJavaConstants.species, getSpeciesInstance());
+		alternateRefDNAInst.addAttributeValue(ReactomeJavaConstants.species, speciesInstance);
 		alternateRefDNAInst.setAttributeValue(
 			ReactomeJavaConstants._displayName, getReferenceDatabase().getAlternateReferenceDatabase().getAttributeValue(ReactomeJavaConstants.name) + ":" + ensgId);
-		alternateRefDNAInst = InstanceUtilities.checkForIdenticalInstances(alternateRefDNAInst, null);
+		alternateRefDNAInst = instanceUtilities.checkForIdenticalInstances(alternateRefDNAInst, null);
 		return alternateRefDNAInst;
 	}
 
@@ -387,10 +399,6 @@ public class EWASInferrer {
 	}
 
 	private GKInstance getInstanceEdit() throws Exception {
-		return this.utils.getInstanceEdit();
-	}
-
-	private GKInstance getSpeciesInstance() throws Exception {
-		return this.utils.getSpeciesInstance();
+		return this.instanceUtilities.getInstanceEdit();
 	}
 }

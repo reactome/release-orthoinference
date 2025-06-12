@@ -4,6 +4,8 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
 import java.io.FileReader;
 import java.io.IOException;
@@ -12,10 +14,11 @@ import java.io.IOException;
  * @author Joel Weiser (joel.weiser@oicr.on.ca)
  *         Created 1/9/2024
  */
+@Component
 public class SpeciesConfig {
     private String pathToSpeciesConfig;
 
-    public SpeciesConfig(String pathToSpeciesConfig) {
+    public SpeciesConfig(@Qualifier("pathToSpeciesConfig") String pathToSpeciesConfig) {
         this.pathToSpeciesConfig = pathToSpeciesConfig;
     }
 

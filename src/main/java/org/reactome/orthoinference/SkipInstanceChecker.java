@@ -10,18 +10,23 @@ import static org.gk.model.InstanceUtilities.followInstanceAttributes;
 
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
 
+@Component
 public class SkipInstanceChecker {
 
 	private static final Logger logger = LogManager.getLogger();
 	private MySQLAdaptor dba;
+	private InstanceUtilities instanceUtilities;
 	private Set<Long> skipList;
 	private final long HIV_INFECTION_DB_ID = 162906L;
 	private final long INFLUENZA_INFECTION_DB_ID = 168255L;
 	private final long AMYLOID_FIBER_FORMATION_DB_ID = 977225L;
 
-	public SkipInstanceChecker(MySQLAdaptor dba) {
+	public SkipInstanceChecker(@Qualifier("currentDBA") MySQLAdaptor dba, InstanceUtilities instanceUtilities) {
 		this.dba = dba;
+		this.instanceUtilities = instanceUtilities;
         try {
             this.skipList = getAllReactionLikeEventDbIdsToSkip();
         } catch (Exception e) {
@@ -44,7 +49,7 @@ public class SkipInstanceChecker {
 		// If the only TopLevelPathway of a Reaction is 'Disease', then it is skipped.
 		// Otherwise, it is inferred, making sure in cases where a Reaction is also a part of 'Disease' that that
 		// Pathway is not inferred.
-		if (InstanceUtilities.onlyInDiseasePathway(reactionInst)) {
+		if (instanceUtilities.onlyInDiseasePathway(reactionInst)) {
 			logger.info(reactionInst + " has only Disease TopLevelPathway -- skipping");
 			return true;
 		}
