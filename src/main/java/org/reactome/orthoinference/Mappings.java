@@ -26,14 +26,14 @@ public class Mappings {
 	private Map<String, List<String>> ensgMappings;
 	private Map<String, String> geneNameMappings;
 
-	public Mappings(
-		@Qualifier("sourceSpeciesCode") String sourceSpecies,
-		@Qualifier("targetSpeciesCode") String targetSpecies,
-		@Qualifier("pathToOrthopairs") String pathToOrthopairs) throws IOException {
+	public Mappings(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String targetSpecies)
+		throws IOException {
 
-		this.homologueMappings = readHomologueMappingFile(targetSpecies, sourceSpecies, pathToOrthopairs);
-		this.ensgMappings = readENSGMappingFile(targetSpecies, pathToOrthopairs);
-		this.geneNameMappings = readGeneNameMappingFile(targetSpecies, pathToOrthopairs);
+		this.homologueMappings = readHomologueMappingFile(
+			targetSpecies, configProperties.getSourceSpeciesCode(), configProperties.getPathToOrthopairs()
+		);
+		this.ensgMappings = readENSGMappingFile(targetSpecies, configProperties.getPathToOrthopairs());
+		this.geneNameMappings = readGeneNameMappingFile(targetSpecies, configProperties.getPathToOrthopairs());
 	}
 
 //	public static Mappings getInstance() {

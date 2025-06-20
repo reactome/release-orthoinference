@@ -25,7 +25,6 @@ public class ReferenceDatabase {
 	private ConfigProperties configProperties;
 	private String speciesCode;
 	private InstanceUtilities instanceUtilities;
-	private Utils utils;
 
 	private GKInstance ensemblDBInst;
 	private GKInstance uniprotDbInst;
@@ -34,11 +33,10 @@ public class ReferenceDatabase {
 	private boolean altRefDbExists;
 	private String altRefDbId;
 
-	public ReferenceDatabase(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String speciesCode, InstanceUtilities instanceUtilities, Utils utils) {
+	public ReferenceDatabase(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String speciesCode, InstanceUtilities instanceUtilities) {
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
 		this.instanceUtilities = instanceUtilities;
-		this.utils = utils;
 	}
 
 	public void setEnsEMBLDatabase() throws Exception {

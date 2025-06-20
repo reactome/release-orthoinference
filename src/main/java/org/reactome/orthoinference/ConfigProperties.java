@@ -3,13 +3,10 @@ package org.reactome.orthoinference;
 import org.gk.persistence.MySQLAdaptor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.stereotype.Component;
 
 import java.sql.SQLException;
-import java.util.Properties;
 
 /**
  * @author Joel Weiser (joel.weiser@oicr.on.ca)
@@ -52,12 +49,10 @@ public class ConfigProperties {
         return getDBA(currentDbName);
     }
 
-    @Bean(name = "previousDBA")
     public MySQLAdaptor getPreviousDBA() throws SQLException {
         return getDBA(previousDbName);
     }
 
-    @Bean(name = "releaseVersion")
     public int getReleaseVersion() {
         return this.releaseNumber;
     }
@@ -67,29 +62,24 @@ public class ConfigProperties {
         return this.pathToSpeciesConfig;
     }
 
-    @Bean(name = "pathToOrthopairs")
     public String getPathToOrthopairs() {
         return this.pathToOrthopairs != null ? this.pathToOrthopairs : "orthopairs";
     }
 
-    @Bean
     public SpeciesConfig getSpeciesConfig() {
         String pathToSpeciesConfig = this.pathToSpeciesConfig != null ?
             this.pathToSpeciesConfig : "src/main/resources/Species.json";
         return new SpeciesConfig(pathToSpeciesConfig);
     }
 
-    @Bean(name = "dateOfRelease")
     public String getDateOfRelease() {
         return this.dateOfRelease;
     }
 
-    @Bean(name = "personId")
     public long getPersonId() {
         return this.personId;
     }
 
-    @Bean(name = "sourceSpeciesCode")
     public String getSourceSpeciesCode() {
         return this.sourceSpeciesCode;
     }

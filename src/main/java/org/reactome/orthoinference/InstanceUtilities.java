@@ -1,6 +1,7 @@
 package org.reactome.orthoinference;
 
 import java.io.IOException;
+import java.sql.SQLException;
 import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
@@ -28,32 +29,37 @@ public class InstanceUtilities {
 
 	private final long DISEASE_PATHWAY_DB_ID = 1643685L;
 
-	private MySQLAdaptor dba;
-	private long personId;
+	private ConfigProperties configProperties;
+
 	private String targetSpeciesCode;
-	private SpeciesConfig speciesConfig;
+	private ProteinCountUtility proteinCountUtility;
+	private StableIdentifierGenerator stableIdentifierGenerator;
+
+	private GKInstance evidenceType;
+	private GKInstance summation;
 
 	private GKInstance speciesInst;
 	private GKInstance instanceEdit;
 	private Map<String,GKInstance> mockedIdenticals = new HashMap<>();
 
 	public InstanceUtilities(
-		@Qualifier("currentDBA") MySQLAdaptor dba,
-		@Qualifier("personId") long personId,
+		ConfigProperties configProperties,
 		@Qualifier("targetSpeciesCode") String targetSpeciesCode,
-		SpeciesConfig speciesConfig
+		ProteinCountUtility proteinCountUtility,
+		StableIdentifierGenerator stableIdentifierGenerator
+
 	) {
-		this.dba = dba;
-		this.personId = personId;
+		this.configProperties = configProperties;
 		this.targetSpeciesCode = targetSpeciesCode;
-		this.speciesConfig = speciesConfig;
+		this.proteinCountUtility = proteinCountUtility;
+		this.stableIdentifierGenerator = stableIdentifierGenerator;
 	}
 
 	@Bean(name = "instanceEditInst")
 	public GKInstance getInstanceEdit() throws Exception {
 		if (instanceEdit == null) {
 			instanceEdit = InstanceEditUtils.createInstanceEdit(
-				dba, personId, "org.reactome.orthoinference");
+				getCurrentDBA(), getPersonId(), "org.reactome.orthoinference");
 		}
 		return instanceEdit;
 	}
@@ -62,9 +68,9 @@ public class InstanceUtilities {
 	@Bean(name = "speciesInst")
 	public GKInstance getSpeciesInstance() throws Exception {
 		if (speciesInst == null) {
-			SchemaClass referenceDb = dba.getSchema().getClassByName(ReactomeJavaConstants.Species);
+			SchemaClass referenceDb = getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.Species);
 			speciesInst = new GKInstance(referenceDb);
-			speciesInst.setDbAdaptor(dba);
+			speciesInst.setDbAdaptor(getCurrentDBA());
 			speciesInst.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
 			speciesInst.addAttributeValue(ReactomeJavaConstants.name, getSpeciesName());
 			speciesInst.addAttributeValue(ReactomeJavaConstants._displayName, getSpeciesName());
@@ -79,9 +85,9 @@ public class InstanceUtilities {
 		if (reactionClass.matches(ReactomeJavaConstants.ReferenceIsoform)) {
 			reactionClass = ReactomeJavaConstants.ReferenceGeneProduct;
 		}
-		SchemaClass instanceClass = dba.getSchema().getClassByName(reactionClass);
+		SchemaClass instanceClass = getCurrentDBA().getSchema().getClassByName(reactionClass);
 		GKInstance inferredInst = new GKInstance(instanceClass);
-		inferredInst.setDbAdaptor(dba);
+		inferredInst.setDbAdaptor(getCurrentDBA());
 		inferredInst.addAttributeValue(ReactomeJavaConstants.created, instanceEdit);
 		if (instanceToBeInferred.getSchemClass().isValidAttribute(ReactomeJavaConstants.compartment) &&
 			instanceToBeInferred.getAttributeValue(ReactomeJavaConstants.compartment) != null) {
@@ -110,9 +116,9 @@ public class InstanceUtilities {
 	public GKInstance createCompartmentInstance(GKInstance compartmentInstGk) throws Exception {
 		logger.warn(compartmentInstGk + " is a " + compartmentInstGk.getSchemClass() + " instead of a Compartment" +
 			" -- creating new Compartment instance");
-		SchemaClass compartmentClass = dba.getSchema().getClassByName(ReactomeJavaConstants.Compartment);
+		SchemaClass compartmentClass = getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.Compartment);
 		GKInstance newCompartmentInst = new GKInstance(compartmentClass);
-		newCompartmentInst.setDbAdaptor(dba);
+		newCompartmentInst.setDbAdaptor(getCurrentDBA());
 		Collection<GKSchemaAttribute> compartmentAttributes = compartmentClass.getAttributes();
 		for (GKSchemaAttribute compartmentAttribute : compartmentAttributes) {
 			if (!compartmentAttribute.getName().matches("DB_ID") &&
@@ -129,9 +135,9 @@ public class InstanceUtilities {
 	// Equivalent to create_ghost from Perl; Returns a mock homologue that is needed in cases where an inference is
 	// rejected, but the component isn't essential for the inference to be completed.
 	public GKInstance createMockGKInstance(GKInstance instanceToBeMocked) throws Exception {
-		SchemaClass genomeEncodedEntityClass = dba.getSchema().getClassByName(ReactomeJavaConstants.GenomeEncodedEntity);
+		SchemaClass genomeEncodedEntityClass = getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.GenomeEncodedEntity);
 		GKInstance mockedInst = new GKInstance(genomeEncodedEntityClass);
-		mockedInst.setDbAdaptor(dba);
+		mockedInst.setDbAdaptor(getCurrentDBA());
 		mockedInst.addAttributeValue(ReactomeJavaConstants.created, instanceEdit);
 		String mockedInstName = (String) instanceToBeMocked.getAttributeValue(ReactomeJavaConstants.name);
 		mockedInst.addAttributeValue(ReactomeJavaConstants.name, "Ghost homologue of " + mockedInstName);
@@ -151,7 +157,7 @@ public class InstanceUtilities {
 			mockedIdenticals.put(cacheKey, mockedInst);
 		}
 		instanceToBeMocked = addAttributeValueIfNecessary(instanceToBeMocked, mockedInst, ReactomeJavaConstants.inferredTo);
-		dba.updateInstanceAttribute(instanceToBeMocked, ReactomeJavaConstants.inferredTo);
+		getCurrentDBA().updateInstanceAttribute(instanceToBeMocked, ReactomeJavaConstants.inferredTo);
 
 		return mockedInst;
 	}
@@ -160,7 +166,7 @@ public class InstanceUtilities {
 	public GKInstance checkForIdenticalInstances(GKInstance inferredInst, GKInstance originalInst)
 		throws Exception {
 		@SuppressWarnings("unchecked")
-		Collection<GKInstance> identicalInstances = dba.fetchIdenticalInstances(inferredInst);
+		Collection<GKInstance> identicalInstances = getCurrentDBA().fetchIdenticalInstances(inferredInst);
 		if (identicalInstances != null) {
 			if (identicalInstances.size() == 1) {
 				return identicalInstances.iterator().next();
@@ -175,7 +181,7 @@ public class InstanceUtilities {
 //					.generateOrthologousStableId(inferredInst, originalInst);
 //				inferredInst.addAttributeValue(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
 			}
-			dba.storeInstance(inferredInst);
+			getCurrentDBA().storeInstance(inferredInst);
 			return inferredInst;
 		}
 	}
@@ -278,24 +284,77 @@ public class InstanceUtilities {
 
 		return topLevelPathwayDbIds;
 	}
-	
-	public void setAdaptor(MySQLAdaptor dbAdaptor) {
-		dba = dbAdaptor;
+
+	public GKInstance getEvidenceType() throws Exception {
+		if (evidenceType == null) {
+			String evidenceTypeText = "inferred by electronic annotation";
+
+			evidenceType = new GKInstance(
+				getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.EvidenceType));
+			evidenceType.setDbAdaptor(getCurrentDBA());
+			evidenceType.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
+			evidenceType.addAttributeValue(ReactomeJavaConstants.name, evidenceTypeText);
+			evidenceType.addAttributeValue(ReactomeJavaConstants.name, "IEA");
+			evidenceType.setDisplayName(evidenceTypeText);
+			evidenceType = checkForIdenticalInstances(evidenceType, null);
+		}
+		return evidenceType;
 	}
 
-	public void setSpeciesInstance(GKInstance speciesInstCopy) {
-		speciesInst = speciesInstCopy;
+	public GKInstance getSummationInstance() throws Exception {
+		if (summation == null) {
+			summation = new GKInstance(getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.Summation));
+			summation.setDbAdaptor(getCurrentDBA());
+			summation.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
+			String summationText = "This event has been computationally inferred from an event that has been" +
+				" demonstrated in another species.<p>The inference is based on the homology mapping from PANTHER." +
+				" Briefly, reactions for which all involved PhysicalEntities (in input, output and catalyst) have a" +
+				" mapped orthologue/paralogue (for complexes at least 75% of components must have a mapping) are" +
+				" inferred to the other species. High level events are also inferred for these events to allow for" +
+				" easier navigation.<p><a href='/electronic_inference_compara.html' target = 'NEW'>More details and" +
+				" caveats of the event inference in Reactome.</a> For details on PANTHER see also:" +
+				" <a href='http://www.pantherdb.org/about.jsp' target='NEW'>http://www.pantherdb.org/about.jsp</a>";
+			summation.addAttributeValue(ReactomeJavaConstants.text, summationText);
+			summation.setDisplayName(summationText);
+			summation = checkForIdenticalInstances(summation, null);
+		}
+		return summation;
 	}
 
-	public void setInstanceEdit(GKInstance instanceEditCopy) {
-		instanceEdit = instanceEditCopy;
+	public StableIdentifierGenerator getStableIdentifierGenerator() {
+		return this.stableIdentifierGenerator;
 	}
 
-	public long getDiseasePathwayDbId() {
-		return DISEASE_PATHWAY_DB_ID;
+	public ProteinCountUtility getProteinCountUtility() {
+		return this.proteinCountUtility;
 	}
+
+
+//	public void setAdaptor(MySQLAdaptor dbAdaptor) {
+//		dba = dbAdaptor;
+//	}
+
+//	public void setSpeciesInstance(GKInstance speciesInstCopy) {
+//		speciesInst = speciesInstCopy;
+//	}
+//
+//	public void setInstanceEdit(GKInstance instanceEditCopy) {
+//		instanceEdit = instanceEditCopy;
+//	}
+//
+//	public long getDiseasePathwayDbId() {
+//		return DISEASE_PATHWAY_DB_ID;
+//	}
 
 	private String getSpeciesName() throws IOException, ParseException {
-		return this.speciesConfig.getSpeciesName(this.targetSpeciesCode);
+		return this.configProperties.getSpeciesConfig().getSpeciesName(this.targetSpeciesCode);
+	}
+
+	private MySQLAdaptor getCurrentDBA() throws SQLException {
+		return this.configProperties.getCurrentDBA();
+	}
+
+	private long getPersonId() {
+		return this.configProperties.getPersonId();
 	}
 }

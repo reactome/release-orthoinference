@@ -27,9 +27,6 @@ public class OrthologousEntityGenerator {
 
 	private EWASInferrer ewasInferrer;
 	private InstanceUtilities instanceUtilities;
-	private ProteinCountUtility proteinCountUtility;
-	private Utils utils;
-	private GKInstance speciesInstance;
 	private MySQLAdaptor dba;
 
 	private GKInstance complexSummationInst;
@@ -55,19 +52,13 @@ public class OrthologousEntityGenerator {
  *  instance to the DB.
 */
 	public OrthologousEntityGenerator(
+		@Qualifier("currentDBA") MySQLAdaptor dba,
 		EWASInferrer ewasInferrer,
-		InstanceUtilities instanceUtilities,
-		ProteinCountUtility proteinCountUtility,
-		Utils utils,
-		@Qualifier("speciesInst") GKInstance speciesInstance,
-		@Qualifier("currentDBA") MySQLAdaptor dba
+		InstanceUtilities instanceUtilities
 	) throws Exception {
+		this.dba = dba;
 		this.ewasInferrer = ewasInferrer;
 		this.instanceUtilities = instanceUtilities;
-		this.proteinCountUtility = proteinCountUtility;
-		this.utils = utils;
-		this.speciesInstance = speciesInstance;
-		this.dba = dba;
 		this.complexSummationInst = getComplexSummationInstance();
 	}
 
@@ -160,7 +151,7 @@ public class OrthologousEntityGenerator {
 					infDefinedSetInst.addAttributeValue(compartment, newCompartmentInst);
 				}
 				
-				infDefinedSetInst.addAttributeValue(species, speciesInstance);
+				infDefinedSetInst.addAttributeValue(species, getSpeciesInstance());
 				infDefinedSetInst.addAttributeValue(hasMember, infEWASInstances);
 				String definedSetDisplayName = (String) infDefinedSetInst.getAttributeValue(name) +
 					" [" +((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
@@ -204,7 +195,7 @@ public class OrthologousEntityGenerator {
 	private GKInstance createInfComplexPolymer(GKInstance complexInst, boolean override)
 		throws InvalidAttributeException, InvalidAttributeValueException, Exception {
 		if (complexPolymerIdenticals.get(complexInst) == null) {
-			List<Integer> complexProteinCounts = proteinCountUtility.getDistinctProteinCounts(complexInst);
+			List<Integer> complexProteinCounts = getProteinCountUtility().getDistinctProteinCounts(complexInst);
 			int complexTotalProteinCounts = complexProteinCounts.get(0);
 			int complexInferrableProteinCounts = complexProteinCounts.get(1);
 			// int complexMax = complexProteinCounts.get(2); // Doesn't get used, since MaxHomologue isn't a valid
@@ -317,7 +308,7 @@ public class OrthologousEntityGenerator {
 			infEntitySetInst.addAttributeValue(hasMember, infMembersList);
 
 			// Begin specific inference process for each type of DefinedSet entity.
-			List<Integer> entitySetProteinCounts = proteinCountUtility.getDistinctProteinCounts(entitySetInst);
+			List<Integer> entitySetProteinCounts = getProteinCountUtility().getDistinctProteinCounts(entitySetInst);
 			int entitySetTotalCount = entitySetProteinCounts.get(0);
 			int entitySetInferrableCount = entitySetProteinCounts.get(1);
 			// int entitySetMax = entitySetProteinCounts.get(2);  // Doesn't get used, since MaxHomologue isn't a
@@ -377,7 +368,7 @@ public class OrthologousEntityGenerator {
 									}
 								}
 							}
-							infDefinedSetInst.addAttributeValue(species, speciesInstance);
+							infDefinedSetInst.addAttributeValue(species, getSpeciesInstance());
 							infEntitySetInst = infDefinedSetInst;
 							logger.info("Successfully converted to DefinedSet");
 						}
@@ -454,11 +445,15 @@ public class OrthologousEntityGenerator {
 		return this.ewasInferrer;
 	}
 
-	private Utils getUtils() {
-		return this.utils;
-	}
-
 	private GKInstance getInstanceEdit() throws Exception {
 		return this.instanceUtilities.getInstanceEdit();
+	}
+
+	private ProteinCountUtility getProteinCountUtility() {
+		return this.instanceUtilities.getProteinCountUtility();
+	}
+
+	private GKInstance getSpeciesInstance() throws Exception {
+		return this.instanceUtilities.getSpeciesInstance();
 	}
 }

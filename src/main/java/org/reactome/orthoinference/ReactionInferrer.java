@@ -29,10 +29,7 @@ public class ReactionInferrer {
 	private String speciesCode;
 	private OrthologousEntityGenerator orthologousEntityGenerator;
 	private InstanceUtilities instanceUtilities;
-	private ProteinCountUtility proteinCountUtility;
-	private Utils utils;
 
-	private String dateOfRelease;
 	private static Map<GKInstance, GKInstance> inferredCatalyst = new HashMap<>();
 	private static Map<GKInstance, GKInstance> inferredEvent = new HashMap<>();
 	private static Integer eligibleCount = 0;
@@ -43,22 +40,16 @@ public class ReactionInferrer {
 	public ReactionInferrer(
 		ConfigProperties configProperties,
 		@Qualifier("targetSpeciesCode") String speciesCode,
-		@Qualifier("dateOfRelease") String dateOfRelease,
 		OrthologousEntityGenerator orthologousEntityGenerator,
 		InstanceUtilities instanceUtilities,
-		ProteinCountUtility proteinCountUtility,
-		Utils utils,
 		SkipInstanceChecker skipInstanceChecker
 	) throws Exception {
 
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
-		this.dateOfRelease = dateOfRelease;
 
 		this.orthologousEntityGenerator = orthologousEntityGenerator;
 		this.instanceUtilities = instanceUtilities;
-		this.proteinCountUtility = proteinCountUtility;
-		this.utils = utils;
 
 		this.skipInstanceChecker = skipInstanceChecker;
 
@@ -82,15 +73,15 @@ public class ReactionInferrer {
 			infReactionInst.addAttributeValue(ReactomeJavaConstants.name, reactionInst.getAttributeValuesList(ReactomeJavaConstants.name));
 			infReactionInst.addAttributeValue(
 				ReactomeJavaConstants.goBiologicalProcess, reactionInst.getAttributeValue(ReactomeJavaConstants.goBiologicalProcess));
-			infReactionInst.addAttributeValue(ReactomeJavaConstants.summation, getUtils().getSummationInstance());
-			infReactionInst.addAttributeValue(ReactomeJavaConstants.evidenceType, getUtils().getEvidenceType());
+			infReactionInst.addAttributeValue(ReactomeJavaConstants.summation, instanceUtilities.getSummationInstance());
+			infReactionInst.addAttributeValue(ReactomeJavaConstants.evidenceType, instanceUtilities.getEvidenceType());
 			infReactionInst.addAttributeValue(ReactomeJavaConstants._displayName, reactionInst.getAttributeValue(ReactomeJavaConstants._displayName));
 
 			// This function finds the total number of distinct proteins associated with an instance, as well as the
 			// number that can be inferred.  Total proteins are stored in reactionProteinCounts[0], inferrable proteins
 			// in [1], and the maximum number of homologues for any entity involved in index [2].  Reactions with no
 			// proteins/EWAS (Total = 0) are not inferred.
-			List<Integer> reactionProteinCounts = proteinCountUtility.getDistinctProteinCounts(reactionInst);
+			List<Integer> reactionProteinCounts = getProteinCountUtility().getDistinctProteinCounts(reactionInst);
 			int reactionTotalProteinCounts = reactionProteinCounts.get(0);
 			if (reactionTotalProteinCounts > 0) {
 				logger.info("Total protein count for RlE: " + reactionTotalProteinCounts);
@@ -122,7 +113,7 @@ public class ReactionInferrer {
 								return;
 							}
 							if (infReactionInst.getSchemClass().isValidAttribute(ReactomeJavaConstants.releaseDate)) {
-								infReactionInst.addAttributeValue(ReactomeJavaConstants.releaseDate, dateOfRelease);
+								infReactionInst.addAttributeValue(ReactomeJavaConstants.releaseDate, getDateOfRelease());
 							}
 							// FetchIdenticalInstances would just return the instance being inferred. Since this step
 							// is meant to always add a new inferred instance, the storeInstance method is just called
@@ -357,8 +348,8 @@ public class ReactionInferrer {
 		return this.orthologousEntityGenerator;
 	}
 
-	private Utils getUtils() {
-		return this.utils;
+	private InstanceUtilities getUtils() {
+		return this.instanceUtilities;
 	}
 
 	private ConfigProperties getConfigProperties() {
@@ -367,5 +358,13 @@ public class ReactionInferrer {
 
 	private MySQLAdaptor getCurrentDBA() throws SQLException {
 		return getConfigProperties().getCurrentDBA();
+	}
+
+	private String getDateOfRelease() {
+		return getConfigProperties().getDateOfRelease();
+	}
+
+	private ProteinCountUtility getProteinCountUtility() {
+		return getUtils().getProteinCountUtility();
 	}
 }

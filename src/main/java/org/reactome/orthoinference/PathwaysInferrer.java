@@ -21,16 +21,14 @@ public class PathwaysInferrer {
 
 	private ConfigProperties configProperties;
 	private InstanceUtilities instanceUtilities;
-	private Utils utils;
 
 	private static List<GKInstance> updatedInferrableHumanEvents = new ArrayList<>();
 	private static Map<GKInstance, GKInstance> sourceInstanceToInferredInstance = new HashMap<>();
 	//private static GKInstance diseasePathwayInst;
 
-	public PathwaysInferrer(ConfigProperties configProperties, InstanceUtilities instanceUtilities, Utils utils) {
+	public PathwaysInferrer(ConfigProperties configProperties, InstanceUtilities instanceUtilities) {
 		this.configProperties = configProperties;
 		this.instanceUtilities = instanceUtilities;
-		this.utils = utils;
 	}
 
 	// This class populates species pathways with the instances that have been inferred.
@@ -108,12 +106,12 @@ public class PathwaysInferrer {
 		GKInstance inferredPathway = instanceUtilities.createNewInferredGKInstance(humanPathway);
 		inferredPathway.addAttributeValue(
 			ReactomeJavaConstants.name, humanPathway.getAttributeValuesList(ReactomeJavaConstants.name));
-		inferredPathway.addAttributeValue(ReactomeJavaConstants.summation, getUtils().getSummationInstance());
+		inferredPathway.addAttributeValue(ReactomeJavaConstants.summation, instanceUtilities.getSummationInstance());
 		if (inferredPathway.getSchemClass().isValidAttribute(ReactomeJavaConstants.releaseDate)) {
 			inferredPathway.addAttributeValue(ReactomeJavaConstants.releaseDate, getConfigProperties().getDateOfRelease());
 		}
 		inferredPathway.addAttributeValue(ReactomeJavaConstants.inferredFrom, humanPathway);
-		inferredPathway.addAttributeValue(ReactomeJavaConstants.evidenceType, getUtils().getEvidenceType());
+		inferredPathway.addAttributeValue(ReactomeJavaConstants.evidenceType, instanceUtilities.getEvidenceType());
 		for (GKInstance goBioProcessInst : getGoBiologicalProcess(humanPathway)) {
 			inferredPathway.addAttributeValue(ReactomeJavaConstants.goBiologicalProcess, goBioProcessInst);
 		}
@@ -274,8 +272,8 @@ public class PathwaysInferrer {
 		sourceInstanceToInferredInstance = inferredEventCopy;
 	}
 
-	private Utils getUtils() {
-		return this.utils;
+	private InstanceUtilities getUtils() {
+		return this.instanceUtilities;
 	}
 
 	private ConfigProperties getConfigProperties() {

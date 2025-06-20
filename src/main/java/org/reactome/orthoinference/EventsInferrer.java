@@ -38,21 +38,25 @@ public class EventsInferrer {
 
 	private ConfigProperties configProperties;
 	private String speciesCode;
-	private GKInstance speciesInstance;
 
 	private ReactionInferrer reactionInferrer;
 	private PathwaysInferrer pathwaysInferrer;
 
-	private Utils utils;
+	private InstanceUtilities utils;
 
 	private static Map<GKInstance,GKInstance> manualEventToNonHumanSource = new HashMap<>();
 	private static List<GKInstance> manualHumanEvents = new ArrayList<>();
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
 
-	public EventsInferrer(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String speciesCode, @Qualifier("speciesInst") GKInstance speciesInstance, ReactionInferrer reactionInferrer, PathwaysInferrer pathwaysInferrer, Utils utils) throws Exception {
+	public EventsInferrer(
+		ConfigProperties configProperties,
+		@Qualifier("targetSpeciesCode") String speciesCode,
+		ReactionInferrer reactionInferrer,
+		PathwaysInferrer pathwaysInferrer,
+		InstanceUtilities utils
+	) throws Exception {
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
-		this.speciesInstance = speciesInstance;
 
 		this.reactionInferrer = reactionInferrer;
 		this.pathwaysInferrer = pathwaysInferrer;
@@ -128,7 +132,7 @@ public class EventsInferrer {
 		getPathwaysInferrer().inferPathways(getReactionInferrer().getInferrableHumanEvents());
 
 		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(
-			getCurrentDBA(), getPrevDBA(), speciesInstance, humanSpeciesInstance, configProperties.getPersonId());
+			getCurrentDBA(), getPrevDBA(), getSpeciesInstance(), humanSpeciesInstance, configProperties.getPersonId());
 		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
 		outputReport(speciesCode, configProperties.getReleaseVersion());
 		logger.info("Finished orthoinference of " + getSpeciesName());
@@ -179,7 +183,7 @@ public class EventsInferrer {
 		throws InvalidAttributeException, Exception {
 		for (GKInstance attributeInst : (Collection<GKInstance>) reactionInst.getAttributeValuesList(attribute)) {
 			GKInstance reactionSpeciesInst = (GKInstance) attributeInst.getAttributeValue(ReactomeJavaConstants.species);
-			if (reactionSpeciesInst.getDBID() == speciesInstance.getDBID() &&
+			if (reactionSpeciesInst.getDBID() == getSpeciesInstance().getDBID() &&
 				attributeInst.getAttributeValue(ReactomeJavaConstants.isChimeric) == null) {
 				previouslyInferredInstances.add(attributeInst);
 			}
@@ -235,12 +239,16 @@ public class EventsInferrer {
 		return this.pathwaysInferrer;
 	}
 
-	private Utils getUtils() {
+	private InstanceUtilities getUtils() {
 		return this.utils;
 	}
 
 	private String getSpeciesName() throws IOException, ParseException {
 		return getConfigProperties().getSpeciesConfig().getSpeciesName(getSpeciesCode());
+	}
+
+	private GKInstance getSpeciesInstance() throws Exception {
+		return getUtils().getSpeciesInstance();
 	}
 
 	private MySQLAdaptor getCurrentDBA() throws SQLException {

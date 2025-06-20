@@ -12,7 +12,6 @@ import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.GKSchemaClass;
 import org.gk.schema.SchemaClass;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -23,9 +22,7 @@ public class EWASInferrer {
 	private ConfigProperties configProperties;
 	private ReferenceDatabase referenceDatabase;
 	private Mappings mappings;
-	private GKInstance speciesInstance;
 	private InstanceUtilities instanceUtilities;
-	private Utils utils;
 
 	private static Map<String, GKInstance> referenceGeneProductIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> ewasIdenticals = new HashMap<>();
@@ -35,16 +32,12 @@ public class EWASInferrer {
 		ConfigProperties configProperties,
 		ReferenceDatabase referenceDatabase,
 		Mappings mappings,
-		@Qualifier("speciesInst") GKInstance speciesInstance,
-		InstanceUtilities instanceUtilities,
-		Utils utils
+		InstanceUtilities instanceUtilities
 	) {
 		this.configProperties = configProperties;
 		this.referenceDatabase = referenceDatabase;
 		this.mappings = mappings;
-		this.speciesInstance = speciesInstance;
 		this.instanceUtilities = instanceUtilities;
-		this.utils = utils;
 	}
 
 	// Creates an array of inferred EWAS instances from the homologue mappings file (hsap_species_mapping.txt).
@@ -264,7 +257,7 @@ public class EWASInferrer {
 		List<GKInstance> inferredReferenceDNAInstances = createReferenceDNASequences(homologueId);
 		infReferenceGeneProductInst.addAttributeValue(ReactomeJavaConstants.referenceGene, inferredReferenceDNAInstances);
 
-		infReferenceGeneProductInst.addAttributeValue(ReactomeJavaConstants.species, speciesInstance);
+		infReferenceGeneProductInst.addAttributeValue(ReactomeJavaConstants.species, getSpeciesInstance());
 		String referenceGeneProductSource = getReferenceDatabase().getReferenceDatabaseSourceName(getHomologueSource(homologue));
 		infReferenceGeneProductInst.setAttributeValue(
 			ReactomeJavaConstants._displayName, referenceGeneProductSource + ":" + homologueId);
@@ -342,7 +335,7 @@ public class EWASInferrer {
 		referenceDNAInst.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
 		referenceDNAInst.addAttributeValue(ReactomeJavaConstants.identifier, ensgId);
 		referenceDNAInst.addAttributeValue(ReactomeJavaConstants.referenceDatabase, getReferenceDatabase().getEnsemblDBInst());
-		referenceDNAInst.addAttributeValue(ReactomeJavaConstants.species, speciesInstance);
+		referenceDNAInst.addAttributeValue(ReactomeJavaConstants.species, getSpeciesInstance());
 		referenceDNAInst.setAttributeValue(ReactomeJavaConstants._displayName, "ENSEMBL:" + ensgId);
 		referenceDNAInst = instanceUtilities.checkForIdenticalInstances(referenceDNAInst, null);
 		return referenceDNAInst;
@@ -360,7 +353,7 @@ public class EWASInferrer {
 		alternateRefDNAInst.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
 		alternateRefDNAInst.addAttributeValue(ReactomeJavaConstants.identifier, altDbIdentifier);
 		alternateRefDNAInst.addAttributeValue(ReactomeJavaConstants.referenceDatabase, getReferenceDatabase().getAlternateReferenceDatabase());
-		alternateRefDNAInst.addAttributeValue(ReactomeJavaConstants.species, speciesInstance);
+		alternateRefDNAInst.addAttributeValue(ReactomeJavaConstants.species, getSpeciesInstance());
 		alternateRefDNAInst.setAttributeValue(
 			ReactomeJavaConstants._displayName, getReferenceDatabase().getAlternateReferenceDatabase().getAttributeValue(ReactomeJavaConstants.name) + ":" + ensgId);
 		alternateRefDNAInst = instanceUtilities.checkForIdenticalInstances(alternateRefDNAInst, null);
@@ -396,6 +389,10 @@ public class EWASInferrer {
 
 	private MySQLAdaptor getCurrentDBA() throws SQLException {
 		return this.configProperties.getCurrentDBA();
+	}
+
+	private GKInstance getSpeciesInstance() throws Exception {
+		return this.instanceUtilities.getSpeciesInstance();
 	}
 
 	private GKInstance getInstanceEdit() throws Exception {
