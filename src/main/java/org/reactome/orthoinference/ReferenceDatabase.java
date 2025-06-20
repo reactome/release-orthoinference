@@ -33,28 +33,18 @@ public class ReferenceDatabase {
 	private boolean altRefDbExists;
 	private String altRefDbId;
 
-	public ReferenceDatabase(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String speciesCode, InstanceUtilities instanceUtilities) {
+	public ReferenceDatabase(
+		ConfigProperties configProperties,
+		@Qualifier("targetSpeciesCode") String speciesCode,
+		InstanceUtilities instanceUtilities
+	) throws Exception {
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
 		this.instanceUtilities = instanceUtilities;
-	}
 
-	public void setEnsEMBLDatabase() throws Exception {
-		if (isFungiSpecies()) {
-			fetchOrCreateFungiEnsemblDatabase();
-		} else if (isProtistSpecies()) {
-			fetchOrCreateProtistsEnsemblDatabase();
-		} else {
-			fetchOrCreateMainEnsemblDatabase();
-		}
-	}
-
-	// Fetches Uniprot DB instance
-	@SuppressWarnings("unchecked")
-	public void fetchAndSetUniprotDbInstance() throws Exception {
-		Collection<GKInstance> uniprotDbInstances = (Collection<GKInstance>)
-			getCurrentDBA().fetchInstanceByAttribute(ReactomeJavaConstants.ReferenceDatabase, ReactomeJavaConstants.name, "=", "UniProt");
-		uniprotDbInst = uniprotDbInstances.iterator().next();
+		setEnsEMBLDatabase();
+		fetchAndSetUniprotDbInstance();
+		setAlternateReferenceDatabase();
 	}
 
 	public GKInstance getReferenceDatabase(String homologSource) {
@@ -63,15 +53,6 @@ public class ReferenceDatabase {
 
 	public String getReferenceDatabaseSourceName(String homologSource) {
 		return homologSource.equals("ENSP") ? "ENSEMBL" : "UniProt";
-	}
-
-	public void setAlternateReferenceDatabase() throws Exception {
-		JSONObject altRefDbJSON = getAltRefDBJSON();
-		if (altRefDbJSON != null) {
-			createAlternateReferenceDBInstance(altRefDbJSON);
-		} else {
-			setAltRefDbToFalse();
-		}
 	}
 
 	public GKInstance getEnsemblDBInst() {
@@ -88,6 +69,33 @@ public class ReferenceDatabase {
 
 	public String getAlternateReferenceDbId() {
 		return this.altRefDbId;
+	}
+
+	private void setEnsEMBLDatabase() throws Exception {
+		if (isFungiSpecies()) {
+			fetchOrCreateFungiEnsemblDatabase();
+		} else if (isProtistSpecies()) {
+			fetchOrCreateProtistsEnsemblDatabase();
+		} else {
+			fetchOrCreateMainEnsemblDatabase();
+		}
+	}
+
+	// Fetches Uniprot DB instance
+	@SuppressWarnings("unchecked")
+	private void fetchAndSetUniprotDbInstance() throws Exception {
+		Collection<GKInstance> uniprotDbInstances = (Collection<GKInstance>)
+			getCurrentDBA().fetchInstanceByAttribute(ReactomeJavaConstants.ReferenceDatabase, ReactomeJavaConstants.name, "=", "UniProt");
+		uniprotDbInst = uniprotDbInstances.iterator().next();
+	}
+
+	private void setAlternateReferenceDatabase() throws Exception {
+		JSONObject altRefDbJSON = getAltRefDBJSON();
+		if (altRefDbJSON != null) {
+			createAlternateReferenceDBInstance(altRefDbJSON);
+		} else {
+			setAltRefDbToFalse();
+		}
 	}
 
 	private void fetchOrCreateProtistsEnsemblDatabase() throws Exception {
