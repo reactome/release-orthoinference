@@ -20,7 +20,7 @@ public class EWASInferrer {
 	private static final Logger logger = LogManager.getLogger();
 
 	private ConfigProperties configProperties;
-	private ReferenceDatabase referenceDatabase;
+	private OrthologyReferenceDatabase orthologyReferenceDatabase;
 	private Mappings mappings;
 	private InstanceUtilities instanceUtilities;
 
@@ -30,12 +30,12 @@ public class EWASInferrer {
 
 	public EWASInferrer(
 		ConfigProperties configProperties,
-		ReferenceDatabase referenceDatabase,
+		OrthologyReferenceDatabase orthologyReferenceDatabase,
 		Mappings mappings,
 		InstanceUtilities instanceUtilities
 	) {
 		this.configProperties = configProperties;
-		this.referenceDatabase = referenceDatabase;
+		this.orthologyReferenceDatabase = orthologyReferenceDatabase;
 		this.mappings = mappings;
 		this.instanceUtilities = instanceUtilities;
 	}
@@ -364,8 +364,8 @@ public class EWASInferrer {
 		return this.mappings;
 	}
 
-	private ReferenceDatabase getReferenceDatabase() {
-		return this.referenceDatabase;
+	private OrthologyReferenceDatabase getReferenceDatabase() {
+		return this.orthologyReferenceDatabase;
 	}
 
 	private MySQLAdaptor getCurrentDBA() throws SQLException {

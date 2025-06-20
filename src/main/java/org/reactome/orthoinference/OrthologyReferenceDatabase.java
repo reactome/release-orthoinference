@@ -20,7 +20,7 @@ import java.util.List;
  * Created 5/5/2025
  */
 @Component
-public class ReferenceDatabase {
+public class OrthologyReferenceDatabase {
 
 	private ConfigProperties configProperties;
 	private String speciesCode;
@@ -33,7 +33,7 @@ public class ReferenceDatabase {
 	private boolean altRefDbExists;
 	private String altRefDbId;
 
-	public ReferenceDatabase(
+	public OrthologyReferenceDatabase(
 		ConfigProperties configProperties,
 		@Qualifier("targetSpeciesCode") String speciesCode,
 		InstanceUtilities instanceUtilities
