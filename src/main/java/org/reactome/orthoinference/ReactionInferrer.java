@@ -28,6 +28,7 @@ public class ReactionInferrer {
 	private ConfigProperties configProperties;
 	private String speciesCode;
 	private OrthologousEntityGenerator orthologousEntityGenerator;
+	private StableIdentifierGenerator stableIdentifierGenerator;
 	private InstanceUtilities instanceUtilities;
 
 	private static Map<GKInstance, GKInstance> inferredCatalyst = new HashMap<>();
@@ -42,6 +43,7 @@ public class ReactionInferrer {
 		@Qualifier("targetSpeciesCode") String speciesCode,
 		OrthologousEntityGenerator orthologousEntityGenerator,
 		InstanceUtilities instanceUtilities,
+		StableIdentifierGenerator stableIdentifierGenerator,
 		SkipInstanceChecker skipInstanceChecker
 	) throws Exception {
 
@@ -51,6 +53,7 @@ public class ReactionInferrer {
 		this.orthologousEntityGenerator = orthologousEntityGenerator;
 		this.instanceUtilities = instanceUtilities;
 
+		this.stableIdentifierGenerator = stableIdentifierGenerator;
 		this.skipInstanceChecker = skipInstanceChecker;
 
 		initializeEligibleAndInferredFiles();
@@ -118,7 +121,7 @@ public class ReactionInferrer {
 							// FetchIdenticalInstances would just return the instance being inferred. Since this step
 							// is meant to always add a new inferred instance, the storeInstance method is just called
 							// here.
-							GKInstance orthoStableIdentifierInst = getUtils().getStableIdentifierGenerator()
+							GKInstance orthoStableIdentifierInst = stableIdentifierGenerator
 								.generateOrthologousStableId(infReactionInst, reactionInst);
 							infReactionInst.addAttributeValue(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
 							getCurrentDBA().storeInstance(infReactionInst);

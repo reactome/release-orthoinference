@@ -33,7 +33,6 @@ public class InstanceUtilities {
 
 	private String targetSpeciesCode;
 	private ProteinCountUtility proteinCountUtility;
-	private StableIdentifierGenerator stableIdentifierGenerator;
 
 	private GKInstance evidenceType;
 	private GKInstance summation;
@@ -45,14 +44,11 @@ public class InstanceUtilities {
 	public InstanceUtilities(
 		ConfigProperties configProperties,
 		@Qualifier("targetSpeciesCode") String targetSpeciesCode,
-		ProteinCountUtility proteinCountUtility,
-		StableIdentifierGenerator stableIdentifierGenerator
-
+		ProteinCountUtility proteinCountUtility
 	) {
 		this.configProperties = configProperties;
 		this.targetSpeciesCode = targetSpeciesCode;
 		this.proteinCountUtility = proteinCountUtility;
-		this.stableIdentifierGenerator = stableIdentifierGenerator;
 	}
 
 	@Bean(name = "instanceEditInst")
@@ -319,10 +315,6 @@ public class InstanceUtilities {
 			summation = checkForIdenticalInstances(summation, null);
 		}
 		return summation;
-	}
-
-	public StableIdentifierGenerator getStableIdentifierGenerator() {
-		return this.stableIdentifierGenerator;
 	}
 
 	public ProteinCountUtility getProteinCountUtility() {

@@ -20,14 +20,16 @@ public class PathwaysInferrer {
 	private static final Logger logger = LogManager.getLogger();
 
 	private ConfigProperties configProperties;
+	private StableIdentifierGenerator stableIdentifierGenerator;
 	private InstanceUtilities instanceUtilities;
 
 	private static List<GKInstance> updatedInferrableHumanEvents = new ArrayList<>();
 	private static Map<GKInstance, GKInstance> sourceInstanceToInferredInstance = new HashMap<>();
 	//private static GKInstance diseasePathwayInst;
 
-	public PathwaysInferrer(ConfigProperties configProperties, InstanceUtilities instanceUtilities) {
+	public PathwaysInferrer(ConfigProperties configProperties, StableIdentifierGenerator stableIdentifierGenerator, InstanceUtilities instanceUtilities) {
 		this.configProperties = configProperties;
+		this.stableIdentifierGenerator = stableIdentifierGenerator;
 		this.instanceUtilities = instanceUtilities;
 	}
 
@@ -122,7 +124,7 @@ public class PathwaysInferrer {
 		}
 		inferredPathway.setDisplayName(humanPathway.getDisplayName());
 		sourceInstanceToInferredInstance.put(humanPathway, inferredPathway);
-		GKInstance orthoStableIdentifierInst = getUtils().getStableIdentifierGenerator()
+		GKInstance orthoStableIdentifierInst = stableIdentifierGenerator
 			.generateOrthologousStableId(inferredPathway, humanPathway);
 		inferredPathway.addAttributeValue(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
 		getCurrentDBA().storeInstance(inferredPathway);
