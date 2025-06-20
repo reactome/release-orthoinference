@@ -39,7 +39,7 @@ public class SpeciesConfig {
         throws IOException, ParseException {
 
         JSONParser parser = new JSONParser();
-        Object obj = parser.parse(new FileReader(pathToSpeciesConfig));
+        Object obj = parser.parse(new FileReader(getPathToSpeciesConfig()));
         JSONObject jsonObject = (JSONObject) obj;
 
         // Parse Species information (found in Species.json config file)
