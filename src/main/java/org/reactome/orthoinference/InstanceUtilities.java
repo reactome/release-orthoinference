@@ -30,8 +30,8 @@ public class InstanceUtilities {
 	private final long DISEASE_PATHWAY_DB_ID = 1643685L;
 
 	private ConfigProperties configProperties;
-
 	private String targetSpeciesCode;
+	private StableIdentifierGenerator stableIdentifierGenerator;
 	private ProteinCountUtility proteinCountUtility;
 
 	private GKInstance evidenceType;
@@ -44,10 +44,12 @@ public class InstanceUtilities {
 	public InstanceUtilities(
 		ConfigProperties configProperties,
 		@Qualifier("targetSpeciesCode") String targetSpeciesCode,
+		StableIdentifierGenerator stableIdentifierGenerator,
 		ProteinCountUtility proteinCountUtility
 	) {
 		this.configProperties = configProperties;
 		this.targetSpeciesCode = targetSpeciesCode;
+		this.stableIdentifierGenerator = stableIdentifierGenerator;
 		this.proteinCountUtility = proteinCountUtility;
 	}
 
@@ -173,9 +175,9 @@ public class InstanceUtilities {
 			}
 		} else {
 			if (inferredInst.getSchemClass().isa(ReactomeJavaConstants.PhysicalEntity)) {
-//				GKInstance orthoStableIdentifierInst = getUtils().getStableIdentifierGenerator()
-//					.generateOrthologousStableId(inferredInst, originalInst);
-//				inferredInst.addAttributeValue(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
+				GKInstance orthoStableIdentifierInst = stableIdentifierGenerator
+					.generateOrthologousStableId(inferredInst, originalInst);
+				inferredInst.addAttributeValue(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
 			}
 			getCurrentDBA().storeInstance(inferredInst);
 			return inferredInst;

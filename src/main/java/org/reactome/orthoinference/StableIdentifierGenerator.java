@@ -6,6 +6,7 @@ import org.gk.model.GKInstance;
 import org.gk.model.InstanceDisplayNameGenerator;
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
+import org.gk.schema.SchemaClass;
 import org.json.simple.parser.ParseException;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
@@ -24,12 +25,10 @@ public class StableIdentifierGenerator {
 
     private ConfigProperties configProperties;
     private String speciesCode;
-    private InstanceUtilities instanceUtilities;
 
-    public StableIdentifierGenerator(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String speciesCode, InstanceUtilities instanceUtilities) {
+    public StableIdentifierGenerator(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String speciesCode) {
         this.configProperties = configProperties;
         this.speciesCode = speciesCode;
-        this.instanceUtilities = instanceUtilities;
     }
 
     public GKInstance generateOrthologousStableId(GKInstance inferredInst, GKInstance originalInst) throws Exception {
@@ -102,17 +101,18 @@ public class StableIdentifierGenerator {
         throws Exception {
 
         GKInstance orthoStableIdentifierInst =
-            createOrthologousStableIdentifierInstance(stableIdentifierInst, targetIdentifier);
+            createOrthologousStableIdentifierInstance(targetIdentifier);
         getDBA().storeInstance(orthoStableIdentifierInst);
 
         return orthoStableIdentifierInst;
     }
 
     // Generates a new stable identifier instance
-    private GKInstance createOrthologousStableIdentifierInstance(
-        GKInstance stableIdentifierInst, String targetIdentifier) throws Exception {
+    private GKInstance createOrthologousStableIdentifierInstance(String targetIdentifier) throws Exception {
+        SchemaClass instanceClass = getDBA().getSchema().getClassByName(ReactomeJavaConstants.StableIdentifier);
+        GKInstance orthoStableIdentifierInst = new GKInstance(instanceClass);
+        orthoStableIdentifierInst.setDbAdaptor(getDBA());
 
-        GKInstance orthoStableIdentifierInst = instanceUtilities.createNewInferredGKInstance(stableIdentifierInst);
         orthoStableIdentifierInst.addAttributeValue(ReactomeJavaConstants.identifier, targetIdentifier);
         orthoStableIdentifierInst.addAttributeValue(ReactomeJavaConstants.identifierVersion, "1");
 
@@ -120,6 +120,7 @@ public class StableIdentifierGenerator {
 
         return orthoStableIdentifierInst;
     }
+
 
     private MySQLAdaptor getDBA() throws SQLException {
         return this.configProperties.getCurrentDBA();
