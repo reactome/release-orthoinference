@@ -360,25 +360,6 @@ public class EWASInferrer {
 		return alternateRefDNAInst;
 	}
 
-	// These are setup functions called at the beginning of the 'inferEvent' script
-	public void setAdaptor(MySQLAdaptor dbAdaptor) {
-		//dba = dbAdaptor;
-	}
-
-//	public void setInstanceEdit(GKInstance instanceEditCopy) {
-//		instanceEditInst = instanceEditCopy;
-//	}
-//
-//	// Sets the HashMap of species-specific homologue-identifier mappings
-//	public void setHomologueMappingFile(Map<String, String[]> homologueMappingsCopy) {
-//		homologueMappings = homologueMappingsCopy;
-//	}
-//
-//
-//	public void setGeneNameMappingFile(Map<String, String> geneNameMappingsCopy) {
-//		geneNameMappings = geneNameMappingsCopy;
-//	}
-
 	private Mappings getMappings() {
 		return this.mappings;
 	}

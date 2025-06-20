@@ -18,7 +18,6 @@ public class OrthologousPathwayDiagramGenerator {
     private GKInstance referenceSpecies;
     private GKInstance targetSpeciesInst;
     private long personId;
-    //private long referenceSpeciesId;
 
     public OrthologousPathwayDiagramGenerator(MySQLAdaptor dba, MySQLAdaptor dbaPrev, GKInstance targetSpeciesInst,
                                               GKInstance referenceSpecies, long personId) {
@@ -27,7 +26,6 @@ public class OrthologousPathwayDiagramGenerator {
         this.targetSpeciesInst = targetSpeciesInst;
         this.referenceSpecies = referenceSpecies;
         this.personId = personId;
-        //this.referenceSpeciesId = referenceSpeciesId;
     }
 
     /**

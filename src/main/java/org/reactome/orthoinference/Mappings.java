@@ -20,8 +20,6 @@ import java.util.Map;
  */
 @Component
 public class Mappings {
-	//private static Mappings mappings;
-
 	private Map<String, String[]> homologueMappings;
 	private Map<String, List<String>> ensgMappings;
 	private Map<String, String> geneNameMappings;
@@ -35,13 +33,6 @@ public class Mappings {
 		this.ensgMappings = readENSGMappingFile(targetSpecies, configProperties.getPathToOrthopairs());
 		this.geneNameMappings = readGeneNameMappingFile(targetSpecies, configProperties.getPathToOrthopairs());
 	}
-
-//	public static Mappings getInstance() {
-//		if (mappings == null) {
-//			throw new IllegalStateException("Not initialized yet");
-//		}
-//		return mappings;
-//	}
 
 	public Map<String, String[]> getHomologueMappings() {
 		return this.homologueMappings;

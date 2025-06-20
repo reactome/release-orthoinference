@@ -54,7 +54,7 @@ public class EventsInferrer {
 		ReactionInferrer reactionInferrer,
 		PathwaysInferrer pathwaysInferrer,
 		InstanceUtilities utils
-	) throws Exception {
+	) {
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
 
@@ -68,7 +68,7 @@ public class EventsInferrer {
 	public void inferEvents() throws Exception {
 		logger.info("Beginning orthoinference of " + getSpeciesName());
 
-/**
+/*
  *  Start of ReactionlikeEvent inference. Retrieves all human ReactionlikeEvents, and attempts to infer each for the species.
  */
 		// Gets DB instance of source species (human)
@@ -138,10 +138,6 @@ public class EventsInferrer {
 		logger.info("Finished orthoinference of " + getSpeciesName());
 	}
 
-//	public StableIdentifierGenerator getStableIdentifierGenerator() {
-//		return stableIdentifierGenerator;
-//	}
-
 	private GKInstance getHumanSpeciesInstance() throws Exception {
 		Collection<GKInstance> sourceSpeciesInst = (Collection<GKInstance>)
 			getCurrentDBA().fetchInstanceByAttribute("Species", "name", "=", "Homo sapiens");
@@ -152,18 +148,6 @@ public class EventsInferrer {
 		return sourceSpeciesInst.iterator().next();
 	}
 
-//	/**
-//	 * Create mapping of UniProt accessions to species-specific gene names, and then set this mapping for use in
-//	 * EWASInferrer.
-//	 * @param species String - 4-letter shortened version of species name (eg: Homo sapiens --> hsap).
-//	 * @throws IOException - Thrown if file is not found.
-//	 */
-//	private void readAndSetGeneNameMappingFile(String species) throws IOException {
-//		Map<String, String> geneNameMappings = readGeneNameMappingFile(species);
-//
-//		EWASInferrer.setGeneNameMappingFile(geneNameMappings);
-//	}
-
 	private void createNewFile(String filename) throws IOException {
 		File file = new File(filename);
 		if (file.exists()) {
@@ -171,11 +155,6 @@ public class EventsInferrer {
 		}
 		file.createNewFile();
 	}
-
-//	private void setReleaseDates(String dateOfRelease) {
-//		ReactionInferrer.setReleaseDate(dateOfRelease);
-//		PathwaysInferrer.setReleaseDate(dateOfRelease);
-//	}
 
 	@SuppressWarnings("unchecked")
 	private List<GKInstance> checkIfPreviouslyInferred(
@@ -205,23 +184,6 @@ public class EventsInferrer {
 			" eligible reactions (" + String.format("%.2f", percentInferred) + "%)\n";
 		Files.write(Paths.get(reportFilename), results.getBytes(), StandardOpenOption.APPEND);
 	}
-
-//	// Statically store the adaptor variable in each class
-//	private void setDbAdaptors(MySQLAdaptor dbAdaptor) {
-//		ReactionInferrer.setAdaptor(dbAdaptor);
-//		InstanceUtilities.setAdaptor(dbAdaptor);
-//		OrthologousEntityGenerator.setAdaptor(dbAdaptor);
-//		EWASInferrer.setAdaptor(dbAdaptor);
-//		PathwaysInferrer.setAdaptor(dbAdaptor);
-//
-//	}
-
-//	private void readAndSetHomologueMappingFile(String species, String fromSpecies)
-//		throws IOException {
-//		Map<String,String[]> homologueMappings = readHomologueMappingFile(species, fromSpecies);
-//		ProteinCountUtility.setHomologueMappingFile(homologueMappings);
-//		EWASInferrer.setHomologueMappingFile(homologueMappings);
-//	}
 
 	private ConfigProperties getConfigProperties() {
 		return this.configProperties;

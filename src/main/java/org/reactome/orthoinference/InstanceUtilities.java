@@ -321,23 +321,6 @@ public class InstanceUtilities {
 		return this.proteinCountUtility;
 	}
 
-
-//	public void setAdaptor(MySQLAdaptor dbAdaptor) {
-//		dba = dbAdaptor;
-//	}
-
-//	public void setSpeciesInstance(GKInstance speciesInstCopy) {
-//		speciesInst = speciesInstCopy;
-//	}
-//
-//	public void setInstanceEdit(GKInstance instanceEditCopy) {
-//		instanceEdit = instanceEditCopy;
-//	}
-//
-//	public long getDiseasePathwayDbId() {
-//		return DISEASE_PATHWAY_DB_ID;
-//	}
-
 	private String getSpeciesName() throws IOException, ParseException {
 		return this.configProperties.getSpeciesConfig().getSpeciesName(this.targetSpeciesCode);
 	}

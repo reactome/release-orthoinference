@@ -25,7 +25,6 @@ public class PathwaysInferrer {
 
 	private static List<GKInstance> updatedInferrableHumanEvents = new ArrayList<>();
 	private static Map<GKInstance, GKInstance> sourceInstanceToInferredInstance = new HashMap<>();
-	//private static GKInstance diseasePathwayInst;
 
 	public PathwaysInferrer(ConfigProperties configProperties, StableIdentifierGenerator stableIdentifierGenerator, InstanceUtilities instanceUtilities) {
 		this.configProperties = configProperties;
@@ -289,12 +288,4 @@ public class PathwaysInferrer {
 	private GKInstance getInstanceEdit() throws Exception {
 		return this.instanceUtilities.getInstanceEdit();
 	}
-
-//	private static GKInstance getDiseaseInstance() throws Exception {
-//		if (diseasePathwayInst == null) {
-//			diseasePathwayInst = dba.fetchInstance(InstanceUtilities.getDiseasePathwayDbId());
-//		}
-//
-//		return diseasePathwayInst;
-//	}
 }

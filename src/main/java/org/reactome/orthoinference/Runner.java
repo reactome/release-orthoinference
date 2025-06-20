@@ -23,12 +23,6 @@ public class Runner implements CommandLineRunner {
 
 	@Override
 	public void run(String... args) throws Exception {
-		System.out.println("Hello from CommandLineRunner!");
-		System.out.println("Species code: " + speciesCode);
-		System.out.println("Person id: " + configProperties.getPersonId());
-
-		//EventsInferrer eventsInferrer = new EventsInferrer(configProperties, getSpeciesCode());
 		eventsInferrer.inferEvents();
-
 	}
 }
