@@ -255,11 +255,11 @@
 		},
 		"mart_url":"http:\/\/protists.ensembl.org\/biomart\/martservice",
 		"alt_refdb":{
-			"access":"http:\/\/plasmodb.org\/plasmodb\/servlet\/sv?page=gene&source_id=###ID###",
+			"access":"https:\/\/plasmodb.org\/plasmo\/app\/record\/gene\/###ID### ",
 			"dbname":[
 				"PlasmoDB"
 			],
-			"url":"http:\/\/plasmodb.org"
+			"url":"https:\/\/plasmodb.org"
 		},
 		"group":"Eukaryotes",
 		"mart_virtual_schema":"protists_mart",
