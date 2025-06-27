@@ -68,7 +68,7 @@
 			"ensg_access":"http:\/\/fungi.ensembl.org\/Saccharomyces_cerevisiae\/geneview?gene=###ID###&db=core"
 		},
 		"alt_refdb":{
-			"access":"https:\/\/www.yeastgenome.org/search?q=###ID###&category=locus",
+			"access":"https:\/\/www.yeastgenome.org\/search?q=###ID###&category=locus",
 			"dbname":[
 				"SGD",
 				"Saccharomyces Genome Database"
