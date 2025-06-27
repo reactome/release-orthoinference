@@ -279,7 +279,7 @@
 			]
 		},
 		"alt_refdb":{
-			"access":"https:\/\/flybase.org\/.bin\/fbidq.html?###ID###",
+			"access":"https:\/\/flybase.org\/reports\/###ID###.html",
 			"dbname":[
 				"FlyBase"
 			],
