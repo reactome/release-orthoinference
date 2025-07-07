@@ -62,7 +62,7 @@ public class ConfigProperties {
 
     @Bean(name = "pathToSpeciesConfig")
     public String getPathToSpeciesConfig() {
-        return this.pathToSpeciesConfig;
+        return this.pathToSpeciesConfig != null ? this.pathToSpeciesConfig : "src/main/resources/Species.json";
     }
 
     public String getPathToOrthopairs() {
@@ -70,9 +70,7 @@ public class ConfigProperties {
     }
 
     public SpeciesConfig getSpeciesConfig() {
-        String pathToSpeciesConfig = this.pathToSpeciesConfig != null ?
-            this.pathToSpeciesConfig : "src/main/resources/Species.json";
-        return new SpeciesConfig(pathToSpeciesConfig);
+        return new SpeciesConfig(getPathToSpeciesConfig());
     }
 
     public String getDateOfRelease() {
