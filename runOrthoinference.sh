@@ -7,16 +7,16 @@ cd $DIR
 ## Update repo
 git pull
 ## Create new jar file with orthoinference code
-mvn clean compile assembly:single
+mvn clean package
 
 ## Ensures the correct jar file is obtained regardless of orthoinference project version
-orthoinference_jar_file=$(ls target/orthoinference-*-jar-with-dependencies.jar)
+orthoinference_jar_file=$(ls target/orthoinference-*.jar | grep -v with-dependencies)
 
 ## Run orthoinference for each species
 allSpecies=(mmus rnor cfam btau sscr drer xtro ggal dmel cele ddis spom scer pfal)
 for species in "${allSpecies[@]}"
 do
-	echo "java -jar $orthoinference_jar_file $species > orthoinference_$species.out";
+	echo "java -jar $orthoinference_jar_file --speciesCode=$species > orthoinference_$species.out";
 	java -jar $orthoinference_jar_file $species > orthoinference_$species.out;
 done
 
