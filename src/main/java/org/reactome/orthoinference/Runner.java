@@ -11,13 +11,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class Runner implements CommandLineRunner {
 
-	private ConfigProperties configProperties;
-	private String speciesCode;
 	private EventsInferrer eventsInferrer;
 
-	public Runner(ConfigProperties configProperties, @Qualifier("targetSpeciesCode") String speciesCode, EventsInferrer eventsInferrer) {
-		this.configProperties = configProperties;
-		this.speciesCode = speciesCode;
+	public Runner(EventsInferrer eventsInferrer) {
+
 		this.eventsInferrer = eventsInferrer;
 	}
 
