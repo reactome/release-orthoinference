@@ -68,18 +68,22 @@ public class EventsInferrer {
 	public void inferEvents() throws Exception {
 		logger.info("Beginning orthoinference of " + getSpeciesName());
 
-/*
- *  Start of ReactionlikeEvent inference. Retrieves all human ReactionlikeEvents, and attempts to infer each for the species.
- */
-		// Gets DB instance of source species (human)
 		GKInstance humanSpeciesInstance = getHumanSpeciesInstance();
+		Map<Long, GKInstance> reactionMap = getHumanReactionMap(humanSpeciesInstance);
+		processReactions(reactionMap);
+		generatePathwaysAndDiagrams(humanSpeciesInstance);
 
-		// Gets Reaction instances of source species (human)
+		outputReport(speciesCode, configProperties.getReleaseVersion());
+		logger.info("Finished orthoinference of " + getSpeciesName());
+	}
+
+	private Map<Long, GKInstance> getHumanReactionMap(GKInstance humanSpeciesInstance) throws Exception {
 		Collection<GKInstance> reactionInstances = (Collection<GKInstance>)
-			getCurrentDBA().fetchInstanceByAttribute("ReactionlikeEvent", "species", "=", humanSpeciesInstance.getDBID());
+				getCurrentDBA().fetchInstanceByAttribute("ReactionlikeEvent", "species", "=", humanSpeciesInstance.getDBID());
 
-		List<Long> dbids = new ArrayList<>();
 		Map<Long, GKInstance> reactionMap = new HashMap<>();
+		List<Long> dbids = new ArrayList<>();
+
 		for (GKInstance reactionInst : reactionInstances) {
 			dbids.add(reactionInst.getDBID());
 			reactionMap.put(reactionInst.getDBID(), reactionInst);
@@ -87,55 +91,75 @@ public class EventsInferrer {
 		Collections.sort(dbids);
 
 		logger.info(humanSpeciesInstance.getDisplayName() + " ReactionlikeEvent instances: " + dbids.size());
-		for (Long dbid : dbids) {
-			GKInstance reactionInst = reactionMap.get(dbid);
+		return reactionMap;
+	}
+
+	private void processReactions(Map<Long, GKInstance> reactionMap) throws Exception {
+		for (Map.Entry<Long, GKInstance> entry : reactionMap.entrySet()) {
+			GKInstance reactionInst = entry.getValue();
 			logger.info("Attempting RlE inference: " + reactionInst);
-			// Check if the current Reaction already exists for this species, that it is a valid instance (passes
-			// some filters), and that it doesn't have a Disease attribute.
-			// Adds to manualHumanEvents array if it passes conditions. This code block allows you to re-run the code
-			// without re-inferring instances.
-			List<GKInstance> previouslyInferredInstances = new ArrayList<GKInstance>();
-			previouslyInferredInstances.addAll(
-				checkIfPreviouslyInferred(reactionInst, ReactomeJavaConstants.orthologousEvent, previouslyInferredInstances));
-			previouslyInferredInstances.addAll(
-				checkIfPreviouslyInferred(reactionInst, ReactomeJavaConstants.inferredFrom, previouslyInferredInstances));
-			if (previouslyInferredInstances.size() > 0) {
-				GKInstance prevInfInst = previouslyInferredInstances.get(0);
-				if (prevInfInst.getAttributeValue(ReactomeJavaConstants.disease) == null) {
-					GKInstance evidenceTypeInst = (GKInstance) prevInfInst.getAttributeValue(ReactomeJavaConstants.evidenceType);
-					if (evidenceTypeInst != null &&
-						evidenceTypeInst.getDisplayName().contains("electronic")) {
-						getReactionInferrer().addAlreadyInferredEvents(reactionInst, prevInfInst);
-					} else {
-						logger.info("Inferred RlE already exists, skipping inference");
-						manualEventToNonHumanSource.put(reactionInst, prevInfInst);
-						manualHumanEvents.add(reactionInst);
-					}
-				} else {
-					logger.info("Disease reaction, skipping inference");
-				}
+
+			if (isAlreadyInferred(reactionInst)) {
 				continue;
 			}
 
-			// An inferred ReactionlikeEvent doesn't already exist for this species, and an orthologous inference will
-			// be attempted.
-			try {
-				getReactionInferrer().inferReaction(reactionInst);
-				logger.info("Successfully inferred " + reactionInst);
-			} catch (Exception e) {
-				e.printStackTrace();
-				System.exit(1);
-			}
+			inferReactionWithErrorHandling(reactionInst);
+		}
+	}
+
+	private boolean isAlreadyInferred(GKInstance reactionInst) throws Exception {
+		List<GKInstance> previouslyInferredInstances = new ArrayList<>();
+		previouslyInferredInstances.addAll(
+				checkIfPreviouslyInferred(reactionInst, ReactomeJavaConstants.orthologousEvent, previouslyInferredInstances));
+		previouslyInferredInstances.addAll(
+				checkIfPreviouslyInferred(reactionInst, ReactomeJavaConstants.inferredFrom, previouslyInferredInstances));
+
+		if (previouslyInferredInstances.isEmpty()) {
+			return false;
 		}
 
+		return handlePreviouslyInferredInstance(reactionInst, previouslyInferredInstances.get(0));
+	}
+
+	private boolean handlePreviouslyInferredInstance(GKInstance reactionInst, GKInstance prevInfInst) throws Exception {
+		if (prevInfInst.getAttributeValue(ReactomeJavaConstants.disease) != null) {
+			logger.info("Disease reaction, skipping inference");
+			return true;
+		}
+
+		GKInstance evidenceTypeInst = (GKInstance) prevInfInst.getAttributeValue(ReactomeJavaConstants.evidenceType);
+		if (evidenceTypeInst != null && evidenceTypeInst.getDisplayName().contains("electronic")) {
+			getReactionInferrer().addAlreadyInferredEvents(reactionInst, prevInfInst);
+		} else {
+			logger.info("Inferred RlE already exists, skipping inference");
+			manualEventToNonHumanSource.put(reactionInst, prevInfInst);
+			manualHumanEvents.add(reactionInst);
+		}
+		return true;
+	}
+
+	private void inferReactionWithErrorHandling(GKInstance reactionInst) {
+		try {
+			getReactionInferrer().inferReaction(reactionInst);
+			logger.info("Successfully inferred " + reactionInst);
+		} catch (Exception e) {
+			logger.error("Failed to infer reaction: " + reactionInst, e);
+			throw new RuntimeException("Failed to infer reaction", e);
+		}
+	}
+
+	private void generatePathwaysAndDiagrams(GKInstance humanSpeciesInstance) throws Exception {
 		getPathwaysInferrer().setInferredEvent(getReactionInferrer().getInferredEvent());
 		getPathwaysInferrer().inferPathways(getReactionInferrer().getInferrableHumanEvents());
 
 		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(
-			getCurrentDBA(), getPrevDBA(), getSpeciesInstance(), humanSpeciesInstance, configProperties.getPersonId());
+				getCurrentDBA(),
+				getPrevDBA(),
+				getSpeciesInstance(),
+				humanSpeciesInstance,
+				configProperties.getPersonId()
+		);
 		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
-		outputReport(speciesCode, configProperties.getReleaseVersion());
-		logger.info("Finished orthoinference of " + getSpeciesName());
 	}
 
 	private GKInstance getHumanSpeciesInstance() throws Exception {
