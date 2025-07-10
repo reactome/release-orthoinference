@@ -263,61 +263,106 @@ public class ReactionInferrer {
 	
 	// Function used to create inferred catalysts associated with the current reaction instance.
 	// Infers all PhysicalEntity's associated with the reaction's 'catalystActivity' and 'activeUnit' attributes
+
 	@SuppressWarnings("unchecked")
-	private boolean inferReactionCatalysts(GKInstance reactionInst, GKInstance infReactionInst)
-		throws Exception {
-		Collection<GKInstance> catalystInstances =
-			(Collection<GKInstance>) reactionInst.getAttributeValuesList(ReactomeJavaConstants.catalystActivity);
+	private boolean inferReactionCatalysts(GKInstance reactionInst, GKInstance infReactionInst) throws Exception {
+		Collection<GKInstance> catalystInstances = (Collection<GKInstance>) reactionInst.getAttributeValuesList(ReactomeJavaConstants.catalystActivity);
+		logCatalystInfo(catalystInstances);
+
+		for (GKInstance catalystInst : catalystInstances) {
+			logger.info("Attempting catalyst inference: " + catalystInst);
+			GKInstance infCatalystInst = getOrCreateInferredCatalyst(catalystInst);
+			if (infCatalystInst == null) {
+				return false;
+			}
+			infReactionInst.addAttributeValue(ReactomeJavaConstants.catalystActivity, infCatalystInst);
+		}
+
+		logger.info("Completed catalyst(s) inference for " + reactionInst);
+		return true;
+	}
+
+	private void logCatalystInfo(Collection<GKInstance> catalystInstances) {
 		logger.info("Total CatalystActivity instances: " + catalystInstances.size());
 		if (!catalystInstances.isEmpty()) {
 			logger.info("Catalyst instance(s): " + catalystInstances);
 		}
-		for (GKInstance catalystInst : catalystInstances) {
-			logger.info("Attempting catalyst inference: " + catalystInst);
-			if (inferredCatalystMap.get(catalystInst) == null) {
-				GKInstance infCatalystInst = instanceUtilities.createNewInferredGKInstance(catalystInst);
-				infCatalystInst.setDbAdaptor(getCurrentDBA());
-				infCatalystInst.addAttributeValue(ReactomeJavaConstants.activity, catalystInst.getAttributeValue(ReactomeJavaConstants.activity));
-				GKInstance catalystPEInst = (GKInstance) catalystInst.getAttributeValue(ReactomeJavaConstants.physicalEntity);
-				if (catalystPEInst != null) {
-					logger.info("Catalyst PE instance: " + catalystPEInst);
-					GKInstance infCatalystPEInst = getOrthologousEntityGenerator().createOrthoEntity(
-						catalystPEInst, false);
-					if (infCatalystPEInst != null) {
-						infCatalystInst.addAttributeValue(ReactomeJavaConstants.physicalEntity, infCatalystPEInst);
-					} else {
-						return false;
-					}
-				}
-
-				List<GKInstance> activeUnits = new ArrayList<>();
-				Collection<GKInstance> activeUnitInstances =
-					(Collection<GKInstance>) catalystInst.getAttributeValuesList(ReactomeJavaConstants.activeUnit);
-				logger.info("Total active unit instances: " + activeUnitInstances);
-				if (!activeUnitInstances.isEmpty()) {
-					logger.info("Active unit instance(s): " + activeUnitInstances);
-					for (GKInstance activeUnitInst : activeUnitInstances) {
-						logger.info("Active Unit instance: " + activeUnitInst);
-						GKInstance infActiveUnitInst = getOrthologousEntityGenerator().createOrthoEntity(
-							activeUnitInst, false);
-						if (infActiveUnitInst != null) {
-							activeUnits.add(infActiveUnitInst);
-						}
-					}
-				}
-				infCatalystInst.addAttributeValue(ReactomeJavaConstants.activeUnit, activeUnits);
-				infCatalystInst.addAttributeValue(ReactomeJavaConstants._displayName, catalystInst.getAttributeValue(ReactomeJavaConstants._displayName));
-				infCatalystInst = instanceUtilities.checkForIdenticalInstances(infCatalystInst, null);
-				inferredCatalystMap.put(catalystInst, infCatalystInst);
-			} else {
-				logger.info("Inferred catalyst already exists");
-			}
-			infReactionInst.addAttributeValue(ReactomeJavaConstants.catalystActivity, inferredCatalystMap.get(catalystInst));
+	}
+	private GKInstance getOrCreateInferredCatalyst(GKInstance sourceCatalyst) throws Exception {
+		if (inferredCatalystMap.get(sourceCatalyst) != null) {
+			logger.info("Inferred catalyst already exists");
+			return inferredCatalystMap.get(sourceCatalyst);
 		}
-		logger.info("Completed catalyst inference");
+
+		GKInstance inferredCatalyst = createInferredCatalyst(sourceCatalyst);
+		inferredCatalystMap.put(sourceCatalyst, inferredCatalyst);
+		return inferredCatalyst;
+	}
+
+	private GKInstance createInferredCatalyst(GKInstance sourceCatalyst) throws Exception {
+		GKInstance inferredCatalyst = instanceUtilities.createNewInferredGKInstance(sourceCatalyst);
+		inferredCatalyst.setDbAdaptor(getCurrentDBA());
+
+		inferActivityAndDisplayName(sourceCatalyst, inferredCatalyst);
+
+		if (!inferPhysicalEntity(sourceCatalyst, inferredCatalyst)) {
+			return null;
+		}
+
+		// Handle active units
+		inferActiveUnits(sourceCatalyst, inferredCatalyst);
+
+		// Finalize catalyst instance
+		inferredCatalyst = finalizeCatalystInstance(sourceCatalyst, inferredCatalyst);
+
+		return inferredCatalyst;
+	}
+
+	private void inferActivityAndDisplayName(GKInstance sourceCatalyst, GKInstance inferredCatalyst) throws Exception {
+		inferredCatalyst.addAttributeValue(ReactomeJavaConstants.activity,
+				sourceCatalyst.getAttributeValue(ReactomeJavaConstants.activity));
+		inferredCatalyst.addAttributeValue(ReactomeJavaConstants._displayName,
+				sourceCatalyst.getAttributeValue(ReactomeJavaConstants._displayName));
+	}
+
+	private boolean inferPhysicalEntity(GKInstance sourceCatalyst, GKInstance inferredCatalyst) throws Exception {
+		GKInstance catalystPEInst = (GKInstance) sourceCatalyst.getAttributeValue(ReactomeJavaConstants.physicalEntity);
+		if (catalystPEInst != null) {
+			logger.info("Catalyst PE instance: " + catalystPEInst);
+			GKInstance infCatalystPEInst = getOrthologousEntityGenerator().createOrthoEntity(catalystPEInst, false);
+			if (infCatalystPEInst != null) {
+				inferredCatalyst.addAttributeValue(ReactomeJavaConstants.physicalEntity, infCatalystPEInst);
+				return true;
+			}
+			return false;
+		}
 		return true;
 	}
-	
+
+	@SuppressWarnings("unchecked")
+	private void inferActiveUnits(GKInstance sourceCatalyst, GKInstance inferredCatalyst) throws Exception {
+		List<GKInstance> activeUnits = new ArrayList<>();
+		Collection<GKInstance> activeUnitInstances =
+				(Collection<GKInstance>) sourceCatalyst.getAttributeValuesList(ReactomeJavaConstants.activeUnit);
+
+		logger.info("Total active unit instances: " + activeUnitInstances);
+		if (!activeUnitInstances.isEmpty()) {
+			logger.info("Active unit instance(s): " + activeUnitInstances);
+			for (GKInstance activeUnitInst : activeUnitInstances) {
+				logger.info("Active Unit instance: " + activeUnitInst);
+				GKInstance infActiveUnitInst = getOrthologousEntityGenerator().createOrthoEntity(activeUnitInst, false);
+				if (infActiveUnitInst != null) {
+					activeUnits.add(infActiveUnitInst);
+				}
+			}
+		}
+		inferredCatalyst.addAttributeValue(ReactomeJavaConstants.activeUnit, activeUnits);
+	}
+
+	private GKInstance finalizeCatalystInstance(GKInstance sourceCatalyst, GKInstance inferredCatalyst) throws Exception {
+		inferredCatalyst = instanceUtilities.checkForIdenticalInstances(inferredCatalyst, null);
+		return inferredCatalyst;
+	}
 
 	// Function used to infer regulation instances. Logic existed for regulators that had CatalystActivity and
 	// Event instances, but they have never come up in the many times this has been run.
@@ -355,12 +400,13 @@ public class ReactionInferrer {
 
 		GKInstance inferredRegulator = inferRegulator(regulator);
 		if (inferredRegulator == null) {
+			logger.info("Could not infer regulator for " + regulation);
+
 			if (isRequirement(regulation)) {
 				throw new MissingRegulatorForRequiredRegulationException(
 					"No regulator inferrable for required regulation - " + regulation
 				);
 			}
-			logger.info("Could not infer regulator for " + regulation);
 			return null;
 		}
 
