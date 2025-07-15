@@ -8,8 +8,13 @@ def utils = new Utilities()
 pipeline{
 	agent any
 
+        environment {
+		    ECR_URL = 'public.ecr.aws/reactome/release-orthoinference'
+		    CONT_NAME = 'orthoinference_container'
+        }
+	
 	stages{
-		// This stage checks that upstream projects Orthopairs and UpdateStableIdentifier, were run successfully for their last build.
+		// This stage checks that upstream projects Orthopairs and UpdateStableIdentifier were run successfully for their last build.
 		stage('Check if Orthopairs and UpdateStableIdentifiers builds succeeded'){
 			steps{
 				script{
@@ -38,6 +43,19 @@ pipeline{
 				}
 			}
 		}
+
+                // This stage pulls the docker image and removes old containers
+		stage('Setup: Pull and clean docker environment'){
+                    steps{
+                        sh "docker pull ${ECR_URL}:latest"
+                        sh """
+                            if docker ps -a --format '{{.Names}}' | grep -Eq '${CONT_NAME}'; then
+                             docker rm -f ${CONT_NAME}
+                            fi
+                        """
+                    }
+                }
+		
 		// This stage builds the jar file using maven. It also runs the Main orthoinference process as a 'sub-stage'.
 		// This was due to a restriction in iterating over a list of species names. To iterate, you need to first have a 'stage > steps > script' hierarchy.
 		// At the script level, you can iterate over a list and then create new stages from this iteration. The choice was between an empty stage or to do a sub-stage.
@@ -47,7 +65,11 @@ pipeline{
 				// It takes all Human Reaction instances in the database and attempts to project each Reaction to each species by
 				// stripping them down to the reaction's constituent proteins, checks if the protein homolog exists for that species, and infers it in Reactome's data model.
 				// If enough proteins (>= 75%) are inferrable in a Reaction, then it is created and stored in the database for this release. This is done from scratch each time.
+				def orthoinferencesDir = "orthoinferences"
 				script{
+					sh "mkdir -p output && rm -rf output/*"
+                                        sh "mkdir -p ${orthoinferencesDir} && rm -rf ${orthoinferencesDir}/*"
+					
 					speciesList = ['mmus', 'rnor', 'cfam', 'btau', 'sscr', 'drer', 'xtro', 'ggal', 'dmel', 'cele', 'ddis', 'spom', 'scer', 'pfal']
 					for (species in speciesList) {
 						stage("Main: Infer ${species}"){
@@ -57,7 +79,26 @@ pipeline{
 									sh "git checkout src/main/resources/log4j2.xml"
 									sh "sed -i -e 's/OrthoInference/${species}-OrthoInference/g' src/main/resources/log4j2.xml"
 									utils.buildJarFile()
-									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
+									sh """
+                                                                           docker run \\
+									     -v /var/run/mysqld/mysqld.sock:/var/run/mysqld/mysqld.sock \\
+									     -v \$(pwd)/output:/output \\
+	                                                                     -v \$(pwd)/logs:/logs \\
+								             -v \$(pwd)/$orthoinferencesDir:/orthoinference \\
+									     --net=host \\
+									     --name ${CONT_NAME} \\
+									     ${ECR_URL}:latest \\
+									      /bin/bash -c "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species} && mv eligible* inferred* orthoinference/"
+	                                                                """
+	                                                                sh """
+								           set -e
+								           logfile=\$(ls logs/OrthoInference-*.log 2>/dev/null | head -n 1)
+                                                                           if [ -n "\$logfile" ]; then
+                                                                               mv "\$logfile" "logs/${species}-\$(basename \$logfile)"
+                                                                           else
+                                                                               echo "No log file found to rename."
+                                                                           fi
+									"""
 								}
 							}
 						}
@@ -71,7 +112,7 @@ pipeline{
 				script{
 					def releaseVersion = utils.getReleaseVersion()
 					sh "./formatOrthoinferenceReport.sh --release ${releaseVersion}"
-					def inferenceReportFilename = "report_ortho_inference_test_reactome_${releaseVersion}_sorted.txt"
+					def inferenceReportFilename = "output/report_ortho_inference_test_reactome_${releaseVersion}_sorted.txt"
 					sh "cp ${inferenceReportFilename} ${env.WEBSITE_FILES_UPDATE_ABS_PATH}/"
 					dir("${env.WEBSITE_FILES_UPDATE_ABS_PATH}"){
 						// Creates hard-link of sorted report_ortho_inference file, in website_files_update folder.
@@ -81,7 +122,7 @@ pipeline{
 				}
 			}
 		}
-		// This stage downloads the previous releases orthoinference files (eligible, inferred), and outputs line count differences between them.
+		// This stage downloads the previous releases' orthoinference files (eligible, inferred), and outputs line count differences between them.
 		stage('Post: Orthoinference file line counts') {
 		    steps{
 		        script{
@@ -91,8 +132,7 @@ pipeline{
 		            def currentDir = pwd()
 		            
 			    // Create the 'orthoinferences' and 'previousReleaseVersion' directories
-		            sh "mkdir -p ${orthoinferencesDir} ${previousReleaseVersion}"
-		            sh "mv eligible* inferred* ${orthoinferencesDir}/"
+		            sh "mkdir -p ${previousReleaseVersion}"
 		            sh "aws s3 --recursive --no-progress cp s3://reactome/private/releases/${previousReleaseVersion}/orthoinference/data/orthoinferences/ ${previousReleaseVersion}/"
 		            sh "gunzip ${previousReleaseVersion}/*"
 	                    utils.outputLineCountsOfFilesBetweenFolders("$orthoinferencesDir", "$previousReleaseVersion", "$currentDir")
@@ -110,11 +150,11 @@ pipeline{
 				}
 			}
 		}
-		// This stage generates the graph database using the graph-importer module, and replaces the current graph db with it.
+		// This stage generates the graph database using the graph-importer module, and replaces the current graph database with it.
 		stage('Post: Generate Graph Database'){
 			steps{
 				script{
-					// Gets a copy of 'changeGraphDatabase', which Jenkins can execute as sudo. Changes permissions of file to user read/write only.
+					// Gets a copy of 'changeGraphDatabase', which Jenkins can execute as sudo. Change the permissions of the file to user read/write only.
 					utils.cloneOrUpdateLocalRepo("release-jenkins-utils")
 					sh "cp -f release-jenkins-utils/scripts/changeGraphDatabase.sh ${env.JENKINS_HOME_PATH}"
 					sh "chmod 700 ${env.JENKINS_HOME_PATH}/changeGraphDatabase.sh"
