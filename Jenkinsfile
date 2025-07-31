@@ -58,7 +58,7 @@ pipeline{
 									sh "git checkout src/main/resources/log4j2.xml"
 									sh "sed -i -e 's/OrthoInference/${species}-OrthoInference/g' src/main/resources/log4j2.xml"
 									utils.buildJarFile()
-									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar --speciesCode ${species}"
+									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar --speciesCode=${species}"
 								}
 							}
 						}
