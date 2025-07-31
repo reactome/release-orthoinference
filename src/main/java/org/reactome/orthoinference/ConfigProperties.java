@@ -1,72 +1,50 @@
 package org.reactome.orthoinference;
 
 import org.gk.persistence.MySQLAdaptor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.boot.ApplicationArguments;
 
 import java.sql.SQLException;
 
 /**
  * @author Joel Weiser (joel.weiser@oicr.on.ca)
- *         Created 1/9/2024
+ *      Created 1/9/2024
  */
 @Configuration
+@EnableConfigurationProperties(ConfigProperties.OrthoinferenceProps.class)
 public class ConfigProperties {
-    @Value("${user}")
-    private String user;
-    @Value("${password}")
-    private String password;
-    @Value("${currentDbName}")
-    private String currentDbName;
-    @Value("${previousDbName}")
-    private String previousDbName;
-    @Value("${host}")
-    private String host;
-    @Value("${port}")
-    private int port;
 
-    @Value("${pathToSpeciesConfig}")
-    private String pathToSpeciesConfig;
-    @Value("${pathToOrthopairs}")
-    private String pathToOrthopairs;
+    private final OrthoinferenceProps props;
 
-    @Value("${dateOfRelease}")
-    private String dateOfRelease;
-    @Value("${releaseNumber}")
-    private int releaseNumber;
-    @Value("${personId}")
-    private long personId;
-
-    @Value("${sourceSpeciesCode}")
-    private String sourceSpeciesCode;
-
-
-    public ConfigProperties() {}
+    public ConfigProperties(OrthoinferenceProps props) {
+        this.props = props;
+    }
 
     @Lazy
     @Bean(name = "currentDBA")
     public MySQLAdaptor getCurrentDBA() throws SQLException {
-        return getDBA(currentDbName);
+        return getDBA(props.getCurrentDbName());
     }
 
     public MySQLAdaptor getPreviousDBA() throws SQLException {
-        return getDBA(previousDbName);
+        return getDBA(props.getPreviousDbName());
     }
 
     public int getReleaseVersion() {
-        return this.releaseNumber;
+        return props.getReleaseNumber();
     }
 
     @Bean(name = "pathToSpeciesConfig")
     public String getPathToSpeciesConfig() {
-        return this.pathToSpeciesConfig != null ? this.pathToSpeciesConfig : "src/main/resources/Species.json";
+        return props.getPathToSpeciesConfig() != null ? props.getPathToSpeciesConfig() : "src/main/resources/Species.json";
     }
 
     public String getPathToOrthopairs() {
-        return this.pathToOrthopairs != null ? this.pathToOrthopairs : "orthopairs";
+        return props.getPathToOrthopairs() != null ? props.getPathToOrthopairs() : "orthopairs";
     }
 
     public SpeciesConfig getSpeciesConfig() {
@@ -74,15 +52,15 @@ public class ConfigProperties {
     }
 
     public String getDateOfRelease() {
-        return this.dateOfRelease;
+        return props.getDateOfRelease();
     }
 
     public long getPersonId() {
-        return this.personId;
+        return props.getPersonId();
     }
 
     public String getSourceSpeciesCode() {
-        return this.sourceSpeciesCode;
+        return props.getSourceSpeciesCode();
     }
 
     @Bean(name = "targetSpeciesCode")
@@ -96,6 +74,74 @@ public class ConfigProperties {
     }
 
     private MySQLAdaptor getDBA(String dbName) throws SQLException {
-        return new MySQLAdaptor(this.host,dbName,this.user,this.password,this.port);
+        return new MySQLAdaptor(props.getHost(), dbName, props.getUser(), props.getPassword(), props.getPort());
+    }
+
+    @ConfigurationProperties(prefix = "orthoinference")
+    public static class OrthoinferenceProps {
+        private String user;
+        private String password;
+        private String currentDbName;
+        private String previousDbName;
+        private String host;
+        private int port;
+        private String pathToSpeciesConfig;
+        private String pathToOrthopairs;
+        private String dateOfRelease;
+        private int releaseNumber;
+        private long personId;
+        private String sourceSpeciesCode;
+
+        public String getUser() {
+            return this.user;
+        }
+
+        public String getPassword() {
+            return this.password;
+        }
+
+        public String getCurrentDbName() {
+            return this.currentDbName;
+        }
+
+        public String getPreviousDbName() {
+            return this.previousDbName;
+        }
+
+        public String getHost() {
+            return this.host;
+        }
+
+        public void setHost(String host) {
+            this.host = host;
+        }
+
+        public int getPort() {
+            return this.port;
+        }
+
+        public String getPathToSpeciesConfig() {
+            return this.pathToSpeciesConfig;
+        }
+
+        public String getPathToOrthopairs() {
+            return this.pathToOrthopairs;
+        }
+
+        public String getDateOfRelease() {
+            return this.dateOfRelease;
+        }
+
+        public int getReleaseNumber() {
+            return this.releaseNumber;
+        }
+
+        public long getPersonId() {
+            return this.personId;
+        }
+
+        public String getSourceSpeciesCode() {
+            return this.sourceSpeciesCode;
+        }
     }
 }
