@@ -24,7 +24,7 @@ pipeline{
 					def releaseVersion = utils.getReleaseVersion()
 					sh "mkdir -p orthopairs"
 					sh "aws s3 --no-progress cp --recursive ${env.S3_RELEASE_DIRECTORY_URL}/${releaseVersion}/orthopairs/data/orthopairs/ ./orthopairs/"
-					sh "gunzip orthopairs/*"
+					sh "gunzip -f orthopairs/*"
 				}
 			}
 		}
