@@ -24,7 +24,7 @@ pipeline{
 					def releaseVersion = utils.getReleaseVersion()
 					sh "mkdir -p orthopairs"
 					sh "aws s3 --no-progress cp --recursive ${env.S3_RELEASE_DIRECTORY_URL}/${releaseVersion}/orthopairs/data/orthopairs/ ./orthopairs/"
-					sh "gunzip orthopairs/*"
+					sh "gunzip -f orthopairs/*.gz"
 				}
 			}
 		}
@@ -53,11 +53,12 @@ pipeline{
 						stage("Main: Infer ${species}"){
 							script{
 								withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
+									sh "ln -sf $ConfigFile src/main/resources/application.properties"
 									// Changes name of output log files to include 4-letter species name, for easier file management.
 									sh "git checkout src/main/resources/log4j2.xml"
 									sh "sed -i -e 's/OrthoInference/${species}-OrthoInference/g' src/main/resources/log4j2.xml"
 									utils.buildJarFile()
-									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar $ConfigFile ${species}"
+									sh "java -Xmx${env.JAVA_MEM_MAX}m -jar target/orthoinference-*-jar-with-dependencies.jar --speciesCode ${species}"
 								}
 							}
 						}

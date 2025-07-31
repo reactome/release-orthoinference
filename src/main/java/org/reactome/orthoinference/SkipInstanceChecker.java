@@ -39,7 +39,7 @@ public class SkipInstanceChecker {
 	}
 
 	// Skip orthoinference of this instance if:
-	public boolean checkIfInstanceShouldBeSkipped(GKInstance reactionInst) throws Exception {
+	public boolean instanceShouldBeSkipped(GKInstance reactionInst) throws Exception {
 		// it is found in skiplist array
 		if (getSkipList().contains(reactionInst.getDBID())) {
 			logger.info(reactionInst + " is in skipList -- skipping");
