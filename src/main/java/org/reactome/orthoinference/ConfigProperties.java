@@ -87,6 +87,51 @@ public class ConfigProperties {
         private int port;
         private String pathToSpeciesConfig;
         private String pathToOrthopairs;
+
+        public void setUser(String user) {
+            this.user = user;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+
+        public void setCurrentDbName(String currentDbName) {
+            this.currentDbName = currentDbName;
+        }
+
+        public void setPreviousDbName(String previousDbName) {
+            this.previousDbName = previousDbName;
+        }
+
+        public void setPort(int port) {
+            this.port = port;
+        }
+
+        public void setPathToSpeciesConfig(String pathToSpeciesConfig) {
+            this.pathToSpeciesConfig = pathToSpeciesConfig;
+        }
+
+        public void setPathToOrthopairs(String pathToOrthopairs) {
+            this.pathToOrthopairs = pathToOrthopairs;
+        }
+
+        public void setDateOfRelease(String dateOfRelease) {
+            this.dateOfRelease = dateOfRelease;
+        }
+
+        public void setReleaseNumber(int releaseNumber) {
+            this.releaseNumber = releaseNumber;
+        }
+
+        public void setPersonId(long personId) {
+            this.personId = personId;
+        }
+
+        public void setSourceSpeciesCode(String sourceSpeciesCode) {
+            this.sourceSpeciesCode = sourceSpeciesCode;
+        }
+
         private String dateOfRelease;
         private int releaseNumber;
         private long personId;
