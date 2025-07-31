@@ -53,6 +53,7 @@ pipeline{
 						stage("Main: Infer ${species}"){
 							script{
 								withCredentials([file(credentialsId: 'Config', variable: 'ConfigFile')]){
+									sh "ln -sf $ConfigFile src/main/resources/application.properties"
 									// Changes name of output log files to include 4-letter species name, for easier file management.
 									sh "git checkout src/main/resources/log4j2.xml"
 									sh "sed -i -e 's/OrthoInference/${species}-OrthoInference/g' src/main/resources/log4j2.xml"
