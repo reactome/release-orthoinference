@@ -3,43 +3,37 @@ package org.reactome.orthoinference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
-import static org.gk.model.ReactomeJavaConstants.*;
+import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.GKSchemaClass;
-import org.gk.schema.InvalidAttributeException;
-import org.gk.schema.InvalidAttributeValueException;
 import org.gk.schema.SchemaClass;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 @Component
-public class OrthologousEntityGenerator {
+public class OrthologousEntityGenerator implements OrthoEntityInferrer {
 	
 	private static final Logger logger = LogManager.getLogger();
 
+	private EntitySetInferrer entitySetInferrer;
+	private ComplexPolymerInferrer complexPolymerInferrer;
 	private EWASInferrer ewasInferrer;
 	private InstanceUtilities instanceUtilities;
 	private MySQLAdaptor dba;
 
-	private GKInstance complexSummationInst;
+	//private GKInstance complexSummationInst;
 
 
 	private static GKInstance nullInst = null;
 	private static Map<GKInstance, GKInstance> orthologousEntityIdenticals = new HashMap<>();
 	private static Map<GKInstance, GKInstance> homolEWASIdenticals = new HashMap<>();
-	private static Map<GKInstance, GKInstance> complexPolymerIdenticals = new HashMap<>();
-	private static Map<GKInstance, GKInstance> inferredEntitySetIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> definedSetIdenticals = new HashMap<>();
-	private static Map<String,GKInstance> complexIdenticals = new HashMap<>();
-	private static Map<String,GKInstance> entitySetIdenticals = new HashMap<>();
 
 
 
@@ -53,24 +47,23 @@ public class OrthologousEntityGenerator {
 */
 	public OrthologousEntityGenerator(
 		@Qualifier("currentDBA") MySQLAdaptor dba,
+		ComplexPolymerInferrer complexPolymerInferrer,
+		EntitySetInferrer entitySetInferrer,
 		EWASInferrer ewasInferrer,
 		InstanceUtilities instanceUtilities
 	) throws Exception {
 		this.dba = dba;
+		this.complexPolymerInferrer = complexPolymerInferrer;
+		this.entitySetInferrer = entitySetInferrer;
 		this.ewasInferrer = ewasInferrer;
 		this.instanceUtilities = instanceUtilities;
-		this.complexSummationInst = getComplexSummationInstance();
 	}
 
+	@Override
 	public GKInstance createOrthoEntity(GKInstance entityInst, boolean override) throws Exception {
 		logger.info("Attempting PE inference: " + entityInst);
-		GKInstance infEntityInst = null;
-		if (!entityInst.getSchemClass().isValidAttribute(species)) {
-			// This used to have a conditional statement based on the returned value of the 'check_intracellular'
-			// function.
-			// That function doesn't exist anymore (only seemed to apply to the 'mtub' species, which hasn't been
-			// inferred for a while).  Since the instance is species-agnostic, just returns the original instance.
-			logger.info("Could not find valid species attribute, returning original instance: " + entityInst);
+
+		if (!hasSpeciesAttribute(entityInst)) {
 			return entityInst;
 		}
 
@@ -79,50 +72,71 @@ public class OrthologousEntityGenerator {
 			return orthologousEntityIdenticals.get(entityInst);
 		}
 
-		// Checks that a species attribute exists in either the current instance or in constituent instances.
-		if (!SpeciesCheckUtility.hasOrContainsSpeciesAttribute(entityInst)) {
-			logger.info("No species attribute found in PE, using original instance");
-			infEntityInst = entityInst;
-		// Will either infer an EWAS or return a mock GEE instance if needed (i.e. if override is currently 'True')
-		} else if (entityInst.getSchemClass().isa(GenomeEncodedEntity)) {
-			// TODO: Try using 'isa' here instead of contains
-			if (entityInst.getSchemClass().toString().contains(EntityWithAccessionedSequence)) {
-				infEntityInst = createInfEWAS(entityInst, override);
-			} else {
-				if (override) {
-					logger.info("Mock GEE instance needed");
-					GKInstance mockedInst = instanceUtilities.createMockGKInstance(entityInst);
-					return mockedInst;
-				}
-			}
-		// Infers Complex or Polymer instances -- Will recursively call createOrthoEntity with override on its
-		// constituent PEs
-		} else if (entityInst.getSchemClass().isa(Complex) || entityInst.getSchemClass().isa(Polymer)) {
-			infEntityInst = createInfComplexPolymer(entityInst, override);
-		// Infers EntitySetInstances that themselves contain the species attribute (Not just constituent instances as
-		// when hasSpecies is called above), returning the current instance if it doesn't.
-		} else if (entityInst.getSchemClass().isa(EntitySet)) {
-			if (entityInst.getAttributeValue(species) != null) {
-				infEntityInst = createInfEntitySet(entityInst, override);
-			} else {
-				logger.info("EntitySet has no species attribute, using original instance: " + entityInst);
-				infEntityInst = entityInst;
-			}
-		// Handles SimpleEntities by returning the current instance. The idea behind this is that SimpleEntities
-		// wouldn't need to be inferred since they wouldn't change between species {Note from infer_events.pl --
-		// David Croft}.
-		} else if (entityInst.getSchemClass().isa(SimpleEntity)) {
-			logger.info("PE is a SimplyEntity, using original instance");
-			infEntityInst = entityInst;
-		} else {
-			logger.warn("Unknown PhysicalEntity class: " + entityInst.getClass());
-		}
+		GKInstance infEntityInst = inferEntityBasedOnType(entityInst, override);
+
 		if (override) {
 			return infEntityInst;
 		}
+
 		orthologousEntityIdenticals.put(entityInst, infEntityInst);
-			logger.info("PE inference completed: " + entityInst);
-			return infEntityInst;
+		logger.info("PE inference completed: " + entityInst);
+		return infEntityInst;
+	}
+
+	private GKInstance inferEntityBasedOnType(GKInstance entityInst, boolean override) throws Exception {
+		// No species attribute case
+		if (!SpeciesCheckUtility.hasOrContainsSpeciesAttribute(entityInst)) {
+			logger.info("No species attribute found in PE, using original instance");
+			return entityInst;
+		}
+
+		// Handle different entity types
+		if (entityInst.getSchemClass().isa(ReactomeJavaConstants.GenomeEncodedEntity)) {
+			return handleGenomeEncodedEntity(entityInst, override);
+		}
+
+		if (entityInst.getSchemClass().isa(ReactomeJavaConstants.Complex) ||
+			entityInst.getSchemClass().isa(ReactomeJavaConstants.Polymer)) {
+			return complexPolymerInferrer.createInfComplexPolymer(entityInst, override);
+		}
+
+		if (entityInst.getSchemClass().isa(ReactomeJavaConstants.EntitySet)) {
+			return handleEntitySet(entityInst, override);
+		}
+
+		if (entityInst.getSchemClass().isa(ReactomeJavaConstants.SimpleEntity)) {
+			logger.info("PE is a SimplyEntity, using original instance");
+			return entityInst;
+		}
+
+		logger.warn("Unknown PhysicalEntity class: " + entityInst.getClass());
+		return null;
+	}
+
+	private GKInstance handleGenomeEncodedEntity(GKInstance entityInst, boolean override) throws Exception {
+		if (entityInst.getSchemClass().isa(ReactomeJavaConstants.EntityWithAccessionedSequence)) {
+			return createInfEWAS(entityInst, override);
+		}
+
+		if (override) {
+			logger.info("Mock GEE instance needed");
+			return instanceUtilities.createMockGKInstance(entityInst);
+		}
+
+		return null;
+	}
+
+	private GKInstance handleEntitySet(GKInstance entityInst, boolean override) throws Exception {
+		if (entityInst.getAttributeValue(ReactomeJavaConstants.species) != null) {
+			return entitySetInferrer.createInfEntitySet(entityInst, override);
+		}
+
+		logger.info("EntitySet has no species attribute, using original instance: " + entityInst);
+		return entityInst;
+	}
+
+	private boolean hasSpeciesAttribute(GKInstance instance) {
+		return instance.getSchemClass().isValidAttribute(ReactomeJavaConstants.species);
 	}
 	
 	// Function that first tries to infer any EWAS' associated with the instance. For those that have more than 1
@@ -130,315 +144,106 @@ public class OrthologousEntityGenerator {
 	// it will either return null or, if override is set, return a mock instance.
 	private GKInstance createInfEWAS(GKInstance ewasInst, boolean override) throws Exception {
 		if (homolEWASIdenticals.get(ewasInst) == null) {
-			// Attempt to infer the EWAS 
+			// Attempt to infer the EWAS
 			List<GKInstance> infEWASInstances = getEWASInferrer().inferEWAS(ewasInst);
-			// If number of EWAS instances is greater than 1, then it is considered a DefinedSet. A new inferred
-			// instance with definedSet class is created.
-			if (infEWASInstances.size() > 1) {
-				logger.info("Multiple EWAS homologues produced for single EWAS. Converting to DefinedSet");
-				SchemaClass definedSetClass = dba.getSchema().getClassByName(DefinedSet);
-				GKInstance infDefinedSetInst = new GKInstance(definedSetClass);
-				infDefinedSetInst.setDbAdaptor(dba);
-				infDefinedSetInst.addAttributeValue(created, getInstanceEdit());
-				String definedSetName = "Homologues of " + ewasInst.getAttributeValue(name);
-				infDefinedSetInst.addAttributeValue(name, definedSetName);
-				
-				GKInstance compartmentInstGk = (GKInstance) ewasInst.getAttributeValue(compartment);
-				if (compartmentInstGk.getSchemClass().isa(Compartment)) {
-					infDefinedSetInst.addAttributeValue(compartment, ewasInst.getAttributeValue(compartment));
-				} else {
-					GKInstance newCompartmentInst = instanceUtilities.createCompartmentInstance(compartmentInstGk);
-					infDefinedSetInst.addAttributeValue(compartment, newCompartmentInst);
-				}
-				
-				infDefinedSetInst.addAttributeValue(species, getSpeciesInstance());
-				infDefinedSetInst.addAttributeValue(hasMember, infEWASInstances);
-				String definedSetDisplayName = (String) infDefinedSetInst.getAttributeValue(name) +
-					" [" +((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
-				infDefinedSetInst.setAttributeValue(_displayName, definedSetDisplayName);
-				// Caching based on an instance's defining attributes. This reduces the number of
-				// 'checkForIdenticalInstance' calls, which is slow.
-				String cacheKey = instanceUtilities.getCacheKey(
-					(GKSchemaClass) infDefinedSetInst.getSchemClass(), infDefinedSetInst);
-				if (definedSetIdenticals.get(cacheKey) != null) {
-					infDefinedSetInst = definedSetIdenticals.get(cacheKey);
-				} else {
-					infDefinedSetInst = instanceUtilities.checkForIdenticalInstances(infDefinedSetInst, ewasInst);
-					definedSetIdenticals.put(cacheKey, infDefinedSetInst);
-				}
-				infDefinedSetInst = instanceUtilities.addAttributeValueIfNecessary(
-					infDefinedSetInst, ewasInst, inferredFrom);
-				dba.updateInstanceAttribute(infDefinedSetInst, inferredFrom);
-				ewasInst = instanceUtilities.addAttributeValueIfNecessary(ewasInst, infDefinedSetInst, inferredTo);
-				dba.updateInstanceAttribute(ewasInst, inferredTo);
-				homolEWASIdenticals.put(ewasInst, infDefinedSetInst);
-				logger.info("Successfully converted to DefinedSet");
-			} else if (infEWASInstances.size() == 1) {
-				homolEWASIdenticals.put(ewasInst, infEWASInstances.get(0));
-			} else {
-				if (override) {
-					logger.info("Mock EWAS instance needed");
-					return instanceUtilities.createMockGKInstance(ewasInst);
-				} else {
-					return nullInst;
-				}
+
+			if (handleInferredEWASInstances(ewasInst, infEWASInstances, override)) {
+				return homolEWASIdenticals.get(ewasInst);
 			}
-		} else {
-			logger.info("Inferred EWAS already exists");
+
+			if (override) {
+				logger.info("Mock EWAS instance needed");
+				return instanceUtilities.createMockGKInstance(ewasInst);
+			}
+			return nullInst;
 		}
+
+		logger.info("Inferred EWAS already exists");
 		return homolEWASIdenticals.get(ewasInst);
 	}
-	// Infers Complex or Polymer instances. These instances are generally comprised of more than 1 PhysicalEntity,
-	// and calls 'createOrthoEntity' for each one. Complex/Polymer instances are also subject to the
-	// 'countDistinctProteins' function. The result from this needs to have at least 75% of total proteins to be
-	// inferrable for inference to continue.
-	private GKInstance createInfComplexPolymer(GKInstance complexInst, boolean override)
-		throws InvalidAttributeException, InvalidAttributeValueException, Exception {
-		if (complexPolymerIdenticals.get(complexInst) == null) {
-			List<Integer> complexProteinCounts = getProteinCountUtility().getDistinctProteinCounts(complexInst);
-			int complexTotalProteinCounts = complexProteinCounts.get(0);
-			int complexInferrableProteinCounts = complexProteinCounts.get(1);
-			// int complexMax = complexProteinCounts.get(2); // Doesn't get used, since MaxHomologue isn't a valid
-			// attribute anymore.
 
-			// Filtering based on results of ProteinCounts and threshold (currently hard-coded at 75%).
-			int percent = 0;
-			if (complexTotalProteinCounts > 0) {
-				percent = (complexInferrableProteinCounts * 100)/complexTotalProteinCounts;
-			}
-			if (!override) {
-				if ((complexTotalProteinCounts > 0 && complexInferrableProteinCounts == 0) || percent < 75)
-				{
-					logger.info("Complex/Polymer protein count is below 75% threshold (" + percent + "%) -- " +
-						"terminating inference");
-					return nullInst;
-				}
-			}
-			logger.info("Complex protein counts. Total: " + complexTotalProteinCounts +
-				"  Inferrable: " + complexInferrableProteinCounts);
-			GKInstance infComplexInst = instanceUtilities.createNewInferredGKInstance(complexInst);
-			infComplexInst.addAttributeValue(summation, complexSummationInst);
-			infComplexInst.addAttributeValue(name, complexInst.getAttributeValue(name));
-			List<GKInstance> infComponentInstances = new ArrayList<>();
-			// Inference handling is different depending on if it is a Complex or a Polymer. Complexes will infer all
-			// 'components' while Polymers will infer all 'repeatedUnits'.
-			// TODO: Log the ratio of inferred complex/polyer from human?
-			if (complexInst.getSchemClass().isa(Complex)) {
-				Collection<GKInstance> componentInstances = complexInst.getAttributeValuesList(hasComponent);
-				logger.info("Complex components: " + componentInstances);
-				for (GKInstance componentInst : componentInstances) {
-					infComponentInstances.add(createOrthoEntity(componentInst, true));
-				}
-				infComplexInst.addAttributeValue(hasComponent, infComponentInstances);
-			} else  if (complexInst.getSchemClass().isa(Polymer)) {
-				Collection<GKInstance> repeatedUnitInstances = complexInst.getAttributeValuesList(repeatedUnit);
-				logger.info("Polymer repeated units: " + repeatedUnitInstances);
-				for (GKInstance repeatedUnitInst : repeatedUnitInstances) {
-					infComponentInstances.add(createOrthoEntity(repeatedUnitInst, true));
-				}
-				infComplexInst.addAttributeValue(repeatedUnit, infComponentInstances);
-			} else {
-				logger.warn(complexInst + " is not a Complex or a Polymer");
-				return nullInst;
-			}
-			infComplexInst.setAttributeValue(_displayName, complexInst.getAttributeValue(_displayName));
-			
-			// Caching based on an instance's defining attributes. This reduces the number of
-			// 'checkForIdenticalInstance' calls, which is slow.
-			String cacheKey = instanceUtilities.getCacheKey(
-				(GKSchemaClass) infComplexInst.getSchemClass(), infComplexInst);
-			if (complexIdenticals.get(cacheKey) != null) {
-				infComplexInst = complexIdenticals.get(cacheKey);
-			} else {
-				infComplexInst = instanceUtilities.checkForIdenticalInstances(infComplexInst, complexInst);
-				complexIdenticals.put(cacheKey, infComplexInst);
-			}
+	private boolean handleInferredEWASInstances(GKInstance ewasInst, List<GKInstance> infEWASInstances, boolean override)
+		throws Exception {
 
-			infComplexInst = instanceUtilities.addAttributeValueIfNecessary(infComplexInst, complexInst, inferredFrom);
-			dba.updateInstanceAttribute(infComplexInst, inferredFrom);
-			complexInst = instanceUtilities.addAttributeValueIfNecessary(complexInst, infComplexInst, inferredTo);
-			dba.updateInstanceAttribute(complexInst, inferredTo);
-			
-			if (override) {
-				return infComplexInst;
-			} 
-			complexPolymerIdenticals.put(complexInst, infComplexInst);
-		} else {
-			logger.info("Inferred Complex/Polymer already exists");
+		if (infEWASInstances.size() > 1) {
+			handleMultipleEWASHomologues(ewasInst, infEWASInstances);
+			return true;
+		} else if (infEWASInstances.size() == 1) {
+			homolEWASIdenticals.put(ewasInst, infEWASInstances.get(0));
+			return true;
 		}
-		return complexPolymerIdenticals.get(complexInst);
-	}
-	
-	// EntitySet inference function. This function will initially call createOrthoEntity on all 'members' before
-	// filtering by the type of EntitySet (Open, Candidate, or Defined Sets) and completing a specific inference.
-	// Important to note is that while there are multiple cases where createOrthoEntity is called (for members and
-	// candidates) in createInfEntitySet, the override functionality is not used here.  Presumably, this is because
-	// the instances aren't a constituent part of a single instance (as in Complexes), but rather are stand-alone ones
-	// that also happen to be included in a Set.  This means they should be subject  to the stringency of a typical
-	// instance, rather then using override to create mock instances that allow an instance to be inferred more easily.
-	@SuppressWarnings("unchecked")
-	private GKInstance createInfEntitySet(GKInstance entitySetInst, boolean override)
-		throws InvalidAttributeException, Exception {
-		if (inferredEntitySetIdenticals.get(entitySetInst) == null) {
-			// Equivalent to infer_members function in infer_events.pl
-			Set<String> existingMemberInstances = new HashSet<>();
-			List<GKInstance> infMembersList = new ArrayList<>();
-			Collection<GKInstance> memberInstances =
-				(Collection<GKInstance>) entitySetInst.getAttributeValuesList(hasMember);
-			if (!entitySetInst.getSchemClass().isa(CandidateSet)) {
-				logger.info("Total member instances: " + memberInstances.size());
-				logger.info("Member instances: " + memberInstances);
-			}
-			for (GKInstance memberInst : memberInstances) {
-				GKInstance infMemberInst = createOrthoEntity(memberInst, false);
-				if (infMemberInst != null &&
-					!existingMemberInstances.contains(infMemberInst.getAttributeValue(name).toString())) {
-					existingMemberInstances.add(infMemberInst.getAttributeValue(name).toString());
-					infMembersList.add(infMemberInst);
-				}
-			}
-			if (!entitySetInst.getSchemClass().isa(CandidateSet)) {
-				logger.info("Total number of inferred members: " +
-					infMembersList.size() + "/" + memberInstances.size());
-			}
-
-			// Begin inference of EntitySet
-			GKInstance infEntitySetInst = instanceUtilities.createNewInferredGKInstance(entitySetInst);
-			infEntitySetInst.addAttributeValue(name, entitySetInst.getAttributeValuesList(name));
-			infEntitySetInst.addAttributeValue(hasMember, infMembersList);
-
-			// Begin specific inference process for each type of DefinedSet entity.
-			List<Integer> entitySetProteinCounts = getProteinCountUtility().getDistinctProteinCounts(entitySetInst);
-			int entitySetTotalCount = entitySetProteinCounts.get(0);
-			int entitySetInferrableCount = entitySetProteinCounts.get(1);
-			// int entitySetMax = entitySetProteinCounts.get(2);  // Doesn't get used, since MaxHomologue isn't a
-			// valid attribute anymore
-			
-			// Filtering based on ProteinCount results
-			if (!override && entitySetTotalCount > 0 && entitySetInferrableCount == 0) {
-				logger.info("No distinct proteins found in EntitySet -- terminating inference");
-				return nullInst;
-			}
-			
-			if (entitySetInst.getSchemClass().isa(CandidateSet)) {
-				Set<String> existingCandidateInstances = new HashSet<>();
-				List<GKInstance> infCandidatesList = new ArrayList<>();
-				// Equivalent to infer_members function in infer_events.pl
-				Collection<GKInstance> candidateInstances = (Collection<GKInstance>)
-					entitySetInst.getAttributeValuesList(hasCandidate);
-				logger.info("Total candidate instances: " + candidateInstances.size());
-				logger.info("Candidate instances: " + candidateInstances);
-				for (GKInstance candidateInst : candidateInstances) {
-					GKInstance infCandidateInst = createOrthoEntity(candidateInst, false);
-					if (infCandidateInst != null &&
-						!existingMemberInstances.contains(infCandidateInst.getAttributeValue(name).toString()) &&
-						!existingCandidateInstances.contains(infCandidateInst.getAttributeValue(name).toString())) {
-						existingCandidateInstances.add(infCandidateInst.getAttributeValue(name).toString());
-						infCandidatesList.add(infCandidateInst);
-					}
-				}
-				logger.info("Total number of inferred candidates: " +
-					infCandidatesList.size() + "/" + candidateInstances.size());
-				// Handling of CandidateSets
-				if (infCandidatesList.size() > 0) {
-					infEntitySetInst.addAttributeValue(hasCandidate, infCandidatesList);
-				} else {
-					if (infMembersList.size() != 0) {
-						if (infMembersList.size() == 1) {
-							infEntitySetInst = infMembersList.get(0);
-						} else {
-							logger.info("No candidates inferred, but there are inferred members. " +
-								"Converting to DefinedSet");
-							SchemaClass definedSetClass = dba.getSchema().getClassByName(DefinedSet);
-							GKInstance infDefinedSetInst = new GKInstance(definedSetClass);
-							infDefinedSetInst.setDbAdaptor(dba);
-							infDefinedSetInst.addAttributeValue(created, getInstanceEdit());
-							infDefinedSetInst.setAttributeValue(name, infEntitySetInst.getAttributeValuesList(name));
-							infDefinedSetInst.setAttributeValue(hasMember, infMembersList);
-							if (entitySetInst.getSchemClass().isValidAttribute(compartment) &&
-								entitySetInst.getAttributeValue(compartment) != null) {
-								for (Object compartmentInst : entitySetInst.getAttributeValuesList(compartment)) {
-									GKInstance compartmentInstGk = (GKInstance) compartmentInst;
-									if (compartmentInstGk.getSchemClass().isa(Compartment)) {
-										infDefinedSetInst.addAttributeValue(compartment, compartmentInstGk);
-									} else {
-										GKInstance newCompartmentInst =
-											instanceUtilities.createCompartmentInstance(compartmentInstGk);
-										infDefinedSetInst.addAttributeValue(compartment, newCompartmentInst);
-									}
-								}
-							}
-							infDefinedSetInst.addAttributeValue(species, getSpeciesInstance());
-							infEntitySetInst = infDefinedSetInst;
-							logger.info("Successfully converted to DefinedSet");
-						}
-					} else {
-						if (override) {
-							logger.info("Mock CandidateSet instance needed");
-							infEntitySetInst = instanceUtilities.createMockGKInstance(entitySetInst);
-						} else {
-							return nullInst;
-						}
-					}
-				}	
-			} else if (entitySetInst.getSchemClass().isa(DefinedSet)) {
-				if (infMembersList.size() == 0) {
-					if (override) {
-						logger.info("Mock DefinedSet instance needed");
-						return instanceUtilities.createMockGKInstance(entitySetInst);
-					} else {
-						logger.info("No member instances found -- terminating inference");
-						return nullInst;
-					}
-				} else if (infMembersList.size() == 1) {
-					logger.info("Only 1 member from EntitySet was inferred, converting to PE: " +
-						infMembersList.get(0));
-					infEntitySetInst = infMembersList.get(0);
-				}
-				// If it has more than 1 member (which is the logic that would theoretically go here), nothing happens; 
-				// All members are stored in this inferred instances 'hasMember' attribute near the beginning of this
-				// function.
-			}
-			infEntitySetInst.setAttributeValue(_displayName, entitySetInst.getAttributeValue(_displayName));
-			// Caching based on an instance's defining attributes. This reduces the number of
-			// 'checkForIdenticalInstance' calls, which is slow.
-			String cacheKey = instanceUtilities.getCacheKey(
-				(GKSchemaClass) infEntitySetInst.getSchemClass(), infEntitySetInst);
-			if (entitySetIdenticals.get(cacheKey) != null) {
-				infEntitySetInst = entitySetIdenticals.get(cacheKey);
-			} else {
-				infEntitySetInst = instanceUtilities.checkForIdenticalInstances(infEntitySetInst, entitySetInst);
-				entitySetIdenticals.put(cacheKey, infEntitySetInst);
-			}
-			if (infEntitySetInst.getSchemClass().isValidAttribute(species) &&
-				entitySetInst.getAttributeValue(species) != null) {
-				infEntitySetInst = instanceUtilities.addAttributeValueIfNecessary(
-					infEntitySetInst, entitySetInst, inferredFrom);
-				dba.updateInstanceAttribute(infEntitySetInst, inferredFrom);
-				entitySetInst = instanceUtilities.addAttributeValueIfNecessary(
-					entitySetInst, infEntitySetInst, inferredTo);
-				dba.updateInstanceAttribute(entitySetInst, inferredTo);
-			}
-			if (override) {
-				return infEntitySetInst;
-			}
-			inferredEntitySetIdenticals.put(entitySetInst, infEntitySetInst);
-		} else {
-			logger.info("Inferred EntitySet already exists");
-		}
-		return inferredEntitySetIdenticals.get(entitySetInst);
+		return false;
 	}
 
-	public GKInstance getComplexSummationInstance() throws Exception {
-		GKInstance complexSummationInst = new GKInstance(dba.getSchema().getClassByName(Summation));
-		complexSummationInst.setDbAdaptor(dba);
-		complexSummationInst.addAttributeValue(created, getInstanceEdit());
-		String complexSummationText = "This complex/polymer has been computationally inferred (based on PANTHER) " +
-			"from a complex/polymer involved in an event that has been demonstrated in another species.";
-		complexSummationInst.addAttributeValue(text, complexSummationText);
-		complexSummationInst.setAttributeValue(_displayName, complexSummationText);
-		complexSummationInst = instanceUtilities.checkForIdenticalInstances(complexSummationInst, null);
-		return complexSummationInst;
+	private void handleMultipleEWASHomologues(GKInstance ewasInst, List<GKInstance> infEWASInstances)
+		throws Exception {
+
+		logger.info("Multiple EWAS homologues produced for single EWAS. Converting to DefinedSet");
+		GKInstance infDefinedSetInst = createDefinedSetForHomologues(ewasInst, infEWASInstances);
+		updateDefinedSetReferences(infDefinedSetInst, ewasInst);
+		homolEWASIdenticals.put(ewasInst, infDefinedSetInst);
+		logger.info("Successfully converted to DefinedSet");
+	}
+
+	private GKInstance createDefinedSetForHomologues(GKInstance ewasInst, List<GKInstance> infEWASInstances)
+			throws Exception {
+		SchemaClass definedSetClass = dba.getSchema().getClassByName(ReactomeJavaConstants.DefinedSet);
+		GKInstance infDefinedSetInst = new GKInstance(definedSetClass);
+		infDefinedSetInst.setDbAdaptor(dba);
+
+		// Set basic attributes
+		infDefinedSetInst.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
+		String definedSetName = "Homologues of " + ewasInst.getAttributeValue(ReactomeJavaConstants.name);
+		infDefinedSetInst.addAttributeValue(ReactomeJavaConstants.name, definedSetName);
+
+		// Handle compartment
+		setDefinedSetCompartment(infDefinedSetInst, ewasInst);
+
+		// Set species and members
+		infDefinedSetInst.addAttributeValue(ReactomeJavaConstants.species, getSpeciesInstance());
+		infDefinedSetInst.addAttributeValue(ReactomeJavaConstants.hasMember, infEWASInstances);
+
+		// Set display name
+		String definedSetDisplayName = buildDefinedSetDisplayName(infDefinedSetInst, ewasInst);
+		infDefinedSetInst.setAttributeValue(ReactomeJavaConstants._displayName, definedSetDisplayName);
+
+		return handleDefinedSetCaching(infDefinedSetInst, ewasInst);
+	}
+
+	private void setDefinedSetCompartment(GKInstance infDefinedSetInst, GKInstance ewasInst) throws Exception {
+		GKInstance compartmentInstGk = (GKInstance) ewasInst.getAttributeValue(ReactomeJavaConstants.compartment);
+		if (compartmentInstGk.getSchemClass().isa(ReactomeJavaConstants.Compartment)) {
+			infDefinedSetInst.addAttributeValue(ReactomeJavaConstants.compartment, compartmentInstGk);
+		} else {
+			GKInstance newCompartmentInst = instanceUtilities.createCompartmentInstance(compartmentInstGk);
+			infDefinedSetInst.addAttributeValue(ReactomeJavaConstants.compartment, newCompartmentInst);
+		}
+	}
+
+	private String buildDefinedSetDisplayName(GKInstance infDefinedSetInst, GKInstance ewasInst) throws Exception {
+		return infDefinedSetInst.getAttributeValue(ReactomeJavaConstants.name) +
+				" [" + ((GKInstance) ewasInst.getAttributeValue(ReactomeJavaConstants.compartment)).getDisplayName() + "]";
+	}
+
+	private GKInstance handleDefinedSetCaching(GKInstance infDefinedSetInst, GKInstance ewasInst) throws Exception {
+		String cacheKey = instanceUtilities.getCacheKey(
+				(GKSchemaClass) infDefinedSetInst.getSchemClass(), infDefinedSetInst);
+		if (definedSetIdenticals.get(cacheKey) != null) {
+			return definedSetIdenticals.get(cacheKey);
+		}
+		infDefinedSetInst = instanceUtilities.checkForIdenticalInstances(infDefinedSetInst, ewasInst);
+		definedSetIdenticals.put(cacheKey, infDefinedSetInst);
+		return infDefinedSetInst;
+	}
+
+	private void updateDefinedSetReferences(GKInstance infDefinedSetInst, GKInstance ewasInst) throws Exception {
+		infDefinedSetInst = instanceUtilities.addAttributeValueIfNecessary(
+				infDefinedSetInst, ewasInst, ReactomeJavaConstants.inferredFrom);
+		dba.updateInstanceAttribute(infDefinedSetInst, ReactomeJavaConstants.inferredFrom);
+
+		ewasInst = instanceUtilities.addAttributeValueIfNecessary(
+				ewasInst, infDefinedSetInst, ReactomeJavaConstants.inferredTo);
+		dba.updateInstanceAttribute(ewasInst, ReactomeJavaConstants.inferredTo);
 	}
 
 	private EWASInferrer getEWASInferrer() {
