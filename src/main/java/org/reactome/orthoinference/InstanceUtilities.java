@@ -53,7 +53,6 @@ public class InstanceUtilities {
 		this.proteinCountUtility = proteinCountUtility;
 	}
 
-	@Bean(name = "instanceEditInst")
 	public GKInstance getInstanceEdit() throws Exception {
 		if (instanceEdit == null) {
 			instanceEdit = InstanceEditUtils.createInstanceEdit(
