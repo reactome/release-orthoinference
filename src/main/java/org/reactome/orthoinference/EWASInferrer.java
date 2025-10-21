@@ -49,8 +49,8 @@ public class EWASInferrer {
 			logger.info("Could not infer EWAS, unable to find homologue for " + rgpIdentifier);
 			return new ArrayList<>();
 		}
-		List<GKInstance> infEWASInstances = new ArrayList<>();
 
+		List<GKInstance> infEWASInstances = new ArrayList<>();
 		// Iterate through the array of homologue mappings, attempting to infer EWAS instances for each.
 		logger.info("EWAS homologue(s): " + Arrays.toString(homologues));
 		for (String homologue : homologues) {
@@ -253,8 +253,8 @@ public class EWASInferrer {
 		GKInstance referenceDatabaseInst = getReferenceDatabase().getReferenceDatabase(getHomologueSource(homologue));
 		infReferenceGeneProductInst.addAttributeValue(ReactomeJavaConstants.referenceDatabase, referenceDatabaseInst);
 
-		// Creates ReferenceDNASequence instance from ReferenceEntity
-		List<GKInstance> inferredReferenceDNAInstances = createReferenceDNASequences(homologueId);
+		// Fetches ReferenceDNASequence from database or creates instance from ReferenceEntity
+		List<GKInstance> inferredReferenceDNAInstances = createorFetchReferenceDNASequences(homologueId);
 		infReferenceGeneProductInst.addAttributeValue(ReactomeJavaConstants.referenceGene, inferredReferenceDNAInstances);
 
 		infReferenceGeneProductInst.addAttributeValue(ReactomeJavaConstants.species, getSpeciesInstance());
@@ -313,18 +313,27 @@ public class EWASInferrer {
 
 	// Creates ReferenceGeneSequence instance based on ENSG identifier mapped to protein.
 	// Creates an instance for the primary database and an alternate, if it exists.
-	private List<GKInstance> createReferenceDNASequences(String homologueId) throws Exception {
+	private List<GKInstance> createorFetchReferenceDNASequences(String homologueId) throws Exception {
 		List<GKInstance> referenceDNAInstances = new ArrayList<>();
 		List<String> ensgIds = getMappings().getEnsEMBLGeneIdentifiers(homologueId);
 		logger.info("Gene ID(s): " + ensgIds);
 		for (String ensgId : ensgIds) {
-			referenceDNAInstances.add(createReferenceDNASequence(ensgId));
+			referenceDNAInstances.add(fetchOrCreateReferenceDNASequence(ensgId));
 			if (getReferenceDatabase().alternateReferenceDatabaseExists()) {
 				referenceDNAInstances.add(createReferenceDNASequenceWithAlternateReferenceDatabase(ensgId));
 			}
 		}
 		logger.info("Total ReferenceDNASequence instance(s) created: " + referenceDNAInstances.size());
 		return referenceDNAInstances;
+	}
+
+	private GKInstance fetchOrCreateReferenceDNASequence(String ensgId) throws Exception {
+		GKInstance referenceDNAInst = fetchReferenceDNASequence(ensgId);
+
+		if (referenceDNAInst != null) {
+			return referenceDNAInst;
+		}
+		return createReferenceDNASequence(ensgId);
 	}
 
 	private GKInstance createReferenceDNASequence(String ensgId) throws Exception {
@@ -339,6 +348,21 @@ public class EWASInferrer {
 		referenceDNAInst.setAttributeValue(ReactomeJavaConstants._displayName, "ENSEMBL:" + ensgId);
 		referenceDNAInst = instanceUtilities.checkForIdenticalInstances(referenceDNAInst, null);
 		return referenceDNAInst;
+	}
+
+	private GKInstance fetchReferenceDNASequence(String ensgId) throws Exception {
+		Collection<GKInstance> referenceDNASequences = getCurrentDBA().fetchInstanceByAttribute(
+			ReactomeJavaConstants.ReferenceDNASequence, ReactomeJavaConstants.identifier, "=", ensgId);
+		if (referenceDNASequences != null && referenceDNASequences.size() > 1) {
+			throw new RuntimeException("Found multiple ReferenceDNASequence instances with identifier " + ensgId);
+		}
+
+		if (referenceDNASequences == null || referenceDNASequences.isEmpty()) {
+			return null;
+		}
+
+		return referenceDNASequences.iterator().next();
+
 	}
 
 	private GKInstance createReferenceDNASequenceWithAlternateReferenceDatabase(String ensgId) throws Exception {
