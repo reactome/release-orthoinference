@@ -27,7 +27,7 @@ public class OrthologousEntityGenerator {
 	private static Map<String,GKInstance> complexIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> entitySetIdenticals = new HashMap<>();
 	private static Map<GKInstance, Set<GKInstance>> nonHumanParticpants = new HashMap<>();
-	private static Map<GKInstance, GKInstance> inferredSARSIdenticals = new HashMap<>();
+	private static Map<GKInstance, GKInstance> inferredZikaIdenticals = new HashMap<>();
 	private static Map<GKInstance, GKInstance> humanComplexIdenticals = new HashMap<>();
 
 	/** The heart of the OrthoInference process. This function takes PhysicalEntity (PE) instances and will infer those that are EWAS', Complexes/Polymers, or EntitySets.
@@ -54,7 +54,7 @@ public class OrthologousEntityGenerator {
 
 		GKInstance entitySpeciesInst = (GKInstance) entityInst.getAttributeValue(species);
 		if (entitySpeciesInst != null && entitySpeciesInst.getDBID().equals(48887L)) {
-			inferSARSParticipants(entityInst);
+			inferZikaParticipants(entityInst);
 			return entityInst;
 		}
 
@@ -111,23 +111,23 @@ public class OrthologousEntityGenerator {
 			return infEntityInst;
 	}
 
-	private static GKInstance inferSARSParticipants(GKInstance entityInst) throws Exception {
+	private static GKInstance inferZikaParticipants(GKInstance entityInst) throws Exception {
 
 		if (humanComplexIdenticals.get(entityInst) == null) {
 			Set<GKInstance> containedInstances = getComplexEntitySetContainedInstances(entityInst);
 
-			boolean hasContainedSARSInstance = false;
+			boolean hasContainedDengueInstance = false;
 			for (GKInstance containedInst : containedInstances) {
-				if (hasSARSSpecies(containedInst)) {
-					hasContainedSARSInstance = true;
-					if (inferredSARSIdenticals.get(containedInst) == null) {
-						GKInstance inferredSARSEntityInst = createOrthoEntity(containedInst, false);
-						inferredSARSIdenticals.put(containedInst, inferredSARSEntityInst);
+				if (hasDengueSpecies(containedInst)) {
+					hasContainedDengueInstance = true;
+					if (inferredZikaIdenticals.get(containedInst) == null) {
+						GKInstance inferredZikaEntityInst = createOrthoEntity(containedInst, false);
+						inferredZikaIdenticals.put(containedInst, inferredZikaEntityInst);
 					}
 				}
 			}
 
-			if (hasContainedSARSInstance) {
+			if (hasContainedDengueInstance) {
 				// Outputs Human Complexes/EntitySets that contain CoV-1 instances.
 //				System.out.println(entityInst);
 				GKInstance copiedHumanComplex = InstanceUtilities.createNewInferredGKInstance(entityInst);
@@ -158,8 +158,8 @@ public class OrthologousEntityGenerator {
 				List<GKInstance> components = (List<GKInstance>) copiedHumanComplex.getAttributeValuesList(hasComponent);
 				List<GKInstance> updatedComponents = new ArrayList<>();
 				for (GKInstance component : components) {
-					if (hasSARSSpecies(component)) {
-						updatedComponents.add(inferredSARSIdenticals.get(component));
+					if (hasDengueSpecies(component)) {
+						updatedComponents.add(inferredZikaIdenticals.get(component));
 					} else {
 						updatedComponents.add(component);
 					}
@@ -238,22 +238,22 @@ public class OrthologousEntityGenerator {
 		return humanComplexIdenticals.get(entityInst);
 	}
 
-	public static boolean hasSARSSpecies(GKInstance entityInst) throws Exception {
+	public static boolean hasDengueSpecies(GKInstance entityInst) throws Exception {
 		if (entityInst.getSchemClass().isValidAttribute(species)) {
 			GKInstance speciesInst = (GKInstance) entityInst.getAttributeValue(species);
-			return speciesInst != null && speciesInst.getDBID().equals(9678119L);
+			return speciesInst != null && speciesInst.getDBID().equals(3244621L);
 		}
 		return false;
 	}
 
-	private static boolean hasContainedSARSInstance(GKInstance subEntityInst) throws Exception {
-		boolean hasContainedSARSInstance = false;
+	private static boolean hasContainedDengueInstance(GKInstance subEntityInst) throws Exception {
+		boolean hasContainedDengueInstance = false;
 		for (GKInstance subContainedInst : getComplexEntitySetContainedInstances(subEntityInst)) {
-			if (hasSARSSpecies(subContainedInst)) {
-				hasContainedSARSInstance = true;
+			if (hasDengueSpecies(subContainedInst)) {
+				hasContainedDengueInstance = true;
 			}
 		}
-		return hasContainedSARSInstance;
+		return hasContainedDengueInstance;
 	}
 
 	private static Set<GKInstance> getComplexEntitySetContainedInstances(GKInstance entityInst) throws Exception {

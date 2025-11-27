@@ -162,20 +162,20 @@ public class InstanceUtilities {
 				}
 
 				if (inferredInst.getSchemClass().isValidAttribute(summation)) {
-					createCOVSummationInstances(inferredInst, originalInst);
+					createZikaSummationInstances(inferredInst, originalInst);
 				}
 			}
 
 			// Inferred Summations should keep the normal displayName
 			if (!inferredInst.getSchemClass().isa(Summation)) {
-				String updatedDisplayName = inferredInst.getDisplayName().replace("CoV-1", "CoV-2");
+				String updatedDisplayName = inferredInst.getDisplayName().replace("Dengue", "Zika");
 				inferredInst.setDisplayName(updatedDisplayName);
 			}
 			if (inferredInst.getSchemClass().isValidAttribute(name)) {
 				List<String> names = inferredInst.getAttributeValuesList(name);
 				List<String> newNames = new ArrayList<>();
 				for (String name : names) {
-					String newName = name.replace("CoV-1", "CoV-2");
+					String newName = name.replace("Dengue", "Zika");
 					newNames.add(newName);
 				}
 				inferredInst.setAttributeValue(name, newNames);
@@ -194,20 +194,20 @@ public class InstanceUtilities {
 		}
 	}
 
-	public static void createCOVSummationInstances(GKInstance inferredInst, GKInstance originalInst) throws Exception {
+	public static void createZikaSummationInstances(GKInstance inferredInst, GKInstance originalInst) throws Exception {
 
 		List<GKInstance> originalSummationInstances = originalInst.getAttributeValuesList(summation);
-		String summationText = "This COVID-19 " + originalInst.getSchemClass().getName() + " instance was generated via electronic inference from a curated CoV-1 (Human SARS coronavirus) Reactome instance. In Reactome, inference is the process used to automatically create orthologous Pathways, Reactions and PhysicalEntities from our expertly curated data (" + inferredEventsReactomeURL + ").";
+		String summationText = "This Zika Virus " + originalInst.getSchemClass().getName() + " instance was generated via electronic inference from a curated Dengue Virus Reactome instance. In Reactome, inference is the process used to automatically create orthologous Pathways, Reactions and PhysicalEntities from our expertly curated data (" + inferredEventsReactomeURL + ").";
 		if (originalSummationInstances.size() > 0) {
 			for (GKInstance summationInst : originalSummationInstances) {
-				inferredInst.addAttributeValue(summation, createCOVSummationInst(summationInst, summationText));
+				inferredInst.addAttributeValue(summation, createZikaSummationInst(summationInst, summationText));
 			}
 		} else {
-			inferredInst.addAttributeValue(summation, createCOVSummationInst(null, summationText));
+			inferredInst.addAttributeValue(summation, createZikaSummationInst(null, summationText));
 		}
 	}
 
-	private static GKInstance createCOVSummationInst(GKInstance summationInst, String summationText) throws Exception {
+	private static GKInstance createZikaSummationInst(GKInstance summationInst, String summationText) throws Exception {
 
 		GKInstance infSummationInst = new GKInstance(dba.getSchema().getClassByName(Summation));
 		infSummationInst.setDbAdaptor(dba);

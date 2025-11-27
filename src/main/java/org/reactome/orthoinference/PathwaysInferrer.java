@@ -92,7 +92,7 @@ public class PathwaysInferrer {
 		GKInstance infPathwayInst = InstanceUtilities.createNewInferredGKInstance(sourcePathwayReferralInst);
 		infPathwayInst.addAttributeValue(name, sourcePathwayReferralInst.getAttributeValuesList(name));
 //		infPathwayInst.addAttributeValue(summation, summationInst);
-		InstanceUtilities.createCOVSummationInstances(infPathwayInst, sourcePathwayReferralInst);
+		InstanceUtilities.createZikaSummationInstances(infPathwayInst, sourcePathwayReferralInst);
 		if (infPathwayInst.getSchemClass().isValidAttribute(releaseDate))
 		{
 			infPathwayInst.addAttributeValue(releaseDate, dateOfRelease);
@@ -111,7 +111,7 @@ public class PathwaysInferrer {
 		}
 		infPathwayInst.setDisplayName(sourcePathwayReferralInst.getDisplayName());
 
-		// COV-1-to-COV-2 Projection code
+		// Dengue to Zika Projection code
 		if (sourcePathwayReferralInst.getAttributeValue(disease) != null) {
 			infPathwayInst.setAttributeValue(disease, InstanceUtilities.getDiseaseInst());
 		}
@@ -125,12 +125,12 @@ public class PathwaysInferrer {
 				infPathwayInst.addAttributeValue(definition, definitionString);
 			}
 		}
-		String updatedDisplayName = infPathwayInst.getDisplayName().replace("CoV-1", "CoV-2");
+		String updatedDisplayName = infPathwayInst.getDisplayName().replace("Dengue", "Zika");
 		infPathwayInst.setDisplayName(updatedDisplayName);
 		List<String> names = infPathwayInst.getAttributeValuesList(name);
 		List<String> newNames = new ArrayList<>();
 		for (String name : names) {
-			String newName = name.replace("CoV-1", "CoV-2");
+			String newName = name.replace("Dengue", "Zika");
 			newNames.add(newName);
 		}
 		infPathwayInst.setAttributeValue(name, newNames);

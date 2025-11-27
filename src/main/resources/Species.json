@@ -340,5 +340,17 @@
 			"Severe acute respiratory syndrome coronavirus 2"
 		],
 		"abbreviation": "COV"
+	},
+	"dvir": {
+		"name": [
+			"Dengue virus"
+		],
+		"abbreviation": "DVI"
+	},
+	"zvir": {
+		"name": [
+			"Zika virus"
+		],
+		"abbreviation": "ZVI"
 	}
 }

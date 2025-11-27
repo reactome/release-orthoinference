@@ -502,20 +502,20 @@ public class EWASInferrer {
 		{
 			String[] tabSplit = currentLine.split("\t");
 			String name = tabSplit[0];
-			String cov1Identifier = tabSplit[1];
-			String startCoordCov1 = tabSplit[2] != null ? tabSplit[2] : "";
-			String endCoordCov1 = tabSplit[3] != null ? tabSplit[3] : "";
-			if (!startCoordCov1.isEmpty() && !endCoordCov1.isEmpty()) {
+			String dengueIdentifier = tabSplit[1];
+			String startCoordDengue = tabSplit[2] != null ? tabSplit[2] : "";
+			String endCoordDengue = tabSplit[3] != null ? tabSplit[3] : "";
+			if (!startCoordDengue.isEmpty() && !endCoordDengue.isEmpty()) {
 
-				String cov1Joined = cov1Identifier + startCoordCov1 + endCoordCov1;
+				String dengueJoined = dengueIdentifier + startCoordDengue + endCoordDengue;
 
-				String startCoordCov2 = tabSplit[5] != null ? tabSplit[5] : "";
-				String endCoordCov2 = tabSplit[6] != null ? tabSplit[6] : "";
+				String startCoordZika = tabSplit[5] != null ? tabSplit[5] : "";
+				String endCoordZika = tabSplit[6] != null ? tabSplit[6] : "";
 
 				Map<String, String> coordMap = new HashMap<>();
-				coordMap.put("start", startCoordCov2);
-				coordMap.put("end", endCoordCov2);
-				coordinateMappings.put(cov1Joined, coordMap);
+				coordMap.put("start", startCoordZika);
+				coordMap.put("end", endCoordZika);
+				coordinateMappings.put(dengueJoined, coordMap);
 			}
 		}
 		br.close();

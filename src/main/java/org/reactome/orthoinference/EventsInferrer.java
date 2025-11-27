@@ -51,7 +51,8 @@ public class EventsInferrer
 	private static List<GKInstance> manualHumanEvents = new ArrayList<>();
 	private static StableIdentifierGenerator stableIdentifierGenerator;
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
-	private static Long sarsCOV1InfectionsPathwayDbId = 9678108L;
+
+	private static long dengueVirusPathwayDbId = 9839923L;
 
 	@SuppressWarnings("unchecked")
 	public static void inferEvents(Properties props, String referenceSpecies, String targetSpecies) throws Exception
@@ -166,10 +167,10 @@ public class EventsInferrer
 		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(dbAdaptor, dbAdaptorPrev, speciesInst, personId, referenceSpeciesInstanceDbId);
 		// Gets Reaction instances of source targetSpecies (human)
 		Collection<GKInstance> reactionInstances = new ArrayList<>(); //
-		if (referenceSpeciesName.equals("Human SARS coronavirus")) {
-			GKInstance covPathwayInst = dbAdaptor.fetchInstance(sarsCOV1InfectionsPathwayDbId);
+		if (referenceSpeciesName.equals("Dengue Virus")) {
+			GKInstance denguePathwayInst = dbAdaptor.fetchInstance(dengueVirusPathwayDbId);
 			Set<GKInstance> uniqueReactionInstances = new HashSet<>();
-			for (GKInstance hasEventInst : (Collection<GKInstance>) covPathwayInst.getAttributeValuesList(hasEvent)) {
+			for (GKInstance hasEventInst : (Collection<GKInstance>) denguePathwayInst.getAttributeValuesList(hasEvent)) {
 				uniqueReactionInstances.addAll(getReactionsInEventHierarchy(hasEventInst));
 			}
 			reactionInstances.addAll(uniqueReactionInstances);

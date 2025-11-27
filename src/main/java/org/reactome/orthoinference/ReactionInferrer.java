@@ -44,7 +44,7 @@ public class ReactionInferrer {
 			// This code screens Reactions that will not need to be inferred.
 			Collection<GKInstance> reactionComponents = org.gk.model.InstanceUtilities.getReactionParticipants(reactionInst);
 			Set<GKInstance> containedComponents = new HashSet<>();
-			boolean hasContainedSARSInstance = false;
+			boolean hasContainedDengueInstance = false;
 			for (GKInstance reactionComponent : reactionComponents) {
 				containedComponents.add(reactionComponent);
 				containedComponents.addAll(org.gk.model.InstanceUtilities.getContainedInstances(reactionComponent,
@@ -55,12 +55,12 @@ public class ReactionInferrer {
 			}
 
 			for (GKInstance containedComponent : containedComponents) {
-				if (OrthologousEntityGenerator.hasSARSSpecies(containedComponent)) {
-					hasContainedSARSInstance = true;
+				if (OrthologousEntityGenerator.hasDengueSpecies(containedComponent)) {
+					hasContainedDengueInstance = true;
 				}
 			}
 
-			if (!hasContainedSARSInstance) {
+			if (!hasContainedDengueInstance) {
 				inferredEvent.put(reactionInst, reactionInst);
 				inferrableHumanEvents.add(reactionInst);
 				return;
@@ -72,7 +72,7 @@ public class ReactionInferrer {
 			infReactionInst.addAttributeValue(name, reactionInst.getAttributeValuesList(name));
 			infReactionInst.addAttributeValue(goBiologicalProcess, reactionInst.getAttributeValue(goBiologicalProcess));
 //			infReactionInst.addAttributeValue(summation, summationInst);
-			InstanceUtilities.createCOVSummationInstances(infReactionInst, reactionInst);
+			InstanceUtilities.createZikaSummationInstances(infReactionInst, reactionInst);
 			infReactionInst.addAttributeValue(evidenceType, evidenceTypeInst);
 			infReactionInst.addAttributeValue(_displayName, reactionInst.getAttributeValue(_displayName));
 
@@ -117,7 +117,7 @@ public class ReactionInferrer {
 							// FetchIdenticalInstances would just return the instance being inferred. Since this step is meant to always
 							// add a new inferred instance, the storeInstance method is just called here.
 
-							// COV-1-to-COV-2 Projection additions.
+							// Dengue to Zika Projection additions.
 							if (reactionInst.getAttributeValuesList(literatureReference) != null) {
 								infReactionInst.setAttributeValue(literatureReference, reactionInst.getAttributeValuesList(literatureReference));
 							}
@@ -133,12 +133,12 @@ public class ReactionInferrer {
 								}
 							}
 							//
-							String updatedDisplayName = infReactionInst.getDisplayName().replace("CoV-1", "CoV-2");
+							String updatedDisplayName = infReactionInst.getDisplayName().replace("Dengue", "Zika");
 							infReactionInst.setDisplayName(updatedDisplayName);
 							List<String> names = infReactionInst.getAttributeValuesList(name);
 							List<String> newNames = new ArrayList<>();
 							for (String name : names) {
-								String newName = name.replace("CoV-1", "CoV-2");
+								String newName = name.replace("Dengue", "Zika");
 								newNames.add(newName);
 							}
 							infReactionInst.setAttributeValue(name, newNames);

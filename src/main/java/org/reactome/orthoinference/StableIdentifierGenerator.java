@@ -44,14 +44,14 @@ public class StableIdentifierGenerator {
             // For now, Human is hard-coded as the source species, so we replace the stableIdentifier source species based on that assumption
             String sourceIdentifier = (String) stableIdentifierInst.getAttributeValue(identifier);
 
-            // COV-1-to-COV-2 Projection Code
+            // Dengue to Zika Projection Code
             String sourceAbbreviation = "HSA";
-            if (sourceIdentifier.contains("COV") && !originalInst.getSchemClass().isa(ReactionlikeEvent)) {
-                sourceAbbreviation = "COV";
+            if (sourceIdentifier.contains("DVI") && !originalInst.getSchemClass().isa(ReactionlikeEvent)) {
+                sourceAbbreviation = "DVI";
             }
             String targetIdentifier = sourceIdentifier.replace(sourceAbbreviation, speciesAbbreviation);
             if (originalInst.getSchemClass().isa(Event)) {
-                targetIdentifier = targetIdentifier.replace("COV", "HSA");
+                targetIdentifier = targetIdentifier.replace("DVI", "HSA");
             }
 
             // Paralogs will have the same base stable identifier, but we want to denote when that happens.
