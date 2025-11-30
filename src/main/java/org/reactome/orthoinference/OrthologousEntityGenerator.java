@@ -130,50 +130,41 @@ public class OrthologousEntityGenerator {
 			if (hasContainedDengueInstance) {
 				// Outputs Human Complexes/EntitySets that contain CoV-1 instances.
 //				System.out.println(entityInst);
-				GKInstance copiedHumanComplex = InstanceUtilities.createNewInferredGKInstance(entityInst);
-				for (SchemaAttribute complexAttr : (Collection<SchemaAttribute>) entityInst.getSchemClass().getAttributes()) {
-					if (!complexAttr.getName().equals(authored)
-							&& !complexAttr.getName().equals(created)
-							&& !complexAttr.getName().equals(modified)
-							&& !complexAttr.getName().equals(relatedSpecies)
-							&& !complexAttr.getName().equals(disease)
-							&& !complexAttr.getName().equals(reviewed)
-							&& !complexAttr.getName().equals(inferredFrom)
-							&& !complexAttr.getName().equals(inferredTo)
-							&& !complexAttr.getName().equals(DB_ID)
-							&& !complexAttr.getName().equals(stableIdentifier)
-							&& !complexAttr.getName().equals(revised)
-							&& !complexAttr.getName().equals(edited)
-							&& !complexAttr.getName().equals(compartment)
-							&& !complexAttr.getName().equals(species)) {
+				GKInstance copiedHumanComplexOrSet = InstanceUtilities.createNewInferredGKInstance(entityInst);
+				for (SchemaAttribute complexOrSetAttr : (Collection<SchemaAttribute>) entityInst.getSchemClass().getAttributes()) {
+					if (!complexOrSetAttr.getName().equals(authored)
+							&& !complexOrSetAttr.getName().equals(created)
+							&& !complexOrSetAttr.getName().equals(modified)
+							&& !complexOrSetAttr.getName().equals(relatedSpecies)
+							&& !complexOrSetAttr.getName().equals(disease)
+							&& !complexOrSetAttr.getName().equals(reviewed)
+							&& !complexOrSetAttr.getName().equals(inferredFrom)
+							&& !complexOrSetAttr.getName().equals(inferredTo)
+							&& !complexOrSetAttr.getName().equals(DB_ID)
+							&& !complexOrSetAttr.getName().equals(stableIdentifier)
+							&& !complexOrSetAttr.getName().equals(revised)
+							&& !complexOrSetAttr.getName().equals(edited)
+							&& !complexOrSetAttr.getName().equals(compartment)
+							&& !complexOrSetAttr.getName().equals(species)) {
 
-						if (entityInst.getAttributeValuesList(complexAttr).size() > 0) {
-							for (Object attrValue : entityInst.getAttributeValuesList(complexAttr)) {
-								copiedHumanComplex.addAttributeValue(complexAttr, attrValue);
+						if (entityInst.getAttributeValuesList(complexOrSetAttr).size() > 0) {
+							for (Object attrValue : entityInst.getAttributeValuesList(complexOrSetAttr)) {
+								copiedHumanComplexOrSet.addAttributeValue(complexOrSetAttr, attrValue);
 							}
 						}
 					}
 				}
 
-				List<GKInstance> components = (List<GKInstance>) copiedHumanComplex.getAttributeValuesList(hasComponent);
-				List<GKInstance> updatedComponents = new ArrayList<>();
-				for (GKInstance component : components) {
-					if (hasDengueSpecies(component)) {
-						updatedComponents.add(inferredZikaIdenticals.get(component));
-					} else {
-						updatedComponents.add(component);
-					}
-				}
-				copiedHumanComplex.setAttributeValue(hasComponent, updatedComponents);
+				updateConstituents(copiedHumanComplexOrSet);
 
-				copiedHumanComplex = InstanceUtilities.checkForIdenticalInstances(copiedHumanComplex, entityInst);
+				copiedHumanComplexOrSet = InstanceUtilities.checkForIdenticalInstances(copiedHumanComplexOrSet, entityInst);
 
-				copiedHumanComplex = InstanceUtilities.addAttributeValueIfNecessary(copiedHumanComplex, entityInst, inferredFrom);
-				dba.updateInstanceAttribute(copiedHumanComplex, inferredFrom);
-				entityInst = InstanceUtilities.addAttributeValueIfNecessary(entityInst, copiedHumanComplex, inferredTo);
+				copiedHumanComplexOrSet = InstanceUtilities.addAttributeValueIfNecessary(copiedHumanComplexOrSet, entityInst, inferredFrom);
+				dba.updateInstanceAttribute(copiedHumanComplexOrSet, inferredFrom);
+				entityInst = InstanceUtilities.addAttributeValueIfNecessary(entityInst, copiedHumanComplexOrSet, inferredTo);
 				dba.updateInstanceAttribute(entityInst, inferredTo);
 
-				humanComplexIdenticals.put(entityInst, copiedHumanComplex);
+				humanComplexIdenticals.put(entityInst, copiedHumanComplexOrSet);
 
 
 				/////// This code was used for troubleshooting and to see how far down 'multi-species' instances went in the Complex/EntitySet hierarchy
@@ -244,6 +235,61 @@ public class OrthologousEntityGenerator {
 			return speciesInst != null && speciesInst.getDBID().equals(3244621L);
 		}
 		return false;
+	}
+
+	private static void updateConstituents(GKInstance complexOrSetInstance) throws Exception {
+		if (complexOrSetInstance.getSchemClass().isa(ReactomeJavaConstants.Complex)) {
+			updateComponents(complexOrSetInstance);
+		} else if (complexOrSetInstance.getSchemClass().isa(ReactomeJavaConstants.EntitySet)) {
+			updateMembers(complexOrSetInstance);
+			if (complexOrSetInstance.getSchemClass().isa(ReactomeJavaConstants.CandidateSet)) {
+				updateCandidates(complexOrSetInstance);
+			}
+		} else {
+			throw new RuntimeException(complexOrSetInstance + " is not a complex or set");
+		}
+	}
+
+	private static void updateComponents(GKInstance complex) throws Exception {
+		List<GKInstance> components = getComponents(complex);
+		List<GKInstance> updatedComponents = getUpdatedConstituents(components);
+		complex.setAttributeValue(hasComponent, updatedComponents);
+	}
+
+	private static void updateMembers(GKInstance entitySet) throws Exception {
+		List<GKInstance> members = getMembers(entitySet);
+		List<GKInstance> updatedMembers = getUpdatedConstituents(members);
+		entitySet.setAttributeValue(hasMember, updatedMembers);
+	}
+
+	private static void updateCandidates(GKInstance candidateSet) throws Exception {
+		List<GKInstance> candidates = getCandidates(candidateSet);
+		List<GKInstance> updatedCandidates = getUpdatedConstituents(candidates);
+		candidateSet.setAttributeValue(hasCandidate, updatedCandidates);
+	}
+
+	private static List<GKInstance> getComponents(GKInstance complex) throws Exception {
+		return (List<GKInstance>) complex.getAttributeValuesList(hasComponent);
+	}
+
+	private static List<GKInstance> getMembers(GKInstance entitySet) throws Exception {
+		return (List<GKInstance>) entitySet.getAttributeValuesList(hasMember);
+	}
+
+	private static List<GKInstance> getCandidates(GKInstance candidateSet) throws Exception {
+		return (List<GKInstance>) candidateSet.getAttributeValuesList(hasCandidate);
+	}
+
+	private static List<GKInstance> getUpdatedConstituents(List<GKInstance> constituents) throws Exception {
+		List<GKInstance> updatedConstituents = new ArrayList<>();
+		for (GKInstance constituent : constituents) {
+			if (hasDengueSpecies(constituent)) {
+				updatedConstituents.add(inferredZikaIdenticals.get(constituent));
+			} else {
+				updatedConstituents.add(constituent);
+			}
+		}
+		return updatedConstituents;
 	}
 
 	private static boolean hasContainedDengueInstance(GKInstance subEntityInst) throws Exception {
