@@ -167,7 +167,7 @@ public class EventsInferrer
 		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(dbAdaptor, dbAdaptorPrev, speciesInst, personId, referenceSpeciesInstanceDbId);
 		// Gets Reaction instances of source targetSpecies (human)
 		Collection<GKInstance> reactionInstances = new ArrayList<>(); //
-		if (referenceSpeciesName.equals("Dengue Virus")) {
+		if (referenceSpeciesName.equals("Dengue virus")) {
 			GKInstance denguePathwayInst = dbAdaptor.fetchInstance(dengueVirusPathwayDbId);
 			Set<GKInstance> uniqueReactionInstances = new HashSet<>();
 			for (GKInstance hasEventInst : (Collection<GKInstance>) denguePathwayInst.getAttributeValuesList(hasEvent)) {
