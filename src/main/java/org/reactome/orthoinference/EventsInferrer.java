@@ -151,7 +151,7 @@ public class EventsInferrer
 		createAndSetSpeciesInstance(targetSpeciesName);
 //		setSummationInstance();
 		setEvidenceTypeInstance();
-		InstanceUtilities.setDiseaseInstance(dbAdaptor.fetchInstance(dengueDiseaseDbId));
+		//InstanceUtilities.setDiseaseInstance(dbAdaptor.fetchInstance(dengueDiseaseDbId));
 //		OrthologousEntityGenerator.setComplexSummationInstance();
 
 /**
