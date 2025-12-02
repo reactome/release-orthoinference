@@ -170,7 +170,7 @@ public class InstanceUtilities {
 			// Inferred Summations should keep the normal displayName
 			if (!inferredInst.getSchemClass().isa(Summation)) {
 				String updatedDisplayName = inferredInst.getDisplayName().replace("Dengue", "Zika");
-				inferredInst.setDisplayName(updatedDisplayName);
+				inferredInst.setDisplayName(inferDengueNameToZika(updatedDisplayName));
 			}
 			if (inferredInst.getSchemClass().isValidAttribute(name)) {
 				List<String> names = inferredInst.getAttributeValuesList(name);
@@ -179,7 +179,7 @@ public class InstanceUtilities {
 					String newName = name.replace("Dengue", "Zika");
 					newNames.add(newName);
 				}
-				inferredInst.setAttributeValue(name, newNames);
+				inferredInst.setAttributeValue(name, inferDengueNameToZika(newNames));
 			}
 			//
 

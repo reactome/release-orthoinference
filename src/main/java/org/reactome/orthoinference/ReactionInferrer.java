@@ -265,7 +265,7 @@ public class ReactionInferrer {
 					}
 				}
 				infCatalystInst.addAttributeValue(activeUnit, activeUnits);
-				infCatalystInst.addAttributeValue(_displayName, catalystInst.getAttributeValue(_displayName));
+				infCatalystInst.addAttributeValue(_displayName, inferDengueNameToZika((String) catalystInst.getAttributeValue(_displayName)));
 				infCatalystInst = InstanceUtilities.checkForIdenticalInstances(infCatalystInst, null);
 				inferredCatalyst.put(catalystInst, infCatalystInst);
 			} else {
@@ -317,7 +317,7 @@ public class ReactionInferrer {
 				GKInstance infRegulationInst = InstanceUtilities.createNewInferredGKInstance(regulationInst);
 				infRegulationInst.setDbAdaptor(dba);
 				infRegulationInst.addAttributeValue(regulator, infRegulatorInst);
-				infRegulationInst.addAttributeValue(_displayName, regulationInst.getAttributeValue(_displayName));
+				infRegulationInst.addAttributeValue(_displayName, inferDengueNameToZika((String) regulationInst.getAttributeValue(_displayName)));
 				inferredRegulations.add(infRegulationInst);
 				logger.info("Completed regulator inference");
 			}

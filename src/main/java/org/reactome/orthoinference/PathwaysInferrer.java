@@ -128,7 +128,7 @@ public class PathwaysInferrer {
 			}
 		}
 		String updatedDisplayName = infPathwayInst.getDisplayName().replace("Dengue", "Zika");
-		infPathwayInst.setDisplayName(updatedDisplayName);
+		infPathwayInst.setDisplayName(inferDengueNameToZika(updatedDisplayName));
 		List<String> names = inferDengueNameToZika(infPathwayInst.getAttributeValuesList(name));
 		List<String> newNames = new ArrayList<>();
 		for (String name : names) {
