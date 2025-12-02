@@ -6,6 +6,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+import static org.reactome.orthoinference.InstanceUtilities.inferDengueNameToZika;
 
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
@@ -149,6 +150,9 @@ public class OrthologousEntityGenerator {
 
 						if (entityInst.getAttributeValuesList(complexOrSetAttr).size() > 0) {
 							for (Object attrValue : entityInst.getAttributeValuesList(complexOrSetAttr)) {
+								if (complexOrSetAttr.getName().equals(name) || complexOrSetAttr.getName().equals(_displayName)) {
+									attrValue = inferDengueNameToZika((String) attrValue);
+								}
 								copiedHumanComplexOrSet.addAttributeValue(complexOrSetAttr, attrValue);
 							}
 						}
@@ -328,7 +332,7 @@ public class OrthologousEntityGenerator {
 				infDefinedSetInst.setDbAdaptor(dba);
 				infDefinedSetInst.addAttributeValue(created, instanceEditInst);
 				String definedSetName = "Homologues of " + ewasInst.getAttributeValue(name);
-				infDefinedSetInst.addAttributeValue(name, definedSetName);
+				infDefinedSetInst.addAttributeValue(name, inferDengueNameToZika(definedSetName));
 				
 				GKInstance compartmentInstGk = (GKInstance) ewasInst.getAttributeValue(compartment);
 				if (compartmentInstGk.getSchemClass().isa(Compartment)) {
@@ -341,7 +345,7 @@ public class OrthologousEntityGenerator {
 				infDefinedSetInst.addAttributeValue(species, speciesInst);
 				infDefinedSetInst.addAttributeValue(hasMember, infEWASInstances);
 				String definedSetDisplayName = (String) infDefinedSetInst.getAttributeValue(name) + " [" +((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
-				infDefinedSetInst.setAttributeValue(_displayName, definedSetDisplayName);
+				infDefinedSetInst.setAttributeValue(_displayName, inferDengueNameToZika(definedSetDisplayName));
 				// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance' calls, which is slow.
 				String cacheKey = InstanceUtilities.getCacheKey((GKSchemaClass) infDefinedSetInst.getSchemClass(), infDefinedSetInst);
 				if (definedSetIdenticals.get(cacheKey) != null)
@@ -402,7 +406,7 @@ public class OrthologousEntityGenerator {
 			logger.info("Complex protein counts. Total: " + complexTotalProteinCounts + "  Inferrable: " + complexInferrableProteinCounts);
 			GKInstance infComplexInst = InstanceUtilities.createNewInferredGKInstance(complexInst);
 //			infComplexInst.addAttributeValue(summation, complexSummationInst);
-			infComplexInst.addAttributeValue(name, complexInst.getAttributeValue(name));
+			infComplexInst.addAttributeValue(name, inferDengueNameToZika((String) complexInst.getAttributeValue(name)));
 			List<GKInstance> infComponentInstances = new ArrayList<>();
 			// Inference handling is different depending on if it is a Complex or a Polymer. Complexes will infer all 'components' while Polymers will infer all 'repeatedUnits'.
 			// TODO: Log the ratio of inferred complex/polyer from human?
@@ -428,7 +432,7 @@ public class OrthologousEntityGenerator {
 				logger.warn(complexInst + " is not a Complex or a Polymer");
 				return nullInst;
 			}
-			infComplexInst.setAttributeValue(_displayName, complexInst.getAttributeValue(_displayName));
+			infComplexInst.setAttributeValue(_displayName, inferDengueNameToZika((String) complexInst.getAttributeValue(_displayName)));
 			
 			// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance' calls, which is slow.
 			String cacheKey = InstanceUtilities.getCacheKey((GKSchemaClass) infComplexInst.getSchemClass(), infComplexInst);
@@ -488,7 +492,7 @@ public class OrthologousEntityGenerator {
 
 			// Begin inference of EntitySet
 			GKInstance infEntitySetInst = InstanceUtilities.createNewInferredGKInstance(entitySetInst);
-			infEntitySetInst.addAttributeValue(name, entitySetInst.getAttributeValuesList(name));
+			infEntitySetInst.addAttributeValue(name, inferDengueNameToZika(entitySetInst.getAttributeValuesList(name)));
 			infEntitySetInst.addAttributeValue(hasMember, infMembersList);
 
 			// Begin specific inference process for each type of DefinedSet entity.
@@ -538,7 +542,7 @@ public class OrthologousEntityGenerator {
 							GKInstance infDefinedSetInst = new GKInstance(definedSetClass);
 							infDefinedSetInst.setDbAdaptor(dba);
 							infDefinedSetInst.addAttributeValue(created, instanceEditInst);
-							infDefinedSetInst.setAttributeValue(name, infEntitySetInst.getAttributeValuesList(name));
+							infDefinedSetInst.setAttributeValue(name, inferDengueNameToZika(infEntitySetInst.getAttributeValuesList(name)));
 							infDefinedSetInst.setAttributeValue(hasMember, infMembersList);
 							if (entitySetInst.getSchemClass().isValidAttribute(compartment) && entitySetInst.getAttributeValue(compartment) != null) 
 							{
@@ -587,7 +591,7 @@ public class OrthologousEntityGenerator {
 				// If it has more than 1 member (which is the logic that would theoretically go here), nothing happens; 
 				// All members are stored in this inferred instances 'hasMember' attribute near the beginning of this function.
 			}
-			infEntitySetInst.setAttributeValue(_displayName, entitySetInst.getAttributeValue(_displayName));
+			infEntitySetInst.setAttributeValue(_displayName, inferDengueNameToZika((String) entitySetInst.getAttributeValue(_displayName)));
 			// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance' calls, which is slow.
 			String cacheKey = InstanceUtilities.getCacheKey((GKSchemaClass) infEntitySetInst.getSchemClass(), infEntitySetInst);
 			if (entitySetIdenticals.get(cacheKey) != null)

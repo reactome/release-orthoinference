@@ -6,6 +6,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+import static org.reactome.orthoinference.InstanceUtilities.inferDengueNameToZika;
+
 import org.gk.persistence.MySQLAdaptor;
 
 public class PathwaysInferrer {
@@ -90,7 +92,7 @@ public class PathwaysInferrer {
 
 	private static void inferPathway(GKInstance sourcePathwayReferralInst) throws Exception {
 		GKInstance infPathwayInst = InstanceUtilities.createNewInferredGKInstance(sourcePathwayReferralInst);
-		infPathwayInst.addAttributeValue(name, sourcePathwayReferralInst.getAttributeValuesList(name));
+		infPathwayInst.addAttributeValue(name, inferDengueNameToZika(sourcePathwayReferralInst.getAttributeValuesList(name)));
 //		infPathwayInst.addAttributeValue(summation, summationInst);
 		InstanceUtilities.createZikaSummationInstances(infPathwayInst, sourcePathwayReferralInst);
 		if (infPathwayInst.getSchemClass().isValidAttribute(releaseDate))
@@ -127,7 +129,7 @@ public class PathwaysInferrer {
 		}
 		String updatedDisplayName = infPathwayInst.getDisplayName().replace("Dengue", "Zika");
 		infPathwayInst.setDisplayName(updatedDisplayName);
-		List<String> names = infPathwayInst.getAttributeValuesList(name);
+		List<String> names = inferDengueNameToZika(infPathwayInst.getAttributeValuesList(name));
 		List<String> newNames = new ArrayList<>();
 		for (String name : names) {
 			String newName = name.replace("Dengue", "Zika");

@@ -10,6 +10,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+import static org.reactome.orthoinference.InstanceUtilities.inferDengueNameToZika;
 
 import org.gk.model.InstanceDisplayNameGenerator;
 import org.gk.persistence.MySQLAdaptor;
@@ -129,11 +130,11 @@ public class EWASInferrer {
 					}
 					if (infEWASInst.getAttributeValue(startCoordinate) != null && (int) infEWASInst.getAttributeValue(startCoordinate) > 1 || infEWASInst.getAttributeValue(endCoordinate) != null && (int) infEWASInst.getAttributeValue(endCoordinate) > 1) {
 						List<String> infEWASInstNames = (ArrayList<String>) (ewasInst).getAttributeValuesList(name);
-						infEWASInst.addAttributeValue(name, infEWASInstNames.get(0));
+						infEWASInst.addAttributeValue(name, inferDengueNameToZika(infEWASInstNames.get(0)));
 						infEWASInst.addAttributeValue(name, homologueId);
 					} else {
 						// Added for COV-1-to-COV-2 projections
-						infEWASInst.addAttributeValue(name, ewasInst.getAttributeValue(name));
+						infEWASInst.addAttributeValue(name, inferDengueNameToZika((String) ewasInst.getAttributeValue(name)));
 						//
 						infEWASInst.addAttributeValue(name, homologueId);
 					}
@@ -144,7 +145,7 @@ public class EWASInferrer {
 						List<String> ewasNames = infEWASInst.getAttributeValuesList(name);
 						infEWASInst.setAttributeValue(name, geneNameMappings.get(homologueId));
 						for (String ewasName : ewasNames) {
-							infEWASInst.addAttributeValue(name, ewasName);
+							infEWASInst.addAttributeValue(name, inferDengueNameToZika(ewasName));
 						}
 					}
 					// New display name is generated using the updated 'name' attribute
@@ -199,13 +200,13 @@ public class EWASInferrer {
 								String phosphoName = "phospho-" + infEWASInst.getAttributeValue(name);
 								List<String> ewasNames = (ArrayList<String>) infEWASInst.getAttributeValuesList(name);
 								String originalName = ewasNames.remove(0);
-								infEWASInst.setAttributeValue(name, phosphoName);
+								infEWASInst.setAttributeValue(name, inferDengueNameToZika(phosphoName));
 								// In the Perl version, this code block modifies the 'name' attribute to include 'phosopho-', but in the process it drops the other names contained. I believe this is unintentional.
 								// This would mean attributes without the 'phospho- ' addition would retain their array of names, while attributes containing 'phospho-' would only contain a single name attribute.
 								// I've assumed this is incorrect for the rewrite -- Instances that modify the name attribute to prepend 'phospho-' retain their name array. (Justin Cook 2018)
-								infEWASInst.addAttributeValue(name, ewasNames);
+								infEWASInst.addAttributeValue(name, inferDengueNameToZika(ewasNames));
 								String phosphoDisplayName = phosphoName + " [" + ((GKInstance) ewasInst.getAttributeValue(compartment)).getDisplayName() + "]";
-								infEWASInst.setAttributeValue(_displayName, phosphoDisplayName);
+								infEWASInst.setAttributeValue(_displayName, inferDengueNameToZika(phosphoDisplayName));
 								// This flag ensures the 'phospho-' is only prepended once.
 								logger.info("Updated EWAS name to reflect phosphorylation. Original: " + originalName + ". Updated: " + phosphoName);
 								phosFlag = false;

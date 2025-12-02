@@ -1,6 +1,7 @@
 package org.reactome.orthoinference;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -206,6 +207,15 @@ public class InstanceUtilities {
 			inferredInst.addAttributeValue(summation, createZikaSummationInst(null, summationText));
 		}
 	}
+
+	public static List<String> inferDengueNameToZika(List<String> dengueNames) {
+		return dengueNames.stream().map(dengueName -> inferDengueNameToZika(dengueName)).collect(Collectors.toList());
+	}
+
+	public static String inferDengueNameToZika(String dengueName) {
+		return dengueName.replace("DENV", "ZIKV");
+	}
+
 
 	private static GKInstance createZikaSummationInst(GKInstance summationInst, String summationText) throws Exception {
 

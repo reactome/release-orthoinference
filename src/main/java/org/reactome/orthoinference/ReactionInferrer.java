@@ -9,6 +9,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
+import static org.reactome.orthoinference.InstanceUtilities.inferDengueNameToZika;
+
 import org.gk.persistence.MySQLAdaptor;
 
 public class ReactionInferrer {
@@ -69,12 +71,13 @@ public class ReactionInferrer {
 
 
 			GKInstance infReactionInst = InstanceUtilities.createNewInferredGKInstance(reactionInst);
-			infReactionInst.addAttributeValue(name, reactionInst.getAttributeValuesList(name));
+			infReactionInst.addAttributeValue(name, inferDengueNameToZika(reactionInst.getAttributeValuesList(name)));
 			infReactionInst.addAttributeValue(goBiologicalProcess, reactionInst.getAttributeValue(goBiologicalProcess));
 //			infReactionInst.addAttributeValue(summation, summationInst);
 			InstanceUtilities.createZikaSummationInstances(infReactionInst, reactionInst);
 			infReactionInst.addAttributeValue(evidenceType, evidenceTypeInst);
-			infReactionInst.addAttributeValue(_displayName, reactionInst.getAttributeValue(_displayName));
+			infReactionInst.addAttributeValue(_displayName,
+				inferDengueNameToZika((String) reactionInst.getAttributeValue(_displayName)));
 
 			// This function finds the total number of distinct proteins associated with an instance, as well as the number that can be inferred.
 			// Total proteins are stored in reactionProteinCounts[0], inferrable proteins in [1], and the maximum number of homologues for any entity involved in index [2].
@@ -321,7 +324,7 @@ public class ReactionInferrer {
 		}
 		return inferredRegulations;
 	}
-	
+
 	public static void setReleaseDate(String dateOfReleaseCopy) 
 	{
 		dateOfRelease = dateOfReleaseCopy;
