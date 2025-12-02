@@ -31,6 +31,7 @@ public class EWASInferrer {
 	private static GKInstance alternateDbInst;
 	private static GKInstance uniprotDbInst;
 	private static GKInstance ncbiNucleotideInst;
+	private static GKInstance emblInst;
 	private static GKInstance speciesInst;
 	private static Map<String, String[]> homologueMappings = new HashMap<>();
 	private static Map<String, List<String>> ensgMappings = new HashMap<>();
@@ -70,7 +71,9 @@ public class EWASInferrer {
 						GKInstance rgpInst = (GKInstance) ewasInst.getAttributeValue(referenceEntity);
 						GKInstance refDBInst = (GKInstance) rgpInst.getAttributeValue(referenceDatabase);
 						String refDbName = refDBInst.getAttributeValue(name).toString();
-						GKInstance referenceDatabaseInst = refDbName.contains("NCBI") ? ncbiNucleotideInst : uniprotDbInst;
+						GKInstance referenceDatabaseInst = refDbName.contains("NCBI") ? ncbiNucleotideInst :
+							refDbName.contains("EMBL") ? emblInst :
+							uniprotDbInst;
 						infReferenceGeneProductInst.addAttributeValue(referenceDatabase, referenceDatabaseInst);
 
 						// Creates ReferenceDNASequence instance from ReferenceEntity
@@ -78,7 +81,10 @@ public class EWASInferrer {
 //						infReferenceGeneProductInst.addAttributeValue(referenceGene, inferredReferenceDNAInstances);
 
 						infReferenceGeneProductInst.addAttributeValue(species, speciesInst);
-						String referenceGeneProductSource = refDbName.contains("NCBI") ? "NCBI Nucleotide:" : "UniProt:";
+						String referenceGeneProductSource = refDbName.contains("NCBI") ? "NCBI Nucleotide:" :
+							refDbName.contains("EMBL") ? "EMBL:" :
+							"UniProt:";
+
 						infReferenceGeneProductInst.setAttributeValue(_displayName, referenceGeneProductSource + homologueId + " " + referenceEntityInst.getAttributeValue(name));
 						infReferenceGeneProductInst.setAttributeValue(name, referenceEntityInst.getAttributeValue(name));
 						infReferenceGeneProductInst.setAttributeValue(geneName, referenceEntityInst.getAttributeValue(geneName));
@@ -417,8 +423,10 @@ public class EWASInferrer {
 	{
 		Collection<GKInstance> uniprotDbInstances = (Collection<GKInstance>) dba.fetchInstanceByAttribute(ReferenceDatabase, name, "=", "UniProt");
 		Collection<GKInstance> ncbiNucleotideInstances = (Collection<GKInstance>) dba.fetchInstanceByAttribute(ReferenceDatabase, name, "=", "NCBI Nucleotide");
+		Collection<GKInstance> emblInstances = (Collection<GKInstance>) dba.fetchInstanceByAttribute(ReferenceDatabase, name, "=", "EMBL");
 		uniprotDbInst = uniprotDbInstances.iterator().next();
 		ncbiNucleotideInst = ncbiNucleotideInstances.iterator().next();
+		emblInst = emblInstances.iterator().next();
 	}
 
 	// Creates instance pertaining to the species Ensembl Protein DB
