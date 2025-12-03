@@ -234,9 +234,14 @@ public class OrthologousEntityGenerator {
 	}
 
 	public static boolean hasDengueSpecies(GKInstance entityInst) throws Exception {
+		final long dengueVirusType2SpeciesDbId = 3244621L;
+		final long dengueVirusType2ThailandStrainSpeciesDbId = 9918331L;
+
 		if (entityInst.getSchemClass().isValidAttribute(species)) {
 			GKInstance speciesInst = (GKInstance) entityInst.getAttributeValue(species);
-			return speciesInst != null && speciesInst.getDBID().equals(3244621L);
+			return speciesInst != null &&
+				(speciesInst.getDBID().equals(dengueVirusType2SpeciesDbId) ||
+				 speciesInst.getDBID().equals(dengueVirusType2ThailandStrainSpeciesDbId));
 		}
 		return false;
 	}
