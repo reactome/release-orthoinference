@@ -60,7 +60,7 @@ public class OrthologousEntityGenerator {
 		}
 
 		// Checks that a species attribute exists in either the current instance or in constituent instances.
-		if (!SpeciesCheckUtility.checkForSpeciesAttribute(entityInst))
+		if (!SpeciesCheckUtility.checkForSpeciesAttribute(entityInst) && !dengueSpecificName(entityInst))
 		{
 			logger.info("No species attribute found in PE, using original instance");
 			infEntityInst = entityInst;
@@ -110,6 +110,12 @@ public class OrthologousEntityGenerator {
 		orthologousEntityIdenticals.put(entityInst, infEntityInst);
 			logger.info("PE inference completed: " + entityInst);
 			return infEntityInst;
+	}
+
+	private static boolean dengueSpecificName(GKInstance entityInst) {
+		String entityDisplayName = entityInst.getDisplayName().toLowerCase();
+		return entityDisplayName.contains("dengue") ||
+			entityDisplayName.contains("denv");
 	}
 
 	private static GKInstance inferZikaParticipants(GKInstance entityInst) throws Exception {
