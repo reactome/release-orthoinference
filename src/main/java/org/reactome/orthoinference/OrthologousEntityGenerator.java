@@ -55,8 +55,10 @@ public class OrthologousEntityGenerator {
 
 		GKInstance entitySpeciesInst = (GKInstance) entityInst.getAttributeValue(species);
 		if (entitySpeciesInst != null && entitySpeciesInst.getDBID().equals(48887L)) {
-			inferZikaParticipants(entityInst);
-			return entityInst;
+			if (entityInst.getSchemClass().isa(GenomeEncodedEntity)) {
+				return entityInst;
+			}
+			return inferZikaParticipants(entityInst);
 		}
 
 		// Checks that a species attribute exists in either the current instance or in constituent instances.
@@ -108,8 +110,8 @@ public class OrthologousEntityGenerator {
 			return infEntityInst;
 		}
 		orthologousEntityIdenticals.put(entityInst, infEntityInst);
-			logger.info("PE inference completed: " + entityInst);
-			return infEntityInst;
+		logger.info("PE inference completed: " + entityInst);
+		return infEntityInst;
 	}
 
 	private static boolean dengueSpecificName(GKInstance entityInst) {
@@ -135,7 +137,7 @@ public class OrthologousEntityGenerator {
 			}
 
 			if (hasContainedDengueInstance) {
-				// Outputs Human Complexes/EntitySets that contain CoV-1 instances.
+				// Outputs Human Complexes/EntitySets that contain Dengue instances.
 //				System.out.println(entityInst);
 				GKInstance copiedHumanComplexOrSet = InstanceUtilities.createNewInferredGKInstance(entityInst);
 				for (SchemaAttribute complexOrSetAttr : (Collection<SchemaAttribute>) entityInst.getSchemClass().getAttributes()) {
