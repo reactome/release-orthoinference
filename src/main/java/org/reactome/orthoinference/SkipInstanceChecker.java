@@ -79,13 +79,13 @@ public class SkipInstanceChecker {
 		// it has related species
 		if (reactionInst.getAttributeValue("relatedSpecies") != null)
 		{
-			logger.info(reactionInst + " has related species -- skipping");
+//			logger.info(reactionInst + " has related species -- skipping");
 //			return true;
 		}
 		// it is a disease reaction
 		if (reactionInst.getAttributeValue(disease) != null)
 		{
-			logger.info(reactionInst + " is a disease reaction -- skipping");
+//			logger.info(reactionInst + " is a disease reaction -- skipping");
 //			return true;
 		}
 		// it is manually inferred
@@ -98,7 +98,7 @@ public class SkipInstanceChecker {
 		Collection<GKInstance> speciesInstances = checkIfEntitiesContainMultipleSpecies(reactionInst);
 		if (speciesInstances.size() > 1)
 		{
-			logger.info(reactionInst + " has multiple species -- skipping");
+//			logger.info(reactionInst + " has multiple species -- skipping");
 //			return true;
 		}
 		return false;
