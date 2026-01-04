@@ -55,7 +55,9 @@ public class OrthologousEntityGenerator {
 
 		GKInstance entitySpeciesInst = (GKInstance) entityInst.getAttributeValue(species);
 		if (entitySpeciesInst != null && entitySpeciesInst.getDBID().equals(48887L)) {
-			if (entityInst.getSchemClass().isa(GenomeEncodedEntity)) {
+			if (entityInst.getSchemClass().isa(EntityWithAccessionedSequence) ||
+				entityInst.getSchemClass().isa(GenomeEncodedEntity) ||
+				!containsDegnue(entityInst)) {
 				return entityInst;
 			}
 			return inferZikaParticipants(entityInst);
@@ -89,7 +91,7 @@ public class OrthologousEntityGenerator {
 		// returning the current instance if it doesn't.
 		} else if (entityInst.getSchemClass().isa(EntitySet))
 		{
-			if (entityInst.getAttributeValue(species) != null)
+			if (entityInst.getAttributeValue(species) != null || dengueSpecificName(entityInst))
 			{
 				infEntityInst = createInfEntitySet(entityInst, override);
 			} else {
@@ -112,6 +114,14 @@ public class OrthologousEntityGenerator {
 		orthologousEntityIdenticals.put(entityInst, infEntityInst);
 		logger.info("PE inference completed: " + entityInst);
 		return infEntityInst;
+	}
+
+	private static boolean containsDegnue(GKInstance entityInst) throws Exception {
+		if (hasConstituents(entityInst)) {
+			List<GKInstance> constituents = getConstituents(entityInst);
+			return constituents.stream().anyMatch(constituent -> hasDengueSpecies(constituent));
+		}
+		return hasDengueSpecies(entityInst);
 	}
 
 	private static boolean dengueSpecificName(GKInstance entityInst) {
@@ -241,12 +251,17 @@ public class OrthologousEntityGenerator {
 		return humanComplexIdenticals.get(entityInst);
 	}
 
-	public static boolean hasDengueSpecies(GKInstance entityInst) throws Exception {
+	public static boolean hasDengueSpecies(GKInstance entityInst) {
 		final long dengueVirusType2SpeciesDbId = 3244621L;
 		final long dengueVirusType2ThailandStrainSpeciesDbId = 9918331L;
 
 		if (entityInst.getSchemClass().isValidAttribute(species)) {
-			GKInstance speciesInst = (GKInstance) entityInst.getAttributeValue(species);
+			GKInstance speciesInst;
+			try {
+				speciesInst = (GKInstance) entityInst.getAttributeValue(species);
+			} catch (Exception e) {
+				throw new RuntimeException("Unable to get species instances from " + entityInst);
+			}
 			return speciesInst != null &&
 				(speciesInst.getDBID().equals(dengueVirusType2SpeciesDbId) ||
 				 speciesInst.getDBID().equals(dengueVirusType2ThailandStrainSpeciesDbId));
@@ -285,6 +300,41 @@ public class OrthologousEntityGenerator {
 		candidateSet.setAttributeValue(hasCandidate, updatedCandidates);
 	}
 
+	private static boolean hasConstituents(GKInstance entityInst) {
+		return entityInst.getSchemClass().isa(ReactomeJavaConstants.Complex) ||
+			entityInst.getSchemClass().isa(ReactomeJavaConstants.EntitySet) ||
+			entityInst.getSchemClass().isa(ReactomeJavaConstants.Polymer);
+	}
+
+	private static List<GKInstance> getConstituents(GKInstance entityInst) throws Exception {
+
+		if (!hasConstituents(entityInst)) {
+			return Collections.singletonList(entityInst);
+		}
+
+		List<GKInstance> constituents = new ArrayList<>();
+		if (entityInst.getSchemClass().isa(Complex)) {
+			for (GKInstance component : getComponents(entityInst)) {
+				constituents.addAll(getConstituents(component));
+			}
+		} else if (entityInst.getSchemClass().isa(EntitySet)) {
+			for (GKInstance member : getMembers(entityInst)) {
+				constituents.addAll(getConstituents(member));
+			}
+			if (entityInst.getSchemClass().isa(CandidateSet)) {
+				for (GKInstance candidate : getCandidates(entityInst)) {
+					constituents.addAll(getConstituents(candidate));
+				}
+			}
+		} else if (entityInst.getSchemClass().isa(Polymer)) {
+			for (GKInstance repeatedUnit : getRepeatedUnits(entityInst)) {
+				constituents.addAll(getConstituents(repeatedUnit));
+			}
+		}
+		return constituents;
+	}
+
+
 	private static List<GKInstance> getComponents(GKInstance complex) throws Exception {
 		return (List<GKInstance>) complex.getAttributeValuesList(hasComponent);
 	}
@@ -295,6 +345,10 @@ public class OrthologousEntityGenerator {
 
 	private static List<GKInstance> getCandidates(GKInstance candidateSet) throws Exception {
 		return (List<GKInstance>) candidateSet.getAttributeValuesList(hasCandidate);
+	}
+
+	private static List<GKInstance> getRepeatedUnits(GKInstance polymer) throws Exception {
+		return (List<GKInstance>) polymer.getAttributeValuesList(repeatedUnit);
 	}
 
 	private static List<GKInstance> getUpdatedConstituents(List<GKInstance> constituents) throws Exception {
