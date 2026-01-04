@@ -128,17 +128,22 @@ public class InstanceUtilities {
 	{
 		@SuppressWarnings("unchecked")
 		Collection<GKInstance> identicalInstances = dba.fetchIdenticalInstances(inferredInst);
-		if (identicalInstances != null) 
+		if (identicalInstances != null)
 		{
-			if (identicalInstances.size() == 1) 
-			{
-				return identicalInstances.iterator().next();
+			if (zikaSpecificName(inferredInst)) {
+				if (identicalInstances.stream().noneMatch(InstanceUtilities::zikaSpecificName)) {
+					dba.storeInstance(inferredInst);
+				}
+				//return inferredInst;
 			} else {
-				// TODO: In future, could iterate through array of returned values and pull the 'most identical'. For now, this mimics Perl.
-				return identicalInstances.iterator().next();
+				if (identicalInstances.size() == 1) {
+					return identicalInstances.iterator().next();
+				} else {
+					// TODO: In future, could iterate through array of returned values and pull the 'most identical'. For now, this mimics Perl.
+					return identicalInstances.iterator().next();
+				}
 			}
-		} else {
-
+		}
 			if (inferredInst.getSchemClass().isa(PhysicalEntity)) {
 //				GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(inferredInst, originalInst);
 //				inferredInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);
@@ -192,7 +197,6 @@ public class InstanceUtilities {
 //			}
 
 			return inferredInst;
-		}
 	}
 
 	public static void createZikaSummationInstances(GKInstance inferredInst, GKInstance originalInst) throws Exception {
@@ -323,5 +327,10 @@ public class InstanceUtilities {
 
 	public static GKInstance getDiseaseInst() {
 		return diseaseInst;
+	}
+
+	private static boolean zikaSpecificName(GKInstance instance) {
+		return instance.getDisplayName().toUpperCase().contains("ZIKV") ||
+				instance.getDisplayName().toLowerCase().contains("zika");
 	}
 }
