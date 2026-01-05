@@ -217,7 +217,9 @@ public class InstanceUtilities {
 	}
 
 	public static String inferDengueNameToZika(String dengueName) {
-		return dengueName.replace("DENV", "ZIKV");
+		return dengueName.replace("DENV", "ZIKV")
+			.replace("dengue", "zika")
+			.replace("Dengue", "Zika");
 	}
 
 
