@@ -8,6 +8,7 @@ import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
 import static org.reactome.orthoinference.InstanceUtilities.inferDengueNameToZika;
 
+import org.gk.model.InstanceDisplayNameGenerator;
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.*;
@@ -24,6 +25,7 @@ public class OrthologousEntityGenerator {
 	private static Map<GKInstance, GKInstance> homolEWASIdenticals = new HashMap<>();
 	private static Map<GKInstance, GKInstance> complexPolymerIdenticals = new HashMap<>();
 	private static Map<GKInstance, GKInstance> inferredEntitySetIdenticals = new HashMap<>();
+	private static Map<GKInstance, GKInstance> inferredOtherEntityIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> definedSetIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> complexIdenticals = new HashMap<>();
 	private static Map<String,GKInstance> entitySetIdenticals = new HashMap<>();
@@ -41,6 +43,15 @@ public class OrthologousEntityGenerator {
 		logger.info("Attempting PE inference: " + entityInst);
 		GKInstance infEntityInst = null;
 		if (!entityInst.getSchemClass().isValidAttribute(species)) {
+			if (dengueSpecificName(entityInst)) {
+				if (entityInst.getSchemClass().isa(OtherEntity)) {
+					infEntityInst = createInfOtherEntity(entityInst);
+				} else {
+					throw new IllegalArgumentException("Unknown or inappropriate schema class type without species for " + entityInst);
+				}
+				return infEntityInst;
+			}
+
 			// This used to have a conditional statement based on the returned value of the 'check_intracellular' function.
 			// That function doesn't exist anymore (only seemed to apply to the 'mtub' species, which hasn't been inferred for a while).
 			// Since the instance is species-agnostic, just returns the original instance.
@@ -57,7 +68,7 @@ public class OrthologousEntityGenerator {
 		if (entitySpeciesInst != null && entitySpeciesInst.getDBID().equals(48887L)) {
 			if (entityInst.getSchemClass().isa(EntityWithAccessionedSequence) ||
 				entityInst.getSchemClass().isa(GenomeEncodedEntity) ||
-				!containsDegnue(entityInst)) {
+				!containsDengue(entityInst)) {
 				return entityInst;
 			}
 			return inferZikaParticipants(entityInst);
@@ -116,7 +127,7 @@ public class OrthologousEntityGenerator {
 		return infEntityInst;
 	}
 
-	private static boolean containsDegnue(GKInstance entityInst) throws Exception {
+	private static boolean containsDengue(GKInstance entityInst) throws Exception {
 		if (hasConstituents(entityInst)) {
 			List<GKInstance> constituents = getConstituents(entityInst);
 			return constituents.stream().anyMatch(constituent -> hasDengueSpecies(constituent));
@@ -441,7 +452,7 @@ public class OrthologousEntityGenerator {
 				}
 			}
 		} else {
-			logger.info("Inferred EWAS already exists");
+			logger.info("Inferred EWAS for " + ewasInst + " already exists");
 		}
 		return homolEWASIdenticals.get(ewasInst);
 	}
@@ -684,6 +695,43 @@ public class OrthologousEntityGenerator {
 			logger.info("Inferred EntitySet already exists");
 		}
 		return inferredEntitySetIdenticals.get(entitySetInst);
+	}
+
+	private static GKInstance createInfOtherEntity(GKInstance entityInst) throws Exception
+	{
+		if (inferredOtherEntityIdenticals.containsKey(entityInst)) {
+			return inferredOtherEntityIdenticals.get(entityInst);
+		}
+
+		GKInstance infOtherEntityInst = InstanceUtilities.createNewInferredGKInstance(entityInst);
+		infOtherEntityInst.setDbAdaptor(dba);
+		infOtherEntityInst.addAttributeValue(created, instanceEditInst);
+		infOtherEntityInst.addAttributeValue(name, inferDengueNameToZika(entityInst.getAttributeValuesList(name)));
+		infOtherEntityInst.setAttributeValue(_displayName, InstanceDisplayNameGenerator.generateDisplayName(infOtherEntityInst));
+
+		if (infOtherEntityInst.getSchemClass().isValidAttribute(compartment) && infOtherEntityInst.getAttributeValue(compartment) != null)
+		{
+			for (Object compartmentInst : entityInst.getAttributeValuesList(compartment)) {
+				GKInstance compartmentInstGk = (GKInstance) compartmentInst;
+				if (compartmentInstGk.getSchemClass().isa(Compartment))
+				{
+					infOtherEntityInst.addAttributeValue(compartment, compartmentInstGk);
+				} else {
+					GKInstance newCompartmentInst = InstanceUtilities.createCompartmentInstance(compartmentInstGk);
+					infOtherEntityInst.addAttributeValue(compartment, newCompartmentInst);
+				}
+			}
+		}
+
+		InstanceUtilities.addAttributeValueIfNecessary(infOtherEntityInst, entityInst, inferredFrom);
+		//dba.updateInstanceAttribute(infOtherEntityInst, inferredFrom);
+		entityInst = InstanceUtilities.addAttributeValueIfNecessary(entityInst, infOtherEntityInst, inferredTo);
+		dba.updateInstanceAttribute(entityInst, inferredTo);
+
+
+
+		inferredOtherEntityIdenticals.put(entityInst, infOtherEntityInst);
+		return infOtherEntityInst;
 	}
 	
 	public static void setAdaptor(MySQLAdaptor dbAdaptor)
