@@ -53,7 +53,7 @@ public class EventsInferrer
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
 
 	private static long dengueVirusPathwayDbId = 9839923L;
-	private static long dengueDiseaseDbId = 9683915L;
+	private static long zikaDiseaseDbId = 9975899L;
 
 	@SuppressWarnings("unchecked")
 	public static void inferEvents(Properties props, String referenceSpecies, String targetSpecies) throws Exception
@@ -151,7 +151,7 @@ public class EventsInferrer
 		createAndSetSpeciesInstance(targetSpeciesName);
 //		setSummationInstance();
 		setEvidenceTypeInstance();
-		//InstanceUtilities.setDiseaseInstance(dbAdaptor.fetchInstance(dengueDiseaseDbId));
+		InstanceUtilities.setDiseaseInstance(dbAdaptor.fetchInstance(zikaDiseaseDbId));
 //		OrthologousEntityGenerator.setComplexSummationInstance();
 
 /**
