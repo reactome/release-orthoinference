@@ -1,6 +1,8 @@
 package org.reactome.orthoinference;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -16,6 +18,8 @@ import org.gk.schema.*;
 public class OrthologousEntityGenerator {
 	
 	private static final Logger logger = LogManager.getLogger();
+	private static final Pattern dengueNamePattern = Pattern.compile("dengue|denv[^a-zA-Z]?", Pattern.CASE_INSENSITIVE);
+
 	private static MySQLAdaptor dba;
 	private static GKInstance instanceEditInst;
 	private static GKInstance complexSummationInst;
@@ -43,13 +47,8 @@ public class OrthologousEntityGenerator {
 		logger.info("Attempting PE inference: " + entityInst);
 		GKInstance infEntityInst = null;
 		if (!entityInst.getSchemClass().isValidAttribute(species)) {
-			if (dengueSpecificName(entityInst)) {
-				if (entityInst.getSchemClass().isa(OtherEntity)) {
-					infEntityInst = createInfOtherEntity(entityInst);
-				} else {
-					throw new IllegalArgumentException("Unknown or inappropriate schema class type without species for " + entityInst);
-				}
-				return infEntityInst;
+			if (dengueSpecificName(entityInst) && entityInst.getSchemClass().isa(OtherEntity)) {
+				return createInfOtherEntity(entityInst);
 			}
 
 			// This used to have a conditional statement based on the returned value of the 'check_intracellular' function.
@@ -137,8 +136,10 @@ public class OrthologousEntityGenerator {
 
 	private static boolean dengueSpecificName(GKInstance entityInst) {
 		String entityDisplayName = entityInst.getDisplayName().toLowerCase();
-		return entityDisplayName.contains("dengue") ||
-			entityDisplayName.contains("denv");
+
+		Matcher matcher = dengueNamePattern.matcher(entityDisplayName);
+
+		return matcher.find();
 	}
 
 	private static GKInstance inferZikaParticipants(GKInstance entityInst) throws Exception {
