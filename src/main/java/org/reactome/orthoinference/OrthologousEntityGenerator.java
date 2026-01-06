@@ -149,7 +149,7 @@ public class OrthologousEntityGenerator {
 
 			boolean hasContainedDengueInstance = false;
 			for (GKInstance containedInst : containedInstances) {
-				if (hasDengueSpecies(containedInst)) {
+				if (containsDengue(containedInst)) {
 					hasContainedDengueInstance = true;
 					if (inferredZikaIdenticals.get(containedInst) == null) {
 						GKInstance inferredZikaEntityInst = createOrthoEntity(containedInst, false);
@@ -366,7 +366,7 @@ public class OrthologousEntityGenerator {
 	private static List<GKInstance> getUpdatedConstituents(List<GKInstance> constituents) throws Exception {
 		List<GKInstance> updatedConstituents = new ArrayList<>();
 		for (GKInstance constituent : constituents) {
-			if (hasDengueSpecies(constituent)) {
+			if (containsDengue(constituent)) {
 				updatedConstituents.add(inferredZikaIdenticals.get(constituent));
 			} else {
 				updatedConstituents.add(constituent);
