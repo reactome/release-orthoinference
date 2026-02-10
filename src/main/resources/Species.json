@@ -2,14 +2,7 @@
 	"ddis":{
 		"mart_url":"http:\/\/protists.ensembl.org\/biomart\/martservice",
 		"refdb":{
-			"url":"http:\/\/protists.ensembl.org\/Dictyostelium_discoideum\/Info\/Index",
-			"ensg_access":"http:\/\/protists.ensembl.org\/Dictyostelium_discoideum\/geneview?gene=###ID###&db=core",
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_Dictyostelium discoideum_PROTEIN"
-			],
-			"access":"http:\/\/protists.ensembl.org\/Dictyostelium_discoideum\/Transcript\/ProteinSummary?peptide=###ID###"
+			"use_gk_central_ensembl_ref_db": "protist"
 		},
 		"alt_refdb":{
 			"url":"http:\/\/www.dictybase.org\/",
@@ -35,14 +28,7 @@
 			"url":"http:\/\/www.wormbase.org"
 		},
 		"refdb":{
-			"access":"http:\/\/metazoa.ensembl.org\/Caenorhabditis_elegans\/Transcript\/ProteinSummary?peptide=###ID###",
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_C_elegans_PROTEIN"
-			],
-			"url":"http:\/\/metazoa.ensembl.org\/Caenorhabditis_elegans\/Info\/Index",
-			"ensg_access":"http:\/\/metazoa.ensembl.org\/Caenorhabditis_elegans\/geneview?gene=###ID###&db=core"
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"name":[
 			"Caenorhabditis elegans"
@@ -58,14 +44,7 @@
 			"Saccharomyces cerevisiae"
 		],
 		"refdb":{
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_S_cerevisiae_PROTEIN"
-			],
-			"access":"http:\/\/fungi.ensembl.org\/Saccharomyces_cerevisiae\/Transcript\/ProteinSummary?peptide=###ID###",
-			"url":"http:\/\/fungi.ensembl.org\/Saccharomyces_cerevisiae\/Info\/Index",
-			"ensg_access":"http:\/\/fungi.ensembl.org\/Saccharomyces_cerevisiae\/geneview?gene=###ID###&db=core"
+			"use_gk_central_ensembl_ref_db": "fungi"
 		},
 		"alt_refdb":{
 			"access":"https:\/\/www.yeastgenome.org\/search?q=###ID###&category=locus",
@@ -87,14 +66,7 @@
 		],
 		"mart_group":"sscrofa_gene_ensembl",
 		"refdb":{
-			"ensg_access":"http:\/\/www.ensembl.org\/Sus_scrofa\/geneview?gene=###ID###&db=core",
-			"url":"http:\/\/www.ensembl.org\/Sus_scrofa\/Info\/Index\/",
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_Sus_scrofa_PROTEIN"
-			],
-			"access":"http:\/\/www.ensembl.org\/Sus_scrofa\/Transcript\/ProteinSummary?peptide=###ID###"
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"abbreviation": "SSC"
 	},
@@ -105,27 +77,13 @@
 			"Homo sapiens"
 		],
 		"refdb":{
-			"url":"http:\/\/www.ensembl.org\/Homo_sapiens\/Info\/Index\/",
-			"ensg_access":"http:\/\/www.ensembl.org\/Homo_sapiens\/geneview?gene=###ID###&db=core",
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_Homo_sapiens_PROTEIN"
-			],
-			"access":"http:\/\/www.ensembl.org\/Homo_sapiens\/Transcript\/ProteinSummary?peptide=###ID###"
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"abbreviation": "HSA"
 	},
 	"ggal":{
 		"refdb":{
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_Gallus_gallus_PROTEIN"
-			],
-			"access":"http:\/\/www.ensembl.org\/Gallus_gallus\/Transcript\/ProteinSummary?peptide=###ID###",
-			"ensg_access":"http:\/\/www.ensembl.org\/Gallus_gallus\/geneview?gene=###ID###&db=core",
-			"url":"http:\/\/www.ensembl.org\/Gallus_gallus\/Info\/Index\/"
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"mart_group":"ggallus_gene_ensembl",
 		"name":[
@@ -141,14 +99,7 @@
 			"Xenopus tropicalis"
 		],
 		"refdb":{
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_Xenopus_tropicalis_PROTEIN"
-			],
-			"access":"http:\/\/www.ensembl.org\/Xenopus_tropicalis\/Transcript\/ProteinSummary?peptide=###ID###",
-			"url":"http:\/\/www.ensembl.org\/Xenopus_tropicalis\/Info\/Index\/",
-			"ensg_access":"http:\/\/www.ensembl.org\/Xenopus_tropicalis\/geneview?gene=###ID###&db=core"
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"group":"Vertebrate",
 		"compara":"core",
@@ -170,27 +121,13 @@
 		},
 		"mart_url":"http:\/\/fungi.ensembl.org\/biomart\/martservice",
 		"refdb":{
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_S_pombe_PROTEIN"
-			],
-			"access":"http:\/\/fungi.ensembl.org\/Schizosaccharomyces_pombe\/Transcript\/ProteinSummary?peptide=###ID###",
-			"ensg_access":"http:\/\/fungi.ensembl.org\/Schizosaccharomyces_pombe\/geneview?gene=###ID###&db=core",
-			"url":"http:\/\/fungi.ensembl.org\/Schizosaccharomyces_pombe\/Info\/Index"
+			"use_gk_central_ensembl_ref_db": "fungi"
 		},
 		"abbreviation": "SPO"
 	},
 	"btau":{
 		"refdb":{
-			"url":"http:\/\/www.ensembl.org\/Bos_taurus\/Info\/Index\/",
-			"ensg_access":"http:\/\/www.ensembl.org\/Bos_taurus\/geneview?gene=###ID###&db=core",
-			"access":"http:\/\/www.ensembl.org\/Bos_taurus\/Transcript\/ProteinSummary?peptide=###ID###",
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_Bos_taurus_PROTEIN"
-			]
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"mart_group":"btaurus_gene_ensembl",
 		"name":[
@@ -202,14 +139,7 @@
 	},
 	"mmus":{
 		"refdb":{
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_Mus_musculus_PROTEIN"
-			],
-			"access":"http:\/\/www.ensembl.org\/Mus_musculus\/Transcript\/ProteinSummary?peptide=###ID###",
-			"url":"http:\/\/www.ensembl.org\/Mus_musculus\/Info\/Index\/",
-			"ensg_access":"http:\/\/www.ensembl.org\/Mus_musculus\/geneview?gene=###ID###&db=core"
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"mart_group":"mmusculus_gene_ensembl",
 		"name":[
@@ -223,14 +153,7 @@
 		"compara":"core",
 		"group":"Vertebrate",
 		"refdb":{
-			"access":"http:\/\/www.ensembl.org\/Canis_familiaris\/Transcript\/ProteinSummary?peptide=###ID###",
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_Canis_PROTEIN"
-			],
-			"ensg_access":"http:\/\/www.ensembl.org\/Canis_familiaris\/geneview?gene=###ID###&db=core",
-			"url":"http:\/\/www.ensembl.org\/Canis_familiaris\/Info\/Index\/"
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"name":[
 			"Canis familiaris"
@@ -244,14 +167,7 @@
 			"Plasmodium falciparum"
 		],
 		"refdb":{
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_P_falciparum_PROTEIN"
-			],
-			"access":"http:\/\/protists.ensembl.org\/Plasmodium_falciparum\/Transcript\/ProteinSummary?peptide=###ID###",
-			"ensg_access":"http:\/\/protists.ensembl.org\/Plasmodium_falciparum\/geneview?gene=###ID###&db=core",
-			"url":"http:\/\/protists.ensembl.org\/Plasmodium_falciparum\/Info\/Index"
+			"use_gk_central_ensembl_ref_db": "protist"
 		},
 		"mart_url":"http:\/\/protists.ensembl.org\/biomart\/martservice",
 		"alt_refdb":{
@@ -269,14 +185,7 @@
 		"compara":"core",
 		"group":"Metazoan",
 		"refdb":{
-			"ensg_access":"http:\/\/metazoa.ensembl.org\/Drosophila_melanogaster\/geneview?gene=###ID###&db=core",
-			"url":"http:\/\/metazoa.ensembl.org\/Drosophila_melanogaster",
-			"access":"http:\/\/metazoa.ensembl.org\/Drosophila_melanogaster\/Transcript\/ProteinSummary?peptide=###ID###",
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_D_melanogaster_PROTEIN"
-			]
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"alt_refdb":{
 			"access":"https:\/\/flybase.org\/reports\/###ID###.html",
@@ -297,14 +206,7 @@
 			"Danio rerio"
 		],
 		"refdb":{
-			"access":"http:\/\/www.ensembl.org\/Danio_rerio\/Transcript\/ProteinSummary?peptide=###ID###",
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_Danio_rerio_PROTEIN"
-			],
-			"ensg_access":"http:\/\/www.ensembl.org\/Danio_rerio\/geneview?gene=###ID###&db=core",
-			"url":"http:\/\/www.ensembl.org\/Danio_rerio\/Info\/Index\/"
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"group":"Vertebrate",
 		"compara":"core",
@@ -314,14 +216,7 @@
 		"compara":"core",
 		"group":"Vertebrate",
 		"refdb":{
-			"ensg_access":"http:\/\/www.ensembl.org\/Rattus_norvegicus\/geneview?gene=###ID###&db=core",
-			"url":"http:\/\/www.ensembl.org\/Rattus_norvegicus\/Info\/Index\/",
-			"access":"http:\/\/www.ensembl.org\/Rattus_norvegicus\/Transcript\/ProteinSummary?peptide=###ID###",
-			"dbname":[
-				"ENSEMBL",
-				"Ensembl",
-				"ENSEMBL_Rattus_norvegicus_PROTEIN"
-			]
+			"use_gk_central_ensembl_ref_db": "main"
 		},
 		"mart_group":"rnorvegicus_gene_ensembl",
 		"name":[
