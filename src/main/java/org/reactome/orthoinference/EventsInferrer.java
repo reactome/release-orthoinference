@@ -95,9 +95,7 @@ public class EventsInferrer
 		logger.info("Beginning orthoinference of " + speciesName);
 
 		JSONObject refDb = (JSONObject) speciesObject.get("refdb");
-		String refDbUrl = (String) refDb.get("url");
-		String refDbProteinUrl = (String) refDb.get("access");
-		String refDbGeneUrl = (String) refDb.get("ensg_access");
+		String ensemblDatabaseType = (String) refDb.get("use_gk_central_ensembl_ref_db");
 
 		// Creates two files that a) list reactions that are eligible for inference and b) those that are successfully inferred
 		String eligibleFilename = "eligible_" + species	+ "_75.txt";
@@ -120,8 +118,7 @@ public class EventsInferrer
 		}
 		EWASInferrer.readENSGMappingFile(species, pathToOrthopairs);
 		EWASInferrer.fetchAndSetUniprotDbInstance();
-		EWASInferrer.createEnsemblProteinDbInstance(speciesName, refDbUrl, refDbProteinUrl);
-		EWASInferrer.createEnsemblGeneDBInstance(speciesName, refDbUrl, refDbGeneUrl);
+		EWASInferrer.fetchAndSetEnsemblDbInstance(ensemblDatabaseType);
 
 		JSONObject altRefDbJSON = (JSONObject) speciesObject.get("alt_refdb");
 		if (altRefDbJSON != null)
