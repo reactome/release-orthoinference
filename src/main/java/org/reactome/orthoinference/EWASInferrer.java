@@ -359,7 +359,7 @@ public class EWASInferrer {
 	// Create instance pertaining to any alternative reference DB for the species
 	public static void createAlternateReferenceDBInstance(JSONObject altRefDbJSON) throws Exception
 	{
-		String altRefDbDisplayName = (String) ((JSONArray) altRefDbJSON.get("dbName")).get(0);
+		String altRefDbDisplayName = (String) ((JSONArray) altRefDbJSON.get("dbname")).get(0);
 		if (refDbExistsInDb(altRefDbDisplayName)) {
 			alternateDbInst = getRefDbFromDb(altRefDbDisplayName);
 		} else {
