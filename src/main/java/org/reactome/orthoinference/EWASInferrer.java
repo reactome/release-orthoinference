@@ -400,8 +400,9 @@ public class EWASInferrer {
 	}
 
 	private static boolean refDbExistsInDb(String refDbDisplayName) throws Exception {
-		Collection<GKInstance> refDbInstances = dba.fetchInstanceByAttribute(ReferenceDatabase, _displayName, "=", refDbDisplayName);
-		return !refDbInstances.isEmpty();
+		Collection<GKInstance> refDbInstances =
+			dba.fetchInstanceByAttribute(ReferenceDatabase, _displayName, "=", refDbDisplayName);
+		return refDbInstances != null && !refDbInstances.isEmpty();
 	}
 
 	private static GKInstance getRefDbFromDb(String refDbDisplayName) throws Exception {
