@@ -77,6 +77,7 @@ public class EventsInferrer
 		releaseVersion = props.getProperty("releaseNumber");
 		String pathToOrthopairs = props.getProperty("pathToOrthopairs", "orthopairs");
 		String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig", "src/main/resources/Species.json");
+		String pathToRefDbConfig = props.getProperty("pathToRefDbConfig", "src/main/resources/refdb.json");
 		String dateOfRelease = props.getProperty("dateOfRelease");
 		int personId = Integer.valueOf(props.getProperty("personId"));
 		setReleaseDates(dateOfRelease);
@@ -118,7 +119,7 @@ public class EventsInferrer
 		}
 		EWASInferrer.readENSGMappingFile(species, pathToOrthopairs);
 		EWASInferrer.fetchAndSetUniprotDbInstance();
-		EWASInferrer.fetchAndSetEnsemblDbInstance(ensemblDatabaseType);
+		EWASInferrer.fetchAndSetEnsemblDbInstance(ensemblDatabaseType, pathToRefDbConfig);
 
 		JSONObject altRefDbJSON = (JSONObject) speciesObject.get("alt_refdb");
 		if (altRefDbJSON != null)

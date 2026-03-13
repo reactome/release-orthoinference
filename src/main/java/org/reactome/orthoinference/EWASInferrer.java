@@ -1,6 +1,7 @@
 package org.reactome.orthoinference;
 
 import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -12,12 +13,13 @@ import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
 
 import org.gk.model.InstanceDisplayNameGenerator;
+import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
-import org.gk.schema.GKSchemaClass;
-import org.gk.schema.InvalidAttributeException;
-import org.gk.schema.SchemaClass;
+import org.gk.schema.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
 public class EWASInferrer {
 
@@ -344,8 +346,10 @@ public class EWASInferrer {
 		uniprotDbInst = uniprotDbInstances.iterator().next();
 	}
 
-	public static void fetchAndSetEnsemblDbInstance(String ensemblDatabaseType) throws Exception {
-		GKInstance ensemblDbInst = fetchEnsemblDbInstance(ensemblDatabaseType);
+	public static void fetchAndSetEnsemblDbInstance(String ensemblDatabaseType, String pathToRefDbConfig)
+		throws Exception {
+
+		GKInstance ensemblDbInst = fetchOrCreateEnsemblDbInstance(ensemblDatabaseType, pathToRefDbConfig);
 		if (ensemblDbInst == null) {
 			throw new IllegalStateException(
 				"Unable to fetch EnsEMBL Reference Database for type: " + ensemblDatabaseType
@@ -411,17 +415,54 @@ public class EWASInferrer {
 		).iterator().next();
 	}
 
-	private static GKInstance fetchEnsemblDbInstance(String ensemblDatabaseType) throws Exception {
-		GKInstance ensemblDbInst;
+	private static GKInstance fetchOrCreateEnsemblDbInstance(String ensemblDatabaseType, String pathToRefDbConfig)
+		throws Exception {
+
+		String ensemblRefDBDisplayName;
 		if (ensemblDatabaseType.equals("main")) {
-			ensemblDbInst = getRefDbFromDb("ENSEMBL");
+			ensemblRefDBDisplayName = "ENSEMBL";
 		} else if (ensemblDatabaseType.equals("fungi")) {
-			ensemblDbInst = getRefDbFromDb("ENSEMBL Fungi");
+			ensemblRefDBDisplayName = "ENSEMBL Fungi";
 		} else if (ensemblDatabaseType.equals("protist")) {
-			ensemblDbInst = getRefDbFromDb("ENSEMBL Protist");
+			ensemblRefDBDisplayName = "ENSEMBL Protist";
 		} else {
 			throw new IllegalStateException(ensemblDatabaseType + " is not a valid EnsEMBL database type");
 		}
-		return ensemblDbInst;
+
+		return refDbExistsInDb(ensemblRefDBDisplayName) ?
+			getRefDbFromDb(ensemblRefDBDisplayName) :
+			createRefDb(ensemblRefDBDisplayName, pathToRefDbConfig);
+	}
+
+	private static GKInstance createRefDb(String refDbDisplayName, String pathToRefDbConfig)
+		throws Exception {
+
+		JSONParser parser = new JSONParser();
+		JSONObject refDbsJsonObject = (JSONObject) parser.parse(new FileReader(pathToRefDbConfig));
+		JSONObject refDbJsonObject = (JSONObject) refDbsJsonObject.get(refDbDisplayName);
+
+		String accessUrl = (String) refDbJsonObject.get("accessUrl");
+		String identifiersPrefix = (String) refDbJsonObject.get("identifiersPrefix");
+		String resourceIdentifier = (String) refDbJsonObject.get("resourceIdentifier");
+		String url = (String) refDbJsonObject.get("url");
+
+		GKInstance refDbInstance = new GKInstance(fetchSchema().getClassByName(ReferenceDatabase));
+		refDbInstance.setDbAdaptor(dba);
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.created, instanceEditInst);
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.accessUrl, accessUrl);
+		refDbInstance.setAttributeValue("identifiersPrefix", identifiersPrefix);
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.resourceIdentifier, resourceIdentifier);
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.url, url);
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.name, Collections.singletonList(refDbDisplayName));
+		InstanceDisplayNameGenerator.setDisplayName(refDbInstance);
+
+		return refDbInstance;
+	}
+
+	private static Schema fetchSchema() throws Exception {
+		if (dba.getSchema() == null) {
+			return dba.fetchSchema();
+		}
+		return dba.getSchema();
 	}
 }
