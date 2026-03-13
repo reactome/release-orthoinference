@@ -95,10 +95,6 @@ public class PathwaysInferrer {
 		infPathwayInst.addAttributeValue(name, inferDengueNameToZika(sourcePathwayReferralInst.getAttributeValuesList(name)));
 //		infPathwayInst.addAttributeValue(summation, summationInst);
 		InstanceUtilities.createZikaSummationInstances(infPathwayInst, sourcePathwayReferralInst);
-		if (infPathwayInst.getSchemClass().isValidAttribute(releaseDate))
-		{
-			infPathwayInst.addAttributeValue(releaseDate, dateOfRelease);
-		}
 		infPathwayInst.addAttributeValue(inferredFrom, sourcePathwayReferralInst);
 		infPathwayInst.addAttributeValue(evidenceType, evidenceTypeInst);
 		for (GKInstance goBioProcessInst : (Collection<GKInstance>) sourcePathwayReferralInst.getAttributeValuesList(goBiologicalProcess))

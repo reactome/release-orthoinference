@@ -110,10 +110,6 @@ public class ReactionInferrer {
 							{
 								return;
 							}
-							if (infReactionInst.getSchemClass().isValidAttribute(releaseDate))
-							{
-								infReactionInst.addAttributeValue(releaseDate, dateOfRelease);
-							}
 
 //							GKInstance orthoStableIdentifierInst = EventsInferrer.getStableIdentifierGenerator().generateOrthologousStableId(infReactionInst, reactionInst);
 //							infReactionInst.addAttributeValue(stableIdentifier, orthoStableIdentifierInst);

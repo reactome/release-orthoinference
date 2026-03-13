@@ -79,9 +79,7 @@ public class EventsInferrer
 		releaseVersion = props.getProperty("releaseNumber");
 		String pathToOrthopairs = props.getProperty("pathToOrthopairs");
 		String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig");
-		String dateOfRelease = props.getProperty("dateOfRelease");
 		int personId = Integer.valueOf(props.getProperty("personId"));
-		setReleaseDates(dateOfRelease);
 
 		String pathToSkipList = props.getProperty("pathToOrthoinferenceSkipList");
 		if (!Files.exists(Paths.get(pathToSkipList))) {
