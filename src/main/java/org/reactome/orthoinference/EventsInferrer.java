@@ -346,7 +346,14 @@ public class EventsInferrer
 		GKInstance summationInst = new GKInstance(dbAdaptor.getSchema().getClassByName(Summation));
 		summationInst.setDbAdaptor(dbAdaptor);
 		summationInst.addAttributeValue(created, instanceEditInst);
-		String summationText = "This event has been computationally inferred from an event that has been demonstrated in another species.<p>The inference is based on the homology mapping from PANTHER. Briefly, reactions for which all involved PhysicalEntities (in input, output and catalyst) have a mapped orthologue/paralogue (for complexes at least 75% of components must have a mapping) are inferred to the other species. High level events are also inferred for these events to allow for easier navigation.<p><a href='/electronic_inference_compara.html' target = 'NEW'>More details and caveats of the event inference in Reactome.</a> For details on PANTHER see also: <a href='http://www.pantherdb.org/about.jsp' target='NEW'>http://www.pantherdb.org/about.jsp</a>";
+		String summationText = "This event has been computationally inferred from an event that has been " +
+			"demonstrated in another species.<p>The inference is based on the homology mapping from PANTHER. " +
+			"Briefly, reactions for which all involved PhysicalEntities (in input, output and catalyst) have a " +
+			"mapped orthologue/paralogue (for complexes at least 75% of components must have a mapping) are " +
+			"inferred to the other species. High level events are also inferred for these events to allow for " +
+			"easier navigation.<p><a href='/electronic_inference_compara.html' target = 'NEW'>More details and " +
+			"caveats of the event inference in Reactome.</a> For details on PANTHER see also: " +
+			"<a href='http://www.pantherdb.org/about.jsp' target='NEW'>http://www.pantherdb.org/about.jsp</a>";
 		summationInst.addAttributeValue(text, summationText);
 		summationInst.addAttributeValue(_displayName, summationText);
 		summationInst = InstanceUtilities.checkForIdenticalInstances(summationInst, null);
