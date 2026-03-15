@@ -100,7 +100,11 @@ public class EWASInferrer {
 					for (int endCoord : (Collection<Integer>) ewasInst.getAttributeValuesList(endCoordinate)) {
 						infEWASInst.addAttributeValue(endCoordinate, endCoord);
 					}
-					if (infEWASInst.getAttributeValue(startCoordinate) != null && (int) infEWASInst.getAttributeValue(startCoordinate) > 1 || infEWASInst.getAttributeValue(endCoordinate) != null && (int) infEWASInst.getAttributeValue(endCoordinate) > 1) {
+					if (infEWASInst.getAttributeValue(startCoordinate) != null &&
+						(int) infEWASInst.getAttributeValue(startCoordinate) > 1 ||
+						infEWASInst.getAttributeValue(endCoordinate) != null &&
+						(int) infEWASInst.getAttributeValue(endCoordinate) > 1) {
+
 						List<String> infEWASInstNames = (ArrayList<String>) (ewasInst).getAttributeValuesList(name);
 						infEWASInst.addAttributeValue(name, infEWASInstNames.get(0));
 						infEWASInst.addAttributeValue(name, homologueId);
