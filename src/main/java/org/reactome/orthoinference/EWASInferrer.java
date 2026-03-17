@@ -1,7 +1,6 @@
 package org.reactome.orthoinference;
 
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -441,31 +440,40 @@ public class EWASInferrer {
 	private static GKInstance createRefDb(String refDbDisplayName, String pathToRefDbConfig)
 		throws Exception {
 
-		JSONParser parser = new JSONParser();
-		JSONObject refDbsJsonObject = (JSONObject) parser.parse(new FileReader(pathToRefDbConfig));
-		JSONObject refDbJsonObject = (JSONObject) refDbsJsonObject.get(refDbDisplayName);
-
-		String accessUrl = (String) refDbJsonObject.get("accessUrl");
-		String identifiersPrefix = (String) refDbJsonObject.get("identifiersPrefix");
-		String resourceIdentifier = (String) refDbJsonObject.get("resourceIdentifier");
-		String url = (String) refDbJsonObject.get("url");
+		JSONObject refDbJsonObject = getRefDBJSONObject(refDbDisplayName, pathToRefDbConfig);
 
 		GKInstance refDbInstance = new GKInstance(fetchSchema().getClassByName(ReferenceDatabase));
 		refDbInstance.setDbAdaptor(dba);
 		refDbInstance.setAttributeValue(ReactomeJavaConstants.created, instanceEditInst);
-		refDbInstance.setAttributeValue(ReactomeJavaConstants.accessUrl, accessUrl);
-		refDbInstance.setAttributeValue("identifiersPrefix", identifiersPrefix);
-		refDbInstance.setAttributeValue(ReactomeJavaConstants.resourceIdentifier, resourceIdentifier);
-		refDbInstance.setAttributeValue(ReactomeJavaConstants.url, url);
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.accessUrl, refDbJsonObject.get("accessUrl"));
+		refDbInstance.setAttributeValue("identifiersPrefix", refDbJsonObject.get("identifiersPrefix"));
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.resourceIdentifier,
+			refDbJsonObject.get("resourceIdentifier"));
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.url, refDbJsonObject.get("url"));
 		refDbInstance.setAttributeValue(ReactomeJavaConstants.name, Collections.singletonList(refDbDisplayName));
 		InstanceDisplayNameGenerator.setDisplayName(refDbInstance);
 
 		return refDbInstance;
 	}
 
-	private static Schema fetchSchema() throws Exception {
+	private static JSONObject getRefDBJSONObject(String refDbDisplayName, String pathToRefDbConfig) {
+		JSONParser parser = new JSONParser();
+		JSONObject refDbsJsonObject;
+		try {
+			refDbsJsonObject = (JSONObject) parser.parse(new FileReader(pathToRefDbConfig));
+		} catch (IOException | ParseException e) {
+			throw new RuntimeException("Unable to read/parse JSON from " + pathToRefDbConfig, e);
+		}
+		return (JSONObject) refDbsJsonObject.get(refDbDisplayName);
+	}
+
+	private static Schema fetchSchema() {
 		if (dba.getSchema() == null) {
-			return dba.fetchSchema();
+			try {
+				return dba.fetchSchema();
+			} catch (Exception e) {
+				throw new RuntimeException("Unable to fetch schema from " + dba, e);
+			}
 		}
 		return dba.getSchema();
 	}
