@@ -313,7 +313,9 @@ public class OrthologousEntityGenerator {
 				for (GKInstance candidateInst : candidateInstances)
 				{
 					GKInstance infCandidateInst = createOrthoEntity(candidateInst, false);
-					if (infCandidateInst != null && !existingMemberInstances.contains(infCandidateInst.getAttributeValue(name).toString()) && !existingCandidateInstances.contains(infCandidateInst.getAttributeValue(name).toString()))
+					if (infCandidateInst != null &&
+						!existingMemberInstances.contains(infCandidateInst.getAttributeValue(name).toString()) &&
+						!existingCandidateInstances.contains(infCandidateInst.getAttributeValue(name).toString()))
 					{
 						existingCandidateInstances.add(infCandidateInst.getAttributeValue(name).toString());
 						infCandidatesList.add(infCandidateInst);

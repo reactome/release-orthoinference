@@ -12,12 +12,13 @@ import org.gk.model.GKInstance;
 import static org.gk.model.ReactomeJavaConstants.*;
 
 import org.gk.model.InstanceDisplayNameGenerator;
+import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
-import org.gk.schema.GKSchemaClass;
-import org.gk.schema.InvalidAttributeException;
-import org.gk.schema.SchemaClass;
+import org.gk.schema.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
 public class EWASInferrer {
 
@@ -98,7 +99,11 @@ public class EWASInferrer {
 					for (int endCoord : (Collection<Integer>) ewasInst.getAttributeValuesList(endCoordinate)) {
 						infEWASInst.addAttributeValue(endCoordinate, endCoord);
 					}
-					if (infEWASInst.getAttributeValue(startCoordinate) != null && (int) infEWASInst.getAttributeValue(startCoordinate) > 1 || infEWASInst.getAttributeValue(endCoordinate) != null && (int) infEWASInst.getAttributeValue(endCoordinate) > 1) {
+					if (infEWASInst.getAttributeValue(startCoordinate) != null &&
+						(int) infEWASInst.getAttributeValue(startCoordinate) > 1 ||
+						infEWASInst.getAttributeValue(endCoordinate) != null &&
+						(int) infEWASInst.getAttributeValue(endCoordinate) > 1) {
+
 						List<String> infEWASInstNames = (ArrayList<String>) (ewasInst).getAttributeValuesList(name);
 						infEWASInst.addAttributeValue(name, infEWASInstNames.get(0));
 						infEWASInst.addAttributeValue(name, homologueId);
@@ -339,53 +344,41 @@ public class EWASInferrer {
 
 	// Fetches Uniprot DB instance
 	@SuppressWarnings("unchecked")
-	public static void fetchAndSetUniprotDbInstance() throws Exception
-	{
+	public static void fetchAndSetUniprotDbInstance() throws Exception {
 		Collection<GKInstance> uniprotDbInstances = (Collection<GKInstance>) dba.fetchInstanceByAttribute(ReferenceDatabase, name, "=", "UniProt");
 		uniprotDbInst = uniprotDbInstances.iterator().next();
 	}
 
-	// Creates instance pertaining to the species Ensembl Protein DB
-	public static void createEnsemblProteinDbInstance(String toSpeciesLong, String toSpeciesReferenceDbUrl, String toSpeciesEnspAccessUrl) throws Exception
-	{
-		String enspSpeciesDb = "ENSEMBL_" + toSpeciesLong + "_PROTEIN";
-		enspDbInst = new GKInstance(dba.getSchema().getClassByName(ReferenceDatabase));
-		enspDbInst.setDbAdaptor(dba);
-		enspDbInst.addAttributeValue(created, instanceEditInst);
-		enspDbInst.addAttributeValue(name, "Ensembl");
-		enspDbInst.addAttributeValue(name, enspSpeciesDb);
-		enspDbInst.addAttributeValue(url, toSpeciesReferenceDbUrl);
-		enspDbInst.addAttributeValue(accessUrl, toSpeciesEnspAccessUrl);
-		enspDbInst.setAttributeValue(_displayName, "Ensembl");
-		dba.storeInstance(enspDbInst);
-	}
+	public static void fetchAndSetEnsemblDbInstance(String ensemblDatabaseType, String pathToRefDbConfig)
+		throws Exception {
 
-	// Creates instance pertaining to the species Ensembl Gene DB
-	public static void createEnsemblGeneDBInstance(String toSpeciesLong, String toSpeciesReferenceDbUrl, String toSpeciesEnsgAccessUrl) throws Exception
-	{
-		String ensgSpeciesDb = "ENSEMBL_" + toSpeciesLong + "_GENE";
-		ensgDbInst = new GKInstance(dba.getSchema().getClassByName(ReferenceDatabase));
-		ensgDbInst.setDbAdaptor(dba);
-		ensgDbInst.addAttributeValue(created, instanceEditInst);
-		ensgDbInst.addAttributeValue(name, "ENSEMBL");
-		ensgDbInst.addAttributeValue(name, ensgSpeciesDb);
-		ensgDbInst.addAttributeValue(url, toSpeciesReferenceDbUrl);
-		ensgDbInst.addAttributeValue(accessUrl, toSpeciesEnsgAccessUrl);
-		ensgDbInst.setAttributeValue(_displayName, "ENSEMBL");
-		dba.storeInstance(ensgDbInst);
+		GKInstance ensemblDbInst = fetchOrCreateEnsemblDbInstance(ensemblDatabaseType, pathToRefDbConfig);
+		if (ensemblDbInst == null) {
+			throw new IllegalStateException(
+				"Unable to fetch EnsEMBL Reference Database for type: " + ensemblDatabaseType
+			);
+		}
+
+		ensgDbInst = ensemblDbInst;
+		enspDbInst = ensemblDbInst;
 	}
 
 	// Create instance pertaining to any alternative reference DB for the species
 	public static void createAlternateReferenceDBInstance(JSONObject altRefDbJSON) throws Exception
 	{
-		alternateDbInst = new GKInstance(dba.getSchema().getClassByName(ReferenceDatabase));
-		alternateDbInst.setDbAdaptor(dba);
-		alternateDbInst.addAttributeValue(created, instanceEditInst);
-		alternateDbInst.addAttributeValue(name, ((JSONArray) altRefDbJSON.get("dbname")).get(0));
-		alternateDbInst.addAttributeValue(url, altRefDbJSON.get("url"));
-		alternateDbInst.addAttributeValue(accessUrl, altRefDbJSON.get("access"));
-		alternateDbInst.setAttributeValue(_displayName, ((JSONArray) altRefDbJSON.get("dbname")).get(0));
-		alternateDbInst = InstanceUtilities.checkForIdenticalInstances(alternateDbInst, null);
+		String altRefDbDisplayName = (String) ((JSONArray) altRefDbJSON.get("dbname")).get(0);
+		if (refDbExistsInDb(altRefDbDisplayName)) {
+			alternateDbInst = getRefDbFromDb(altRefDbDisplayName);
+		} else {
+			alternateDbInst = new GKInstance(dba.getSchema().getClassByName(ReferenceDatabase));
+			alternateDbInst.setDbAdaptor(dba);
+			alternateDbInst.addAttributeValue(created, instanceEditInst);
+			alternateDbInst.addAttributeValue(name, altRefDbDisplayName);
+			alternateDbInst.addAttributeValue(url, altRefDbJSON.get("url"));
+			alternateDbInst.addAttributeValue(accessUrl, altRefDbJSON.get("access"));
+			alternateDbInst.setAttributeValue(_displayName, altRefDbDisplayName);
+			alternateDbInst = InstanceUtilities.checkForIdenticalInstances(alternateDbInst, null);
+		}
 		if (altRefDbJSON.get("alt_id") != null)
 		{
 			altRefDbId = (String) altRefDbJSON.get("alt_id");
@@ -411,5 +404,77 @@ public class EWASInferrer {
 
 	public static void setGeneNameMappingFile(Map<String, String> geneNameMappingsCopy) {
 		geneNameMappings = geneNameMappingsCopy;
+	}
+
+	private static boolean refDbExistsInDb(String refDbDisplayName) throws Exception {
+		Collection<GKInstance> refDbInstances =
+			dba.fetchInstanceByAttribute(ReferenceDatabase, _displayName, "=", refDbDisplayName);
+		return refDbInstances != null && !refDbInstances.isEmpty();
+	}
+
+	private static GKInstance getRefDbFromDb(String refDbDisplayName) throws Exception {
+		return (GKInstance) dba.fetchInstanceByAttribute(
+			ReferenceDatabase, _displayName, "=", refDbDisplayName
+		).iterator().next();
+	}
+
+	private static GKInstance fetchOrCreateEnsemblDbInstance(String ensemblDatabaseType, String pathToRefDbConfig)
+		throws Exception {
+
+		String ensemblRefDBDisplayName;
+		if (ensemblDatabaseType.equals("main")) {
+			ensemblRefDBDisplayName = "ENSEMBL";
+		} else if (ensemblDatabaseType.equals("fungi")) {
+			ensemblRefDBDisplayName = "ENSEMBL Fungi";
+		} else if (ensemblDatabaseType.equals("protist")) {
+			ensemblRefDBDisplayName = "ENSEMBL Protist";
+		} else {
+			throw new IllegalStateException(ensemblDatabaseType + " is not a valid EnsEMBL database type");
+		}
+
+		return refDbExistsInDb(ensemblRefDBDisplayName) ?
+			getRefDbFromDb(ensemblRefDBDisplayName) :
+			createRefDb(ensemblRefDBDisplayName, pathToRefDbConfig);
+	}
+
+	private static GKInstance createRefDb(String refDbDisplayName, String pathToRefDbConfig)
+		throws Exception {
+
+		JSONObject refDbJsonObject = getRefDBJSONObject(refDbDisplayName, pathToRefDbConfig);
+
+		GKInstance refDbInstance = new GKInstance(fetchSchema().getClassByName(ReferenceDatabase));
+		refDbInstance.setDbAdaptor(dba);
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.created, instanceEditInst);
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.accessUrl, refDbJsonObject.get("accessUrl"));
+		refDbInstance.setAttributeValue("identifiersPrefix", refDbJsonObject.get("identifiersPrefix"));
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.resourceIdentifier,
+			refDbJsonObject.get("resourceIdentifier"));
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.url, refDbJsonObject.get("url"));
+		refDbInstance.setAttributeValue(ReactomeJavaConstants.name, Collections.singletonList(refDbDisplayName));
+		InstanceDisplayNameGenerator.setDisplayName(refDbInstance);
+
+		return refDbInstance;
+	}
+
+	private static JSONObject getRefDBJSONObject(String refDbDisplayName, String pathToRefDbConfig) {
+		JSONParser parser = new JSONParser();
+		JSONObject refDbsJsonObject;
+		try {
+			refDbsJsonObject = (JSONObject) parser.parse(new FileReader(pathToRefDbConfig));
+		} catch (IOException | ParseException e) {
+			throw new RuntimeException("Unable to read/parse JSON from " + pathToRefDbConfig, e);
+		}
+		return (JSONObject) refDbsJsonObject.get(refDbDisplayName);
+	}
+
+	private static Schema fetchSchema() {
+		if (dba.getSchema() == null) {
+			try {
+				return dba.fetchSchema();
+			} catch (Exception e) {
+				throw new RuntimeException("Unable to fetch schema from " + dba, e);
+			}
+		}
+		return dba.getSchema();
 	}
 }

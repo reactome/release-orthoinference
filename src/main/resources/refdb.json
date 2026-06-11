@@ -1,0 +1,21 @@
+{
+    "ENSEMBL" : {
+        "accessUrl": "https://www.ensembl.org/id/###ID###",
+        "identifiersPrefix": "ensembl",
+        "resourceIdentifier": "MIR:00100011",
+        "url": "https://www.ensembl.org/"
+    },
+    "ENSEMBL Fungi" : {
+        "accessUrl": "https://fungi.ensembl.org/id/###ID###",
+        "identifiersPrefix": "ensembl.fungi",
+        "resourceIdentifier": "MIR:00100265",
+        "url": "https://fungi.ensembl.org/"
+
+    },
+    "ENSEMBL Protist" : {
+        "accessUrl": "https://protists.ensembl.org/id/###ID###",
+        "identifiersPrefix": "ensembl.protist",
+        "resourceIdentifier": "MIR:00100262",
+        "url": "https://protists.ensembl.org/"
+    }
+}

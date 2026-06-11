@@ -77,6 +77,7 @@ public class EventsInferrer
 		releaseVersion = props.getProperty("releaseNumber");
 		String pathToOrthopairs = props.getProperty("pathToOrthopairs", "orthopairs");
 		String pathToSpeciesConfig = props.getProperty("pathToSpeciesConfig", "src/main/resources/Species.json");
+		String pathToRefDbConfig = props.getProperty("pathToRefDbConfig", "src/main/resources/refdb.json");
 		String dateOfRelease = props.getProperty("dateOfRelease");
 		int personId = Integer.valueOf(props.getProperty("personId"));
 		setReleaseDates(dateOfRelease);
@@ -95,9 +96,7 @@ public class EventsInferrer
 		logger.info("Beginning orthoinference of " + speciesName);
 
 		JSONObject refDb = (JSONObject) speciesObject.get("refdb");
-		String refDbUrl = (String) refDb.get("url");
-		String refDbProteinUrl = (String) refDb.get("access");
-		String refDbGeneUrl = (String) refDb.get("ensg_access");
+		String ensemblDatabaseType = (String) refDb.get("use_gk_central_ensembl_ref_db");
 
 		// Creates two files that a) list reactions that are eligible for inference and b) those that are successfully inferred
 		String eligibleFilename = "eligible_" + species	+ "_75.txt";
@@ -120,8 +119,7 @@ public class EventsInferrer
 		}
 		EWASInferrer.readENSGMappingFile(species, pathToOrthopairs);
 		EWASInferrer.fetchAndSetUniprotDbInstance();
-		EWASInferrer.createEnsemblProteinDbInstance(speciesName, refDbUrl, refDbProteinUrl);
-		EWASInferrer.createEnsemblGeneDBInstance(speciesName, refDbUrl, refDbGeneUrl);
+		EWASInferrer.fetchAndSetEnsemblDbInstance(ensemblDatabaseType, pathToRefDbConfig);
 
 		JSONObject altRefDbJSON = (JSONObject) speciesObject.get("alt_refdb");
 		if (altRefDbJSON != null)
@@ -348,7 +346,14 @@ public class EventsInferrer
 		GKInstance summationInst = new GKInstance(dbAdaptor.getSchema().getClassByName(Summation));
 		summationInst.setDbAdaptor(dbAdaptor);
 		summationInst.addAttributeValue(created, instanceEditInst);
-		String summationText = "This event has been computationally inferred from an event that has been demonstrated in another species.<p>The inference is based on the homology mapping from PANTHER. Briefly, reactions for which all involved PhysicalEntities (in input, output and catalyst) have a mapped orthologue/paralogue (for complexes at least 75% of components must have a mapping) are inferred to the other species. High level events are also inferred for these events to allow for easier navigation.<p><a href='/electronic_inference_compara.html' target = 'NEW'>More details and caveats of the event inference in Reactome.</a> For details on PANTHER see also: <a href='http://www.pantherdb.org/about.jsp' target='NEW'>http://www.pantherdb.org/about.jsp</a>";
+		String summationText = "This event has been computationally inferred from an event that has been " +
+			"demonstrated in another species.<p>The inference is based on the homology mapping from PANTHER. " +
+			"Briefly, reactions for which all involved PhysicalEntities (in input, output and catalyst) have a " +
+			"mapped orthologue/paralogue (for complexes at least 75% of components must have a mapping) are " +
+			"inferred to the other species. High level events are also inferred for these events to allow for " +
+			"easier navigation.<p><a href='/electronic_inference_compara.html' target = 'NEW'>More details and " +
+			"caveats of the event inference in Reactome.</a> For details on PANTHER see also: " +
+			"<a href='http://www.pantherdb.org/about.jsp' target='NEW'>http://www.pantherdb.org/about.jsp</a>";
 		summationInst.addAttributeValue(text, summationText);
 		summationInst.addAttributeValue(_displayName, summationText);
 		summationInst = InstanceUtilities.checkForIdenticalInstances(summationInst, null);
