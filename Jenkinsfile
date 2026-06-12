@@ -143,6 +143,7 @@ pipeline{
 				script{
 					utils.cloneOrUpdateLocalRepo("graph-qa")
 					dir("graph-qa"){
+					    sh "git checkout feature/reactome-parent-1.0.5"
 						utils.buildJarFileWithPackage()
 						withCredentials([usernamePassword(credentialsId: 'neo4jUsernamePassword', passwordVariable: 'pass', usernameVariable: 'user')]){
 							sh "java -jar target/graph-qa-exec.jar -u $user -p  $pass --verbose"
