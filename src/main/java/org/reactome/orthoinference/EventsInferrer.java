@@ -20,6 +20,8 @@ import org.reactome.curation.model.SimpleInstance;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import static org.reactome.util.general.CollectionUtils.safeList;
+
 /**
  *
  * @author jcook
@@ -196,14 +198,30 @@ public class EventsInferrer {
 	private List<SimpleInstance> checkIfPreviouslyInferred(
 		SimpleInstance reactionInst, String attribute, List<SimpleInstance> previouslyInferredInstances)
 		throws Exception {
-		for (SimpleInstance attributeInst : (List<SimpleInstance>) reactionInst.getAttribute(attribute)) {
-			SimpleInstance reactionSpeciesInst = (SimpleInstance) attributeInst.getAttribute(ReactomeJavaConstants.species);
-			if (reactionSpeciesInst.getDbId().equals(getSpeciesInstance().getDbId()) &&
+		for (SimpleInstance attributeShell : safeList((List<SimpleInstance>) reactionInst.getAttribute(attribute))) {
+			// The reaction's attribute values are shells -- dbId, displayName and schemaClass only -- so each is
+			// inflated before its species can be read. The inflated instance is the one kept, since the caller goes
+			// on to read its disease and evidenceType.
+			SimpleInstance attributeInst = getCuratorToolAPI().inflate(attributeShell);
+			if (attributeInst == null) {
+				logger.warn("No instance found for " + attributeShell + " -- skipping it");
+				continue;
+			}
+			if (hasSpecies(attributeInst, getSpeciesInstance()) &&
 				attributeInst.getAttribute(ReactomeJavaConstants.isChimeric) == null) {
 				previouslyInferredInstances.add(attributeInst);
 			}
 		}
 		return previouslyInferredInstances;
+	}
+
+	// An Event's species is multi-valued, so its value is a list; a single instance is also accepted.
+	private boolean hasSpecies(SimpleInstance instance, SimpleInstance speciesInst) {
+		Object speciesValue = instance.getAttribute(ReactomeJavaConstants.species);
+		Collection<?> speciesValues = speciesValue instanceof Collection ?
+			(Collection<?>) speciesValue : Collections.singletonList(speciesValue);
+		return speciesValues.stream().anyMatch(value -> value instanceof SimpleInstance &&
+			Objects.equals(((SimpleInstance) value).getDbId(), speciesInst.getDbId()));
 	}
 
 	private void outputReport(String species, int releaseVersion) throws IOException {
