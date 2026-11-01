@@ -1,18 +1,15 @@
 package org.reactome.orthoinference;
 
-import org.gk.model.GKInstance;
 import org.gk.model.ReactomeJavaConstants;
-import org.gk.persistence.MySQLAdaptor;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.ParseException;
+import org.reactome.curation.model.SimpleInstance;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.sql.SQLException;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 
 /**
@@ -25,29 +22,32 @@ public class OrthologyReferenceDatabase {
 	private ConfigProperties configProperties;
 	private String speciesCode;
 	private InstanceUtilities instanceUtilities;
+	private CuratorToolAPI curatorToolAPI;
 
-	private GKInstance ensemblDBInst;
-	private GKInstance uniprotDbInst;
+	private SimpleInstance ensemblDBInst;
+	private SimpleInstance uniprotDbInst;
 
-	private GKInstance alternateDbInst;
+	private SimpleInstance alternateDbInst;
 	private boolean altRefDbExists;
 	private String altRefDbId;
 
 	public OrthologyReferenceDatabase(
 		ConfigProperties configProperties,
 		@Qualifier("targetSpeciesCode") String speciesCode,
-		InstanceUtilities instanceUtilities
+		InstanceUtilities instanceUtilities,
+		CuratorToolAPI curatorToolAPI
 	) throws Exception {
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
 		this.instanceUtilities = instanceUtilities;
+		this.curatorToolAPI = curatorToolAPI;
 
 		setEnsEMBLDatabase();
 		fetchAndSetUniprotDbInstance();
 		setAlternateReferenceDatabase();
 	}
 
-	public GKInstance getReferenceDatabase(String homologSource) {
+	public SimpleInstance getReferenceDatabase(String homologSource) {
 		return homologSource.equals("ENSP") ? ensemblDBInst : uniprotDbInst;
 	}
 
@@ -55,11 +55,11 @@ public class OrthologyReferenceDatabase {
 		return homologSource.equals("ENSP") ? "ENSEMBL" : "UniProt";
 	}
 
-	public GKInstance getEnsemblDBInst() {
+	public SimpleInstance getEnsemblDBInst() {
 		return this.ensemblDBInst;
 	}
 
-	public GKInstance getAlternateReferenceDatabase() {
+	public SimpleInstance getAlternateReferenceDatabase() {
 		return this.alternateDbInst;
 	}
 
@@ -82,11 +82,11 @@ public class OrthologyReferenceDatabase {
 	}
 
 	// Fetches Uniprot DB instance
-	@SuppressWarnings("unchecked")
-	private void fetchAndSetUniprotDbInstance() throws Exception {
-		Collection<GKInstance> uniprotDbInstances = (Collection<GKInstance>)
-			getCurrentDBA().fetchInstanceByAttribute(ReactomeJavaConstants.ReferenceDatabase, ReactomeJavaConstants.name, "=", "UniProt");
-		uniprotDbInst = uniprotDbInstances.iterator().next();
+	private void fetchAndSetUniprotDbInstance() {
+		uniprotDbInst = getCuratorToolAPI().fetchReferenceDatabase("UniProt");
+		if (uniprotDbInst == null) {
+			throw new IllegalStateException("No UniProt ReferenceDatabase instance found");
+		}
 	}
 
 	private void setAlternateReferenceDatabase() throws Exception {
@@ -129,31 +129,23 @@ public class OrthologyReferenceDatabase {
 		return fungiSpeciesCodes.contains(getSpeciesCode());
 	}
 
-	private void fetchOrCreateEnsemblDatabase(String dbName, String dbBaseUrl)
-		throws Exception {
+	private void fetchOrCreateEnsemblDatabase(String dbName, String dbBaseUrl) throws Exception {
+		ensemblDBInst = getCuratorToolAPI().fetchReferenceDatabase(dbName);
 
-		Collection<GKInstance> ensemblDBInstances =
-			(Collection<GKInstance>) getCurrentDBA().fetchInstanceByAttribute(ReactomeJavaConstants.ReferenceDatabase, ReactomeJavaConstants.name, "=", dbName);
-		if (ensemblDBInstances == null || ensemblDBInstances.isEmpty()) {
+		if (ensemblDBInst == null) {
 			ensemblDBInst = createAndStoreEnsEMBLDatabase(dbName, dbBaseUrl);
-		} else {
-			ensemblDBInst = ensemblDBInstances.iterator().next();
 		}
 	}
 
-	private GKInstance createAndStoreEnsEMBLDatabase(String dbName, String dbBaseUrl)
-		throws Exception {
+	private SimpleInstance createAndStoreEnsEMBLDatabase(String dbName, String dbBaseUrl) {
+		SimpleInstance ensEMBLDbInst = new SimpleInstance();
+		ensEMBLDbInst.setSchemaClassName(ReactomeJavaConstants.ReferenceDatabase);
 
-		GKInstance ensEMBLDbInst = new GKInstance(getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.ReferenceDatabase));
-
-		ensEMBLDbInst.setDbAdaptor(getCurrentDBA());
-		ensEMBLDbInst.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
-		ensEMBLDbInst.addAttributeValue(ReactomeJavaConstants.name, dbName);
-		ensEMBLDbInst.addAttributeValue(ReactomeJavaConstants.url, dbBaseUrl);
-		ensEMBLDbInst.addAttributeValue(ReactomeJavaConstants.accessUrl, dbBaseUrl + "id/###ID###");
+		ensEMBLDbInst.setAttribute(ReactomeJavaConstants.name, dbName);
+		ensEMBLDbInst.setAttribute(ReactomeJavaConstants.url, dbBaseUrl);
+		ensEMBLDbInst.setAttribute(ReactomeJavaConstants.accessUrl, dbBaseUrl + "id/###ID###");
 		ensEMBLDbInst.setDisplayName(dbName);
-		getCurrentDBA().storeInstance(ensEMBLDbInst);
-		return ensEMBLDbInst;
+		return getCuratorToolAPI().commit(ensEMBLDbInst);
 	}
 
 	private JSONObject getAltRefDBJSON() throws IOException, ParseException {
@@ -162,16 +154,16 @@ public class OrthologyReferenceDatabase {
 
 	// Create instance pertaining to any alternative reference DB for the species
 	private void createAlternateReferenceDBInstance(JSONObject altRefDbJSON) throws Exception {
-		alternateDbInst = new GKInstance(getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.ReferenceDatabase));
-		alternateDbInst.setDbAdaptor(getCurrentDBA());
-		alternateDbInst.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
-		alternateDbInst.addAttributeValue(ReactomeJavaConstants.name, ((JSONArray) altRefDbJSON.get("dbname")).get(0));
-		alternateDbInst.addAttributeValue(ReactomeJavaConstants.url, altRefDbJSON.get("url"));
-		alternateDbInst.addAttributeValue(ReactomeJavaConstants.accessUrl, altRefDbJSON.get("access"));
-		alternateDbInst.setAttributeValue(ReactomeJavaConstants._displayName, ((JSONArray) altRefDbJSON.get("dbname")).get(0));
+		alternateDbInst = new SimpleInstance();
+		alternateDbInst.setSchemaClassName(ReactomeJavaConstants.ReferenceDatabase);
+			//new GKInstance(getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.ReferenceDatabase));
+
+		alternateDbInst.setAttribute(ReactomeJavaConstants.name, ((JSONArray) altRefDbJSON.get("dbname")).get(0));
+		alternateDbInst.setAttribute(ReactomeJavaConstants.url, altRefDbJSON.get("url"));
+		alternateDbInst.setAttribute(ReactomeJavaConstants.accessUrl, altRefDbJSON.get("access"));
+		alternateDbInst.setDisplayName(((JSONArray) altRefDbJSON.get("dbname")).get(0).toString());
 		alternateDbInst = instanceUtilities.checkForIdenticalInstances(alternateDbInst, null);
-		if (altRefDbJSON.get("alt_id") != null)
-		{
+		if (altRefDbJSON.get("alt_id") != null) {
 			altRefDbId = (String) altRefDbJSON.get("alt_id");
 		}
 		altRefDbExists = true;
@@ -181,19 +173,15 @@ public class OrthologyReferenceDatabase {
 		altRefDbExists = false;
 	}
 
-	private GKInstance getInstanceEdit() throws Exception {
-		return this.instanceUtilities.getInstanceEdit();
-	}
-
 	private ConfigProperties getConfigProperties() {
 		return this.configProperties;
 	}
 
-	private String getSpeciesCode() {
-		return this.speciesCode;
+	private CuratorToolAPI getCuratorToolAPI() {
+		return this.curatorToolAPI;
 	}
 
-	private MySQLAdaptor getCurrentDBA() throws SQLException {
-		return getConfigProperties().getCurrentDBA();
+	private String getSpeciesCode() {
+		return this.speciesCode;
 	}
 }

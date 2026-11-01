@@ -17,6 +17,7 @@ import org.gk.persistence.MySQLAdaptor;
 import org.gk.schema.InvalidAttributeException;
 
 import org.json.simple.parser.ParseException;
+import org.reactome.curation.model.SimpleInstance;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -43,9 +44,10 @@ public class EventsInferrer {
 	private PathwaysInferrer pathwaysInferrer;
 
 	private InstanceUtilities utils;
+	private CuratorToolAPI curatorToolAPI;
 
-	private static Map<GKInstance,GKInstance> manualEventToNonHumanSource = new HashMap<>();
-	private static List<GKInstance> manualHumanEvents = new ArrayList<>();
+	private static Map<SimpleInstance,SimpleInstance> manualEventToNonHumanSource = new HashMap<>();
+	private static List<SimpleInstance> manualHumanEvents = new ArrayList<>();
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
 
 	public EventsInferrer(
@@ -53,7 +55,8 @@ public class EventsInferrer {
 		@Qualifier("targetSpeciesCode") String speciesCode,
 		ReactionInferrer reactionInferrer,
 		PathwaysInferrer pathwaysInferrer,
-		InstanceUtilities utils
+		InstanceUtilities utils,
+		CuratorToolAPI curatorToolAPI
 	) {
 		this.configProperties = configProperties;
 		this.speciesCode = speciesCode;
@@ -62,41 +65,50 @@ public class EventsInferrer {
 		this.pathwaysInferrer = pathwaysInferrer;
 
 		this.utils = utils;
+		this.curatorToolAPI = curatorToolAPI;
 	}
 
 	@SuppressWarnings("unchecked")
 	public void inferEvents() throws Exception {
 		logger.info("Beginning orthoinference of " + getSpeciesName());
 
-		GKInstance humanSpeciesInstance = getHumanSpeciesInstance();
-		Map<Long, GKInstance> reactionMap = getHumanReactionMap(humanSpeciesInstance);
+		//SimpleInstance humanSpeciesInstance = getHumanSpeciesInstance();
+		Map<Long, SimpleInstance> reactionMap = getHumanReactionMap();
 		processReactions(reactionMap);
-		generatePathwaysAndDiagrams(humanSpeciesInstance);
+		//generatePathwaysAndDiagrams();
 
 		outputReport(speciesCode, configProperties.getReleaseVersion());
 		logger.info("Finished orthoinference of " + getSpeciesName());
 	}
 
-	private Map<Long, GKInstance> getHumanReactionMap(GKInstance humanSpeciesInstance) throws Exception {
-		Collection<GKInstance> reactionInstances = (Collection<GKInstance>)
-				getCurrentDBA().fetchInstanceByAttribute("ReactionlikeEvent", "species", "=", humanSpeciesInstance.getDBID());
-
-		Map<Long, GKInstance> reactionMap = new HashMap<>();
-		List<Long> dbids = new ArrayList<>();
-
-		for (GKInstance reactionInst : reactionInstances) {
-			dbids.add(reactionInst.getDBID());
-			reactionMap.put(reactionInst.getDBID(), reactionInst);
+	private Map<Long, SimpleInstance> getHumanReactionMap() {
+		List<SimpleInstance> reactionInstances = getCuratorToolAPI().fetchHumanReactionlikeEvents();
+		// curator-tool-ws reports a failed search as an empty result rather than an error, and there is always at
+		// least one human reaction, so nothing found means the search failed.
+		if (reactionInstances.isEmpty()) {
+			logger.fatal("Could not find any Homo sapiens ReactionlikeEvent instances");
+			System.exit(1);
 		}
-		Collections.sort(dbids);
 
-		logger.info(humanSpeciesInstance.getDisplayName() + " ReactionlikeEvent instances: " + dbids.size());
+		// The search returns shell instances -- dbId, displayName and schemaClass only -- so each is inflated to have
+		// the attributes the inference reads.
+		Map<Long, SimpleInstance> reactionMap = new LinkedHashMap<>();
+		for (SimpleInstance reactionShell : reactionInstances) {
+			SimpleInstance reactionInst = getCuratorToolAPI().inflate(reactionShell);
+			if (reactionInst == null) {
+				throw new IllegalStateException("No ReactionlikeEvent found for db id " + reactionShell.getDbId() +
+					" (" + reactionShell.getDisplayName() + ") returned by the human reaction search");
+			}
+			reactionMap.put(reactionInst.getDbId(), reactionInst);
+		}
+
+		logger.info("Homo sapiens ReactionlikeEvent instances: " + reactionMap.size());
 		return reactionMap;
 	}
 
-	private void processReactions(Map<Long, GKInstance> reactionMap) throws Exception {
-		for (Map.Entry<Long, GKInstance> entry : reactionMap.entrySet()) {
-			GKInstance reactionInst = entry.getValue();
+	private void processReactions(Map<Long, SimpleInstance> reactionMap) throws Exception {
+		for (Map.Entry<Long, SimpleInstance> entry : reactionMap.entrySet()) {
+			SimpleInstance reactionInst = entry.getValue();
 			logger.info("Attempting RlE inference: " + reactionInst);
 
 			if (isAlreadyInferred(reactionInst)) {
@@ -107,12 +119,12 @@ public class EventsInferrer {
 		}
 	}
 
-	private boolean isAlreadyInferred(GKInstance reactionInst) throws Exception {
-		List<GKInstance> previouslyInferredInstances = new ArrayList<>();
+	private boolean isAlreadyInferred(SimpleInstance reactionInst) throws Exception {
+		List<SimpleInstance> previouslyInferredInstances = new ArrayList<>();
 		previouslyInferredInstances.addAll(
-				checkIfPreviouslyInferred(reactionInst, ReactomeJavaConstants.orthologousEvent, previouslyInferredInstances));
+			checkIfPreviouslyInferred(reactionInst, ReactomeJavaConstants.orthologousEvent, previouslyInferredInstances));
 		previouslyInferredInstances.addAll(
-				checkIfPreviouslyInferred(reactionInst, ReactomeJavaConstants.inferredFrom, previouslyInferredInstances));
+			checkIfPreviouslyInferred(reactionInst, ReactomeJavaConstants.inferredFrom, previouslyInferredInstances));
 
 		if (previouslyInferredInstances.isEmpty()) {
 			return false;
@@ -121,13 +133,13 @@ public class EventsInferrer {
 		return handlePreviouslyInferredInstance(reactionInst, previouslyInferredInstances.get(0));
 	}
 
-	private boolean handlePreviouslyInferredInstance(GKInstance reactionInst, GKInstance prevInfInst) throws Exception {
-		if (prevInfInst.getAttributeValue(ReactomeJavaConstants.disease) != null) {
+	private boolean handlePreviouslyInferredInstance(SimpleInstance reactionInst, SimpleInstance prevInfInst) {
+		if (prevInfInst.getAttribute(ReactomeJavaConstants.disease) != null) {
 			logger.info("Disease reaction, skipping inference");
 			return true;
 		}
 
-		GKInstance evidenceTypeInst = (GKInstance) prevInfInst.getAttributeValue(ReactomeJavaConstants.evidenceType);
+		GKInstance evidenceTypeInst = (GKInstance) prevInfInst.getAttribute(ReactomeJavaConstants.evidenceType);
 		if (evidenceTypeInst != null && evidenceTypeInst.getDisplayName().contains("electronic")) {
 			getReactionInferrer().addAlreadyInferredEvents(reactionInst, prevInfInst);
 		} else {
@@ -138,7 +150,7 @@ public class EventsInferrer {
 		return true;
 	}
 
-	private void inferReactionWithErrorHandling(GKInstance reactionInst) {
+	private void inferReactionWithErrorHandling(SimpleInstance reactionInst) {
 		try {
 			getReactionInferrer().inferReaction(reactionInst);
 			logger.info("Successfully inferred " + reactionInst);
@@ -148,28 +160,29 @@ public class EventsInferrer {
 		}
 	}
 
-	private void generatePathwaysAndDiagrams(GKInstance humanSpeciesInstance) throws Exception {
-		getPathwaysInferrer().setInferredEvent(getReactionInferrer().getInferredEvent());
-		getPathwaysInferrer().inferPathways(getReactionInferrer().getInferrableHumanEvents());
+//	private void generatePathwaysAndDiagrams() throws Exception {
+//		SimpleInstance humanSpeciesInstance = getHumanSpeciesInstance();
+//		getPathwaysInferrer().setInferredEvent(getReactionInferrer().getInferredEvent());
+//		getPathwaysInferrer().inferPathways(getReactionInferrer().getInferrableHumanEvents());
+//
+//		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(
+//				getCurrentDBA(),
+//				getPrevDBA(),
+//				getSpeciesInstance(),
+//				humanSpeciesInstance,
+//				configProperties.getPersonId()
+//		);
+//		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
+//	}
 
-		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(
-				getCurrentDBA(),
-				getPrevDBA(),
-				getSpeciesInstance(),
-				humanSpeciesInstance,
-				configProperties.getPersonId()
-		);
-		orthologousPathwayDiagramGenerator.generateOrthologousPathwayDiagrams();
-	}
+	private SimpleInstance getHumanSpeciesInstance() {
+		SimpleInstance humanSpeciesInstance = getCuratorToolAPI().fetchSpecies("Homo sapiens");
 
-	private GKInstance getHumanSpeciesInstance() throws Exception {
-		Collection<GKInstance> sourceSpeciesInst = (Collection<GKInstance>)
-			getCurrentDBA().fetchInstanceByAttribute("Species", "name", "=", "Homo sapiens");
-		if (sourceSpeciesInst.isEmpty()) {
+		if (humanSpeciesInstance == null) {
 			logger.fatal("Could not find Species instance for Homo sapiens");
 			System.exit(1);
 		}
-		return sourceSpeciesInst.iterator().next();
+		return humanSpeciesInstance;
 	}
 
 	private void createNewFile(String filename) throws IOException {
@@ -181,13 +194,13 @@ public class EventsInferrer {
 	}
 
 	@SuppressWarnings("unchecked")
-	private List<GKInstance> checkIfPreviouslyInferred(
-		GKInstance reactionInst, String attribute, List<GKInstance> previouslyInferredInstances)
-		throws InvalidAttributeException, Exception {
-		for (GKInstance attributeInst : (Collection<GKInstance>) reactionInst.getAttributeValuesList(attribute)) {
-			GKInstance reactionSpeciesInst = (GKInstance) attributeInst.getAttributeValue(ReactomeJavaConstants.species);
-			if (reactionSpeciesInst.getDBID() == getSpeciesInstance().getDBID() &&
-				attributeInst.getAttributeValue(ReactomeJavaConstants.isChimeric) == null) {
+	private List<SimpleInstance> checkIfPreviouslyInferred(
+		SimpleInstance reactionInst, String attribute, List<SimpleInstance> previouslyInferredInstances)
+		throws Exception {
+		for (SimpleInstance attributeInst : (List<SimpleInstance>) reactionInst.getAttribute(attribute)) {
+			SimpleInstance reactionSpeciesInst = (SimpleInstance) attributeInst.getAttribute(ReactomeJavaConstants.species);
+			if (reactionSpeciesInst.getDbId().equals(getSpeciesInstance().getDbId()) &&
+				attributeInst.getAttribute(ReactomeJavaConstants.isChimeric) == null) {
 				previouslyInferredInstances.add(attributeInst);
 			}
 		}
@@ -229,19 +242,23 @@ public class EventsInferrer {
 		return this.utils;
 	}
 
+	private CuratorToolAPI getCuratorToolAPI() {
+		return this.curatorToolAPI;
+	}
+
 	private String getSpeciesName() throws IOException, ParseException {
 		return getConfigProperties().getSpeciesConfig().getSpeciesName(getSpeciesCode());
 	}
 
-	private GKInstance getSpeciesInstance() throws Exception {
+	private SimpleInstance getSpeciesInstance() throws Exception {
 		return getUtils().getSpeciesInstance();
 	}
 
-	private MySQLAdaptor getCurrentDBA() throws SQLException {
-		return getConfigProperties().getCurrentDBA();
-	}
-
-	private MySQLAdaptor getPrevDBA() throws SQLException {
-		return getConfigProperties().getPreviousDBA();
-	}
+//	private MySQLAdaptor getCurrentDBA() throws SQLException {
+//		return getConfigProperties().getCurrentDBA();
+//	}
+//
+//	private MySQLAdaptor getPrevDBA() throws SQLException {
+//		return getConfigProperties().getPreviousDBA();
+//	}
 }

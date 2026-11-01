@@ -7,18 +7,24 @@ import java.util.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.gk.model.GKInstance;
+
+import static org.gk.model.ReactomeJavaConstants.compartment;
 import static org.reactome.util.general.CollectionUtils.safeList;
 
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
-import org.gk.schema.GKSchemaAttribute;
-import org.gk.schema.GKSchemaClass;
 import org.gk.schema.SchemaClass;
 import org.json.simple.parser.ParseException;
+import org.reactome.curation.model.SimpleInstance;
 import org.reactome.release.common.database.InstanceEditUtils;
+import org.reactome.server.graph.domain.model.DatabaseObject;
+import org.reactome.server.graph.domain.model.PhysicalEntity;
+import org.reactome.util.general.CollectionUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
+import org.springframework.util.ReflectionUtils;
+import org.springframework.util.StringUtils;
 
 // GenerateInstance is meant to act as a catch-all for functions that are instance-oriented, such as creating, mocking,
 // or identical-checking.
@@ -28,80 +34,70 @@ public class InstanceUtilities {
 	private static final Logger logger = LogManager.getLogger();
 
 	private final long DISEASE_PATHWAY_DB_ID = 1643685L;
+	// Ends each value in a cache key, so that e.g. values "12","3" and "1","23" do not produce the same key.
+	private static final String CACHE_KEY_SEPARATOR = "|";
 
 	private ConfigProperties configProperties;
 	private String targetSpeciesCode;
 	private StableIdentifierGenerator stableIdentifierGenerator;
-	private ProteinCountUtility proteinCountUtility;
+	private CuratorToolAPI curatorToolAPI;
 
-	private GKInstance evidenceType;
-	private GKInstance summation;
+	private SimpleInstance evidenceType;
+	private SimpleInstance summation;
 
-	private GKInstance speciesInst;
+	private SimpleInstance speciesInst;
 	private GKInstance instanceEdit;
-	private Map<String,GKInstance> mockedIdenticals = new HashMap<>();
+	private Map<String,SimpleInstance> mockedIdenticals = new HashMap<>();
 
 	public InstanceUtilities(
 		ConfigProperties configProperties,
 		@Qualifier("targetSpeciesCode") String targetSpeciesCode,
 		StableIdentifierGenerator stableIdentifierGenerator,
-		ProteinCountUtility proteinCountUtility
+		CuratorToolAPI curatorToolAPI
 	) {
 		this.configProperties = configProperties;
 		this.targetSpeciesCode = targetSpeciesCode;
 		this.stableIdentifierGenerator = stableIdentifierGenerator;
-		this.proteinCountUtility = proteinCountUtility;
+		this.curatorToolAPI = curatorToolAPI;
 	}
 
-	@Bean(name = "instanceEditInst")
-	public GKInstance getInstanceEdit() throws Exception {
-		if (instanceEdit == null) {
-			instanceEdit = InstanceEditUtils.createInstanceEdit(
-				getCurrentDBA(), getPersonId(), "org.reactome.orthoinference");
-		}
-		return instanceEdit;
-	}
+//	@Bean(name = "instanceEditInst")
+//	public GKInstance getInstanceEdit() throws Exception {
+//		if (instanceEdit == null) {
+//			instanceEdit = InstanceEditUtils.createInstanceEdit(
+//				getCurrentDBA(), getPersonId(), "org.reactome.orthoinference");
+//		}
+//		return instanceEdit;
+//	}
 
 	// Find the instance specific to this species
 	@Bean(name = "speciesInst")
-	public GKInstance getSpeciesInstance() throws Exception {
+	public SimpleInstance getSpeciesInstance() throws Exception {
 		if (speciesInst == null) {
-			SchemaClass referenceDb = getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.Species);
-			speciesInst = new GKInstance(referenceDb);
-			speciesInst.setDbAdaptor(getCurrentDBA());
-			speciesInst.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
-			speciesInst.addAttributeValue(ReactomeJavaConstants.name, getSpeciesName());
-			speciesInst.addAttributeValue(ReactomeJavaConstants._displayName, getSpeciesName());
+			speciesInst = new SimpleInstance();
+			speciesInst.setSchemaClassName(ReactomeJavaConstants.Species);
+			speciesInst.setDefaultPersonId(getCuratorToolAPI().getPersonId());
+			speciesInst.setAttribute(ReactomeJavaConstants.name, getSpeciesName());
+			speciesInst.setDisplayName(getSpeciesName());
 			speciesInst = checkForIdenticalInstances(speciesInst, null);
 		}
 		return speciesInst;
 	}
 
 	// Creates new instance that will be inferred based on the incoming instances class
-	public GKInstance createNewInferredGKInstance(GKInstance instanceToBeInferred) throws Exception {
-		String reactionClass = instanceToBeInferred.getSchemClass().getName();
+	public SimpleInstance createNewInferredGKInstance(SimpleInstance instanceToBeInferred) throws Exception {
+		String reactionClass = instanceToBeInferred.getSchemaClassName();
 		if (reactionClass.matches(ReactomeJavaConstants.ReferenceIsoform)) {
 			reactionClass = ReactomeJavaConstants.ReferenceGeneProduct;
 		}
-		SchemaClass instanceClass = getCurrentDBA().getSchema().getClassByName(reactionClass);
-		GKInstance inferredInst = new GKInstance(instanceClass);
-		inferredInst.setDbAdaptor(getCurrentDBA());
-		inferredInst.addAttributeValue(ReactomeJavaConstants.created, instanceEdit);
-		if (instanceToBeInferred.getSchemClass().isValidAttribute(ReactomeJavaConstants.compartment) &&
-			instanceToBeInferred.getAttributeValue(ReactomeJavaConstants.compartment) != null) {
-			for (Object compartmentInst : instanceToBeInferred.getAttributeValuesList(ReactomeJavaConstants.compartment)) {
-				GKInstance compartmentInstGk = (GKInstance) compartmentInst;
-				if (compartmentInstGk.getSchemClass().isa(ReactomeJavaConstants.Compartment)) {
-					inferredInst.addAttributeValue(ReactomeJavaConstants.compartment, compartmentInstGk);
-				} else {
-					GKInstance newCompartmentInst = createCompartmentInstance(compartmentInstGk);
-					inferredInst.addAttributeValue(ReactomeJavaConstants.compartment, newCompartmentInst);
-				}
-			}
+		SimpleInstance inferredInst = new SimpleInstance();
+		inferredInst.setSchemaClassName(reactionClass);
+
+		if (instanceToBeInferred.getAttribute(ReactomeJavaConstants.compartment) != null) {
+			inferredInst.setAttribute(ReactomeJavaConstants.compartment, getCompartments(instanceToBeInferred));
 		}
-		if (instanceToBeInferred.getSchemClass().isValidAttribute(ReactomeJavaConstants.species) &&
-			instanceToBeInferred.getAttributeValue(ReactomeJavaConstants.species) != null) {
-			inferredInst.addAttributeValue(ReactomeJavaConstants.species, speciesInst);
+		if (instanceToBeInferred.getAttribute(ReactomeJavaConstants.species) != null) {
+			inferredInst.setAttribute(ReactomeJavaConstants.species, speciesInst);
 		}
 		return inferredInst;
 	}
@@ -110,142 +106,214 @@ public class InstanceUtilities {
 	// were pulled from the original instance's Compartment attribute could not be added to the new instance, due to
 	// them being a GO_CellularComponent. This function is the workaround, producing a Compartment instance that
 	// contains all the same attribute values.
-	@SuppressWarnings("unchecked")
-	public GKInstance createCompartmentInstance(GKInstance compartmentInstGk) throws Exception {
-		logger.warn(compartmentInstGk + " is a " + compartmentInstGk.getSchemClass() + " instead of a Compartment" +
+	public SimpleInstance createCompartmentInstance(SimpleInstance compartmentInst) throws Exception {
+		logger.warn(compartmentInst + " is a " + compartmentInst.getSchemaClassName() + " instead of a Compartment" +
 			" -- creating new Compartment instance");
-		SchemaClass compartmentClass = getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.Compartment);
-		GKInstance newCompartmentInst = new GKInstance(compartmentClass);
-		newCompartmentInst.setDbAdaptor(getCurrentDBA());
-		Collection<GKSchemaAttribute> compartmentAttributes = compartmentClass.getAttributes();
-		for (GKSchemaAttribute compartmentAttribute : compartmentAttributes) {
-			if (!compartmentAttribute.getName().matches("DB_ID") &&
-				compartmentInstGk.getAttributeValue(compartmentAttribute.getName()) != null) {
-				for (Object attribute : compartmentInstGk.getAttributeValuesList(compartmentAttribute.getName())) {
-					newCompartmentInst.addAttributeValue(compartmentAttribute.getName(), attribute);
-				}
+		SimpleInstance newCompartmentInst = new SimpleInstance();
+		newCompartmentInst.setSchemaClassName(ReactomeJavaConstants.Compartment);
+		newCompartmentInst.setDisplayName(compartmentInst.getDisplayName());
+		// Only attributes that Compartment also has are copied. The dbId is left unset so the new instance is treated
+		// as new when it is committed, and the display name, like the dbId, is held outside the attributes map.
+		for (String attributeName : getCuratorToolAPI().getAttributeNames(ReactomeJavaConstants.Compartment)) {
+			if (attributeName.equals("dbId") || attributeName.equals("displayName")) {
+				continue;
+			}
+			Object attributeValue = compartmentInst.getAttribute(attributeName);
+			if (attributeValue != null) {
+				// A multi-valued attribute's list is copied so the two instances do not share it.
+				newCompartmentInst.setAttribute(attributeName,
+					attributeValue instanceof List ? new ArrayList<>((List<?>) attributeValue) : attributeValue);
 			}
 		}
-		newCompartmentInst = checkForIdenticalInstances(newCompartmentInst, null);
-		return newCompartmentInst;
+		return checkForIdenticalInstances(newCompartmentInst, null);
 	}
 
 	// Equivalent to create_ghost from Perl; Returns a mock homologue that is needed in cases where an inference is
 	// rejected, but the component isn't essential for the inference to be completed.
-	public GKInstance createMockGKInstance(GKInstance instanceToBeMocked) throws Exception {
-		SchemaClass genomeEncodedEntityClass = getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.GenomeEncodedEntity);
-		GKInstance mockedInst = new GKInstance(genomeEncodedEntityClass);
-		mockedInst.setDbAdaptor(getCurrentDBA());
-		mockedInst.addAttributeValue(ReactomeJavaConstants.created, instanceEdit);
-		String mockedInstName = (String) instanceToBeMocked.getAttributeValue(ReactomeJavaConstants.name);
-		mockedInst.addAttributeValue(ReactomeJavaConstants.name, "Ghost homologue of " + mockedInstName);
-		mockedInst.addAttributeValue(ReactomeJavaConstants._displayName, "Ghost homologue of " +
-			instanceToBeMocked.getAttributeValue(ReactomeJavaConstants._displayName));
-		mockedInst.addAttributeValue(ReactomeJavaConstants.inferredFrom, instanceToBeMocked);
-		mockedInst.addAttributeValue(ReactomeJavaConstants.species, speciesInst);
-		mockedInst.addAttributeValue(ReactomeJavaConstants.compartment, instanceToBeMocked.getAttributeValue(ReactomeJavaConstants.compartment));
+	public SimpleInstance createMockGKInstance(SimpleInstance instanceToBeMocked) throws Exception {
+		SimpleInstance mockedInst = new SimpleInstance();
+		mockedInst.setSchemaClassName(ReactomeJavaConstants.GenomeEncodedEntity);
+		mockedInst.setDefaultPersonId(getCuratorToolAPI().getPersonId());
+		mockedInst.setDisplayName("Ghost homologue of " + instanceToBeMocked.getDisplayName());
+
+		String mockedInstName = (String) instanceToBeMocked.getAttribute(ReactomeJavaConstants.name);
+		mockedInst.setAttribute(ReactomeJavaConstants.name, "Ghost homologue of " + mockedInstName);
+		mockedInst.setAttribute(ReactomeJavaConstants.inferredFrom, instanceToBeMocked);
+		mockedInst.setAttribute(ReactomeJavaConstants.species, speciesInst);
+		mockedInst.setAttribute(ReactomeJavaConstants.compartment,
+			instanceToBeMocked.getAttribute(ReactomeJavaConstants.compartment));
 
 		// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance'
 		// calls, which is slow.
-		String cacheKey = getCacheKey((GKSchemaClass) mockedInst.getSchemClass(), mockedInst);
+		String cacheKey = getCacheKey(mockedInst);
 		if (mockedIdenticals.get(cacheKey) != null) {
 			mockedInst = mockedIdenticals.get(cacheKey);
 		} else {
 			mockedInst = checkForIdenticalInstances(mockedInst, instanceToBeMocked);
 			mockedIdenticals.put(cacheKey, mockedInst);
 		}
-		instanceToBeMocked = addAttributeValueIfNecessary(instanceToBeMocked, mockedInst, ReactomeJavaConstants.inferredTo);
-		getCurrentDBA().updateInstanceAttribute(instanceToBeMocked, ReactomeJavaConstants.inferredTo);
+		addInferredToValue(instanceToBeMocked, mockedInst);
 
 		return mockedInst;
 	}
 
 	// Checks that equivalent instances don't already exist in the DB, substituting if they do
-	public GKInstance checkForIdenticalInstances(GKInstance inferredInst, GKInstance originalInst)
+	public SimpleInstance checkForIdenticalInstances(SimpleInstance inferredInst, SimpleInstance originalInst)
 		throws Exception {
-		@SuppressWarnings("unchecked")
-		Collection<GKInstance> identicalInstances = getCurrentDBA().fetchIdenticalInstances(inferredInst);
-		if (identicalInstances != null) {
-			if (identicalInstances.size() == 1) {
-				return identicalInstances.iterator().next();
-			} else {
-				// TODO: In future, could iterate through array of returned values and pull the 'most identical'.
-				// For now, this mimics Perl.
-				return identicalInstances.iterator().next();
+		List<SimpleInstance> identicalInstances = getCuratorToolAPI().fetchIdenticalInstances(inferredInst);
+		if (!identicalInstances.isEmpty()) {
+			// TODO: In future, could iterate through array of returned values and pull the 'most identical'.
+			// For now, this mimics Perl.
+			return identicalInstances.get(0);
+		}
+		if (isPhysicalEntity(inferredInst)) {
+			SimpleInstance orthoStableIdentifierInst = stableIdentifierGenerator
+				.generateOrthologousStableId(inferredInst, originalInst);
+			// Null when inferredInst already has a stable identifier, which is then left as it is.
+			if (orthoStableIdentifierInst != null) {
+				inferredInst.setAttribute(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
 			}
-		} else {
-			if (inferredInst.getSchemClass().isa(ReactomeJavaConstants.PhysicalEntity)) {
-				GKInstance orthoStableIdentifierInst = stableIdentifierGenerator
-					.generateOrthologousStableId(inferredInst, originalInst);
-				inferredInst.addAttributeValue(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
-			}
-			getCurrentDBA().storeInstance(inferredInst);
-			return inferredInst;
+		}
+		// Commit copies the dbId the database assigns back onto inferredInst.
+		getCuratorToolAPI().commit(inferredInst);
+		return inferredInst;
+	}
+
+	private boolean isPhysicalEntity(SimpleInstance instance) {
+		return PhysicalEntity.class.isAssignableFrom(instance.getGraphModelClass());
+	}
+
+	// Adds the inferred instance to the source instance's inferredTo attribute and commits the source instance.
+	public void addInferredToValue(SimpleInstance sourceInst, SimpleInstance inferredInst) {
+		addAttributeValueAndCommit(sourceInst, inferredInst, ReactomeJavaConstants.inferredTo);
+	}
+
+	// Adds the source instance to the inferred instance's inferredFrom attribute and commits the inferred instance.
+	public void addInferredFromValue(SimpleInstance inferredInst, SimpleInstance sourceInst) {
+		addAttributeValueAndCommit(inferredInst, sourceInst, ReactomeJavaConstants.inferredFrom);
+	}
+
+	// Adds the orthologous instance to the event's orthologousEvent attribute and commits the event.
+	public void addOrthologousEventValue(SimpleInstance eventInst, SimpleInstance orthologousEventInst) {
+		addAttributeValueAndCommit(eventInst, orthologousEventInst, ReactomeJavaConstants.orthologousEvent);
+	}
+
+	// An attribute is valid if the graph model class for the instance's schema class has a getter for it
+	public boolean isValidAttribute(SimpleInstance instance, String attributeName) {
+		Class<?> graphModelClass = instance.getGraphModelClass();
+		return graphModelClass != null &&
+			ReflectionUtils.findMethod(graphModelClass, "get" + StringUtils.capitalize(attributeName)) != null;
+	}
+
+	// True if the entity's schema class is schemaClassType or any subclass of it. The graph model classes mirror the
+	// graph database's schema hierarchy, so class assignability is equivalent to 'isa' on the schema class.
+	public boolean isSchemaClassType(SimpleInstance entity, String schemaClassType) {
+		Class<? extends DatabaseObject> entityClass = entity.getGraphModelClass();
+		if (entityClass == null) {
+			return false;
+		}
+
+		try {
+			Class<?> schemaClass = Class.forName(DatabaseObject.class.getPackageName() + "." + schemaClassType);
+			return schemaClass.isAssignableFrom(entityClass);
+		} catch (ClassNotFoundException e) {
+			throw new IllegalArgumentException("Unknown schema class: " + schemaClassType, e);
 		}
 	}
+
+	// A commit replaces every attribute of the stored instance, so the value is added to an up-to-date copy: if this
+	// run has already committed the instance, the copy the caller holds is stale and committing it would be rejected
+	// or write its old values back over the stored ones. The caller's copy is left as it is.
+	private void addAttributeValueAndCommit(SimpleInstance instance, SimpleInstance value, String attribute) {
+		SimpleInstance currentInstance = getCuratorToolAPI().refresh(instance);
+		// Null when this run has deleted the instance, and committing it would re-create it.
+		if (currentInstance == null) {
+			logger.warn(instance + " has been deleted -- not adding " + value + " to its " + attribute);
+			return;
+		}
+		addAttributeValueIfNecessary(currentInstance, value, attribute);
+		getCuratorToolAPI().commit(currentInstance);
+	}
+
 	// Checks if the instanceToCheck already contains the instanceToUse in the multi-value attribute
 	@SuppressWarnings("unchecked")
-	public GKInstance addAttributeValueIfNecessary(GKInstance instanceToBeCheckedForExistingAttribute,
-														  GKInstance instanceContainingAttributeToBeChecked,
-														  String attribute) throws Exception {
+	public SimpleInstance addAttributeValueIfNecessary(SimpleInstance instanceToBeCheckedForExistingAttribute,
+														  SimpleInstance instanceContainingAttributeToBeChecked,
+														  String attribute) {
 		// Original version of this function had two checks: For 'multivalue attribute' and for 'instance-type object'. 
 		// Now we know the only attributes being passed through here are inferredTo, inferredFrom, orthologousEvent,
 		// and hasEvent, which are all multivalue attribute classes.
 		// We also know that it will always be a GKInstance passed through here (see arguments), so we are able to
 		// forego both checks.
-		Collection<GKInstance> attributeInstancesFromInferredInstance =
-			instanceToBeCheckedForExistingAttribute.getAttributeValuesList(attribute);
+		// A SimpleInstance holds an unset attribute as null and a single value as itself rather than in a List, so the
+		// existing values are copied into a new List, which also leaves the instance's own List unchanged until it is set.
+		Object existingValue = instanceToBeCheckedForExistingAttribute.getAttribute(attribute);
+		List<SimpleInstance> attributeInstancesFromInferredInstance = new ArrayList<>();
+		if (existingValue instanceof List) {
+			attributeInstancesFromInferredInstance.addAll((List<SimpleInstance>) existingValue);
+		} else if (existingValue != null) {
+			attributeInstancesFromInferredInstance.add((SimpleInstance) existingValue);
+		}
 		Set<Long> dbIdsFromAttributeInstances = new HashSet<>();
-		for (GKInstance attributeInstance : attributeInstancesFromInferredInstance) {
-			dbIdsFromAttributeInstances.add(attributeInstance.getDBID());
+		for (SimpleInstance attributeInstance : attributeInstancesFromInferredInstance) {
+			dbIdsFromAttributeInstances.add(attributeInstance.getDbId());
 		}
 		boolean attributeExists = false;
 		for (Long attributeInstanceDbId : dbIdsFromAttributeInstances) {
-			if (attributeInstanceDbId == instanceContainingAttributeToBeChecked.getDBID()) {
+			if (attributeInstanceDbId.equals(instanceContainingAttributeToBeChecked.getDbId())) {
 				attributeExists = true;
 			}
 		}
 		if (!attributeExists) {
-			instanceToBeCheckedForExistingAttribute.addAttributeValue(
-				attribute, instanceContainingAttributeToBeChecked);
+			attributeInstancesFromInferredInstance.add(instanceContainingAttributeToBeChecked);
+			instanceToBeCheckedForExistingAttribute.setAttribute(attribute, attributeInstancesFromInferredInstance);
 		}
 		return instanceToBeCheckedForExistingAttribute;
 	}
 	
+	// Returns the instance values of a multi-valued attribute as a new List. A SimpleInstance holds an unset attribute
+	// as null and a single value as itself rather than in a List, so neither can be cast to a Collection.
+	@SuppressWarnings("unchecked")
+	public List<SimpleInstance> getAttributeValues(SimpleInstance instance, String attribute) {
+		Object value = instance.getAttribute(attribute);
+		if (value instanceof List) {
+			return new ArrayList<>((List<SimpleInstance>) value);
+		}
+		return value != null ? new ArrayList<>(Collections.singletonList((SimpleInstance) value)) : new ArrayList<>();
+	}
+
 	// Caching. This function goes through each defining attribute of the incoming instance and produces a string of
 	// the attribute values (DB IDs if the attribute is an instance).
 	// This allows for identical instances held in memory to be used before trying to use fetchIdenticalInstances,
 	// which is expensive.
-	@SuppressWarnings("unchecked")
-	public String getCacheKey(GKSchemaClass instanceClass, GKInstance inferredInst) throws Exception {
-		String key = "";
-		for (GKSchemaAttribute definingAttr : (Collection<GKSchemaAttribute>) instanceClass.getDefiningAttributes()) {
-			if (definingAttr.isMultiple()) {
-				Collection<Object> multiValueAttributes = inferredInst.getAttributeValuesList(definingAttr.getName());
-				if (multiValueAttributes.size() > 0) {
-					for (Object attribute : multiValueAttributes) {
-						if (attribute.getClass().getSimpleName().equals("GKInstance")) {
-							GKInstance gkInstance = (GKInstance) attribute;
-							key += gkInstance.getDBID().toString();
-						} else {
-							key += (String) attribute;
-						}
-					}
-				} else {
-					key += "null";
+	public String getCacheKey(SimpleInstance inferredInst) {
+		StringBuilder key = new StringBuilder();
+		for (String definingAttrName : getCuratorToolAPI().getDefiningAttributeNames(inferredInst.getSchemaClassName())) {
+			Object attributeValue = inferredInst.getAttribute(definingAttrName);
+			// A SimpleInstance holds a multi-valued attribute's values as a List and a single value as itself.
+			if (attributeValue instanceof List) {
+				List<?> multiValueAttributes = (List<?>) attributeValue;
+				if (multiValueAttributes.isEmpty()) {
+					key.append("null").append(CACHE_KEY_SEPARATOR);
 				}
+				for (Object attribute : multiValueAttributes) {
+					key.append(getCacheKeyValue(attribute)).append(CACHE_KEY_SEPARATOR);
+				}
+			} else if (attributeValue != null) {
+				key.append(getCacheKeyValue(attributeValue)).append(CACHE_KEY_SEPARATOR);
 			} else {
-				if (definingAttr.isInstanceTypeAttribute() &&
-					inferredInst.getAttributeValue(definingAttr.getName()) != null) {
-					key += ((GKInstance) inferredInst.getAttributeValue(definingAttr.getName())).getDBID().toString();
-				} else if (inferredInst.getAttributeValue(definingAttr.getName()) != null) {
-					key += inferredInst.getAttributeValue(definingAttr.getName());
-				} else {
-					key += "null";
-				}
+				key.append("null").append(CACHE_KEY_SEPARATOR);
 			}
 		}
-		return key;
+		return key.toString();
+	}
+
+	// Instance values are represented by their DB IDs, all others by their own value.
+	private String getCacheKeyValue(Object attributeValue) {
+		if (attributeValue instanceof SimpleInstance) {
+			return String.valueOf(((SimpleInstance) attributeValue).getDbId());
+		}
+		return String.valueOf(attributeValue);
 	}
 
 	/**
@@ -256,7 +324,7 @@ public class InstanceUtilities {
 	 * @return boolean -- true if only parent is Disease Pathway, false if not.
 	 * @throws Exception -- Thrown by MySQLAdaptor.
 	 */
-	public boolean onlyInDiseasePathway(GKInstance eventInst) throws Exception {
+	public boolean onlyInDiseasePathway(SimpleInstance eventInst) throws Exception {
 		Set<Long> topLevelPathwayDbIds = getTopLevelPathwayDbIds(eventInst);
 		return topLevelPathwayDbIds.size() == 1 && topLevelPathwayDbIds.contains(DISEASE_PATHWAY_DB_ID);
 	}
@@ -269,41 +337,39 @@ public class InstanceUtilities {
 	 * @return -- Set<GKInstance> containing a list of all TopLevelPathway DbIds for incoming Event instance.
 	 * @throws Exception -- Thrown by MySQLAdaptor.
 	 */
-	private Set<Long> getTopLevelPathwayDbIds(GKInstance pathway) throws Exception {
-		List<GKInstance> parentPathways = safeList(pathway.getReferers(ReactomeJavaConstants.Event));
+	private Set<Long> getTopLevelPathwayDbIds(SimpleInstance pathway) throws Exception {
+		List<SimpleInstance> parentPathways = safeList(getCuratorToolAPI().getReferrers(pathway, ReactomeJavaConstants.Event));
 		if (parentPathways.isEmpty()) {
-			return new HashSet<>(Arrays.asList(pathway.getDBID()));
+			return new HashSet<>(Arrays.asList(pathway.getDbId()));
 		}
 
 		Set<Long> topLevelPathwayDbIds = new HashSet<>();
-		for (GKInstance parentPathway : parentPathways) {
+		for (SimpleInstance parentPathway : parentPathways) {
 			topLevelPathwayDbIds.addAll(getTopLevelPathwayDbIds(parentPathway));
 		}
 
 		return topLevelPathwayDbIds;
 	}
 
-	public GKInstance getEvidenceType() throws Exception {
+	public SimpleInstance getEvidenceType() throws Exception {
 		if (evidenceType == null) {
 			String evidenceTypeText = "inferred by electronic annotation";
 
-			evidenceType = new GKInstance(
-				getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.EvidenceType));
-			evidenceType.setDbAdaptor(getCurrentDBA());
-			evidenceType.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
-			evidenceType.addAttributeValue(ReactomeJavaConstants.name, evidenceTypeText);
-			evidenceType.addAttributeValue(ReactomeJavaConstants.name, "IEA");
+			evidenceType = new SimpleInstance();
+			evidenceType.setSchemaClassName(ReactomeJavaConstants.EvidenceType);
+			evidenceType.setDefaultPersonId(getCuratorToolAPI().getPersonId());
+			evidenceType.setAttribute(ReactomeJavaConstants.name, Arrays.asList(evidenceTypeText, "IEA"));
 			evidenceType.setDisplayName(evidenceTypeText);
 			evidenceType = checkForIdenticalInstances(evidenceType, null);
 		}
 		return evidenceType;
 	}
 
-	public GKInstance getSummationInstance() throws Exception {
+	public SimpleInstance getSummationInstance() throws Exception {
 		if (summation == null) {
-			summation = new GKInstance(getCurrentDBA().getSchema().getClassByName(ReactomeJavaConstants.Summation));
-			summation.setDbAdaptor(getCurrentDBA());
-			summation.addAttributeValue(ReactomeJavaConstants.created, getInstanceEdit());
+			summation = new SimpleInstance();
+			summation.setSchemaClassName(ReactomeJavaConstants.Summation);
+			summation.setDefaultPersonId(getCuratorToolAPI().getPersonId());
 			String summationText = "This event has been computationally inferred from an event that has been" +
 				" demonstrated in another species.<p>The inference is based on the homology mapping from PANTHER." +
 				" Briefly, reactions for which all involved PhysicalEntities (in input, output and catalyst) have a" +
@@ -311,27 +377,43 @@ public class InstanceUtilities {
 				" inferred to the other species. High level events are also inferred for these events to allow for" +
 				" easier navigation.<p><a href='/electronic_inference_compara.html' target = 'NEW'>More details and" +
 				" caveats of the event inference in Reactome.</a> For details on PANTHER see also:" +
-				" <a href='http://www.pantherdb.org/about.jsp' target='NEW'>http://www.pantherdb.org/about.jsp</a>";
-			summation.addAttributeValue(ReactomeJavaConstants.text, summationText);
+				" <a href='https://www.pantherdb.org/about.jsp' target='NEW'>https://www.pantherdb.org/about.jsp</a>";
+			summation.setAttribute(ReactomeJavaConstants.text, summationText);
 			summation.setDisplayName(summationText);
 			summation = checkForIdenticalInstances(summation, null);
 		}
 		return summation;
 	}
 
-	public ProteinCountUtility getProteinCountUtility() {
-		return this.proteinCountUtility;
+	public List<SimpleInstance> getCompartments(SimpleInstance instanceToBeInferred) throws Exception {
+		List<SimpleInstance> compartments = new ArrayList<>();
+		for (SimpleInstance compartmentInst : (List<SimpleInstance>) instanceToBeInferred.getAttribute(ReactomeJavaConstants.compartment)) {
+			if (compartmentInst.getSchemaClassName().equals(ReactomeJavaConstants.Compartment)) {
+				compartments.add(compartmentInst);
+			} else {
+				compartments.add(createCompartmentInstance(compartmentInst));
+			}
+		}
+		return compartments;
 	}
 
 	private String getSpeciesName() throws IOException, ParseException {
 		return this.configProperties.getSpeciesConfig().getSpeciesName(this.targetSpeciesCode);
 	}
 
-	private MySQLAdaptor getCurrentDBA() throws SQLException {
-		return this.configProperties.getCurrentDBA();
-	}
-
 	private long getPersonId() {
 		return this.configProperties.getPersonId();
+	}
+
+	private CuratorToolAPI getCuratorToolAPI() {
+		return this.curatorToolAPI;
+	}
+
+	private static <E> List<E> safeList(Collection<E> collection) {
+		return Optional.ofNullable(collection).map(InstanceUtilities::convertToList).orElse(Collections.emptyList());
+	}
+
+	private static <E> List<E> convertToList(Collection<E> collection) {
+		return new ArrayList<>(collection);
 	}
 }

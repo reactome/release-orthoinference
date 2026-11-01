@@ -1,14 +1,10 @@
 package org.reactome.orthoinference;
 
-import org.gk.persistence.MySQLAdaptor;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.boot.ApplicationArguments;
-
-import java.sql.SQLException;
 
 /**
  * @author Joel Weiser (joel.weiser@oicr.on.ca)
@@ -22,16 +18,6 @@ public class ConfigProperties {
 
     public ConfigProperties(OrthoinferenceProps props) {
         this.props = props;
-    }
-
-    @Lazy
-    @Bean(name = "currentDBA")
-    public MySQLAdaptor getCurrentDBA() throws SQLException {
-        return getDBA(props.getCurrentDbName());
-    }
-
-    public MySQLAdaptor getPreviousDBA() throws SQLException {
-        return getDBA(props.getPreviousDbName());
     }
 
     public int getReleaseVersion() {
@@ -73,40 +59,36 @@ public class ConfigProperties {
         return args.getOptionValues(speciesCodeArgName).get(0);
     }
 
-    private MySQLAdaptor getDBA(String dbName) throws SQLException {
-        return new MySQLAdaptor(props.getHost(), dbName, props.getUser(), props.getPassword(), props.getPort());
-    }
-
     @ConfigurationProperties(prefix = "orthoinference")
     public static class OrthoinferenceProps {
-        private String user;
-        private String password;
-        private String currentDbName;
-        private String previousDbName;
-        private String host;
-        private int port;
+        //private String user;
+        //private String password;
+        //private String currentDbName;
+        //private String previousDbName;
+        //private String host;
+        //private int port;
         private String pathToSpeciesConfig;
         private String pathToOrthopairs;
 
-        public void setUser(String user) {
-            this.user = user;
-        }
-
-        public void setPassword(String password) {
-            this.password = password;
-        }
-
-        public void setCurrentDbName(String currentDbName) {
-            this.currentDbName = currentDbName;
-        }
-
-        public void setPreviousDbName(String previousDbName) {
-            this.previousDbName = previousDbName;
-        }
-
-        public void setPort(int port) {
-            this.port = port;
-        }
+//        public void setUser(String user) {
+//            this.user = user;
+//        }
+//
+//        public void setPassword(String password) {
+//            this.password = password;
+//        }
+//
+//        public void setCurrentDbName(String currentDbName) {
+//            this.currentDbName = currentDbName;
+//        }
+//
+//        public void setPreviousDbName(String previousDbName) {
+//            this.previousDbName = previousDbName;
+//        }
+//
+//        public void setPort(int port) {
+//            this.port = port;
+//        }
 
         public void setPathToSpeciesConfig(String pathToSpeciesConfig) {
             this.pathToSpeciesConfig = pathToSpeciesConfig;
@@ -137,33 +119,33 @@ public class ConfigProperties {
         private long personId;
         private String sourceSpeciesCode;
 
-        public String getUser() {
-            return this.user;
-        }
-
-        public String getPassword() {
-            return this.password;
-        }
-
-        public String getCurrentDbName() {
-            return this.currentDbName;
-        }
-
-        public String getPreviousDbName() {
-            return this.previousDbName;
-        }
-
-        public String getHost() {
-            return this.host;
-        }
-
-        public void setHost(String host) {
-            this.host = host;
-        }
-
-        public int getPort() {
-            return this.port;
-        }
+//        public String getUser() {
+//            return this.user;
+//        }
+//
+//        public String getPassword() {
+//            return this.password;
+//        }
+//
+//        public String getCurrentDbName() {
+//            return this.currentDbName;
+//        }
+//
+//        public String getPreviousDbName() {
+//            return this.previousDbName;
+//        }
+//
+//        public String getHost() {
+//            return this.host;
+//        }
+//
+//        public void setHost(String host) {
+//            this.host = host;
+//        }
+//
+//        public int getPort() {
+//            return this.port;
+//        }
 
         public String getPathToSpeciesConfig() {
             return this.pathToSpeciesConfig;

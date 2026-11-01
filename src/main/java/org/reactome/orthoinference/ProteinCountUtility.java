@@ -1,22 +1,27 @@
 package org.reactome.orthoinference;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 import org.gk.model.ClassAttributeFollowingInstruction;
-import org.gk.model.GKInstance;
-import org.gk.model.InstanceUtilities;
 import org.gk.model.ReactomeJavaConstants;
+import org.reactome.curation.model.SimpleInstance;
+import org.reactome.server.graph.domain.model.DatabaseObject;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ProteinCountUtility {
 	private Mappings mappings;
+	private CuratorToolAPI curatorToolAPI;
+	private InstanceUtilities instanceUtilities;
 
-	public ProteinCountUtility(Mappings mappings) {
+	public ProteinCountUtility(Mappings mappings, CuratorToolAPI curatorToolAPI, InstanceUtilities instanceUtilities) {
 		this.mappings = mappings;
+		this.curatorToolAPI = curatorToolAPI;
+		this.instanceUtilities = instanceUtilities;
 	}
 	
-	public List<Integer> getDistinctProteinCounts (GKInstance instanceToBeInferred) throws Exception {
+	public List<Integer> getDistinctProteinCounts (SimpleInstance instanceToBeInferred) throws Exception {
 		// With the output instances saved in followedInstances, begin the protein count process, which is based on
 		// the homologue mappings (orthopairs) files.
 		List<Integer> distinctProteinCounts = new ArrayList<>();
@@ -26,13 +31,13 @@ public class ProteinCountUtility {
 
 		// Perform an AttributeQueryRequest with specified input attributes (ReactionlikeEvent, CatalystActivity,
 		// Complex, Polymer, EWAS) and output attributes (ReferenceGeneProduct, EntitySet).
-		Collection<GKInstance> sortedFollowedInstances = getSortedFollowedInstances(instanceToBeInferred);
+		Collection<SimpleInstance> sortedFollowedInstances = getSortedFollowedInstances(instanceToBeInferred);
 		// If it is a ReferenceGene Product, the inferrable and max values are incremented depending on the number
 		// of homologue mappings, while total is incremented for each entity.
-		for (GKInstance entityInst : sortedFollowedInstances) {
+		for (SimpleInstance entityInst : sortedFollowedInstances) {
 			if (isReferenceGeneProduct(entityInst)) {
 				int count = 0;
-				String identifierName = entityInst.getAttributeValue(ReactomeJavaConstants.identifier).toString();
+				String identifierName = entityInst.getAttribute(ReactomeJavaConstants.identifier).toString();
 				if (getMappings().getHomologues(identifierName) != null) {
 					count = getMappings().getHomologues(identifierName).length;
 				}
@@ -48,7 +53,7 @@ public class ProteinCountUtility {
 
 		// For EntitySets, another AttributeQueryRequest is completed. This time the output classes are
 		// Complex, Polymer, and ReferenceSequence.
-		for (GKInstance entityInst : sortedFollowedInstances) {
+		for (SimpleInstance entityInst : sortedFollowedInstances) {
 			if (isEntitySet(entityInst)) {
 				List<ClassAttributeFollowingInstruction> entitySetsInstancesToFollow = new ArrayList<ClassAttributeFollowingInstruction>();
 				entitySetsInstancesToFollow.add(new ClassAttributeFollowingInstruction(
@@ -60,11 +65,11 @@ public class ProteinCountUtility {
 
 				String[] entitySetsOutClasses = new String[] {ReactomeJavaConstants.Complex, ReactomeJavaConstants.Polymer, ReactomeJavaConstants.ReferenceSequence};
 				@SuppressWarnings("unchecked")
-				Collection<GKInstance> entitySetsFollowedInstances = InstanceUtilities.followInstanceAttributes(
+				Collection<SimpleInstance> entitySetsFollowedInstances = followInstanceAttributes(
 					entityInst, entitySetsInstancesToFollow, entitySetsOutClasses);
-				Collection<GKInstance> entitySetsSortedInstances = sortInstancesByDbId(entitySetsFollowedInstances);
+				Collection<SimpleInstance> entitySetsSortedInstances = sortInstancesByDbId(entitySetsFollowedInstances);
 				
-				if (entitySetsFollowedInstances.size() == 0 && entityInst.getSchemClass().isa(ReactomeJavaConstants.CandidateSet)) {
+				if (entitySetsFollowedInstances.size() == 0 && entityInst.getSchemaClassName().equals(ReactomeJavaConstants.CandidateSet)) {
 					// Protein counts are incremented depending on the number and types of candidates
 					List<Integer> checkedCandidateInstances = getCandidateProteinCounts(
 						entityInst, sortedFollowedInstances);
@@ -83,10 +88,9 @@ public class ProteinCountUtility {
 					boolean uncountedInstances = false;
 					// Little trick for breaking out of a nested loop
 					outerloop:
-					for (GKInstance physicalEntityInst : entitySetsSortedInstances) {
-						for (GKInstance earlyFollowedInst : sortedFollowedInstances) {
-							if (physicalEntityInst.getAttributeValue(ReactomeJavaConstants.DB_ID) ==
-								earlyFollowedInst.getAttributeValue(ReactomeJavaConstants.DB_ID)) {
+					for (SimpleInstance physicalEntityInst : entitySetsSortedInstances) {
+						for (SimpleInstance earlyFollowedInst : sortedFollowedInstances) {
+							if (physicalEntityInst.getDbId().equals(earlyFollowedInst.getDbId())) {
 								continue outerloop;
 							}
 						}
@@ -100,9 +104,9 @@ public class ProteinCountUtility {
 					// ProteinCount call for each entity in the second followedInstances array.
 					int flag = 0;
 					int flagInferred = 0;
-					for (GKInstance physicalEntityInst : entitySetsSortedInstances) {
-						if (physicalEntityInst.getSchemClass().isa(ReactomeJavaConstants.Complex) ||
-							physicalEntityInst.getSchemClass().isa(ReactomeJavaConstants.Polymer)) {
+					for (SimpleInstance physicalEntityInst : entitySetsSortedInstances) {
+						if (physicalEntityInst.getSchemaClassName().equals(ReactomeJavaConstants.Complex) ||
+							physicalEntityInst.getSchemaClassName().equals(ReactomeJavaConstants.Polymer)) {
 							List<Integer> complexProteinCounts = getDistinctProteinCounts(physicalEntityInst);
 							if (complexProteinCounts != null) {
 								int subTotal = complexProteinCounts.get(0);
@@ -118,9 +122,9 @@ public class ProteinCountUtility {
 									max = subMax;
 								}
 							}
-						} else if (physicalEntityInst.getSchemClass().isa(ReactomeJavaConstants.ReferenceGeneProduct)) {
+						} else if (isReferenceGeneProduct(physicalEntityInst)) {
 							flag = 1;
-							String identifierName = physicalEntityInst.getAttributeValue(ReactomeJavaConstants.identifier).toString();
+							String identifierName = physicalEntityInst.getAttribute(ReactomeJavaConstants.identifier).toString();
 							int count = 0;
 							if (getMappings().getHomologues(identifierName) != null) {
 								count = getMappings().getHomologues(identifierName).length;
@@ -146,14 +150,71 @@ public class ProteinCountUtility {
 		return distinctProteinCounts;
 	}
 
-	private Collection<GKInstance> getSortedFollowedInstances(GKInstance instanceToBeInferred)
-		throws Exception {
+	private Collection<SimpleInstance> getSortedFollowedInstances(SimpleInstance instanceToBeInferred) {
+		List<String> outClasses = Arrays.asList(ReactomeJavaConstants.ReferenceGeneProduct, ReactomeJavaConstants.EntitySet);
+		Map<Long, SimpleInstance> followedInstances = new HashMap<>();
+		followInstanceAttributes(
+			instanceToBeInferred, getClassToAttributesToFollow(), outClasses, followedInstances, new HashSet<>());
+		return followedInstances.values()
+			.stream()
+			.sorted(Comparator.comparing(SimpleInstance::getDbId))
+			.collect(Collectors.toList());
+	}
 
-		String[] outClasses = new String[] {ReactomeJavaConstants.ReferenceGeneProduct, ReactomeJavaConstants.EntitySet};
-		@SuppressWarnings("unchecked")
-		Collection<GKInstance> followedInstances = InstanceUtilities.followInstanceAttributes(
-			instanceToBeInferred, getClassesToFollow(), outClasses);
-		return sortInstancesByDbId(followedInstances);
+	// Takes the follow instructions and out classes in the form org.gk.model.InstanceUtilities.followInstanceAttributes
+	// does, and returns the instances reached that are instances of one of the outClasses.
+	@SuppressWarnings("unchecked")
+	private Collection<SimpleInstance> followInstanceAttributes(
+		SimpleInstance instance, List<ClassAttributeFollowingInstruction> classesToFollow, String[] outClasses) {
+
+		Map<String, List<String>> classToAttributesToFollow = new LinkedHashMap<>();
+		for (ClassAttributeFollowingInstruction classToFollow : classesToFollow) {
+			classToAttributesToFollow
+				.computeIfAbsent(classToFollow.getClassName(), className -> new ArrayList<>())
+				.addAll((Collection<String>) classToFollow.getAttributes());
+		}
+
+		Map<Long, SimpleInstance> followedInstances = new HashMap<>();
+		followInstanceAttributes(
+			instance, classToAttributesToFollow, Arrays.asList(outClasses), followedInstances, new HashSet<>());
+		return followedInstances.values();
+	}
+
+	// Equivalent of org.gk.model.InstanceUtilities.followInstanceAttributes: starting from the instance (which is
+	// itself included), follows the attributes listed for each class it is an instance of, and collects every instance
+	// reached that is an instance of one of the outClasses. Instances already visited are not followed again.
+	private void followInstanceAttributes(
+		SimpleInstance instance, Map<String, List<String>> classToAttributesToFollow, List<String> outClasses,
+		Map<Long, SimpleInstance> followedInstances, Set<Long> visitedDbIds) {
+
+		if (!visitedDbIds.add(instance.getDbId())) {
+			return;
+		}
+		if (isAnySchemaClassType(instance, outClasses)) {
+			followedInstances.put(instance.getDbId(), instance);
+		}
+
+		for (String classToFollow : classToAttributesToFollow.keySet()) {
+			if (!getUtils().isSchemaClassType(instance, classToFollow)) {
+				continue;
+			}
+			for (String attributeToFollow : classToAttributesToFollow.get(classToFollow)) {
+				for (SimpleInstance referredInst : getAttributeValues(instance, attributeToFollow)) {
+					// Only instances that are followed further or collected are of interest
+					if (visitedDbIds.contains(referredInst.getDbId()) ||
+						!(isAnySchemaClassType(referredInst, classToAttributesToFollow.keySet()) ||
+						isAnySchemaClassType(referredInst, outClasses))) {
+						continue;
+					}
+					// Referred instances are only shells, so they are inflated before their attributes are read
+					SimpleInstance inflatedReferredInst = getCuratorToolAPI().inflate(referredInst);
+					if (inflatedReferredInst != null) {
+						followInstanceAttributes(
+							inflatedReferredInst, classToAttributesToFollow, outClasses, followedInstances, visitedDbIds);
+					}
+				}
+			}
+		}
 	}
 
 	// Function that determines protein counts of CandidateSets. Incoming arguments are the candidateSet of interest,
@@ -161,7 +222,7 @@ public class ProteinCountUtility {
 	// This 'output array from the first AQR' is used to prevent redundant counts, such as if a Candidate instance has
 	// already undergone a protein count.
 	private List<Integer> getCandidateProteinCounts(
-		GKInstance candidateSetInst, Collection<GKInstance> sortedFollowedInstances) throws Exception {
+		SimpleInstance candidateSetInst, Collection<SimpleInstance> sortedFollowedInstances) throws Exception {
 		List<Integer> checkedCandidateCounts = new ArrayList<>();
 		if (hasCandidates(candidateSetInst)) {
 			// AttributeQueryRequest for candidateSets, where the output instances are Complex, Polymer, and
@@ -177,14 +238,14 @@ public class ProteinCountUtility {
 				ReactomeJavaConstants.EntityWithAccessionedSequence, new String[]{ReactomeJavaConstants.referenceEntity}, new String[]{}));
 			String[] candidateSetOutClasses = new String[] {ReactomeJavaConstants.Complex, ReactomeJavaConstants.Polymer, ReactomeJavaConstants.ReferenceSequence};
 			@SuppressWarnings("unchecked")
-			Collection<GKInstance> candidateSetFollowedInstances = InstanceUtilities.followInstanceAttributes(
+			Collection<SimpleInstance> candidateSetFollowedInstances = followInstanceAttributes(
 				candidateSetInst, candidateSetInstancesToFollow, candidateSetOutClasses);
-			Collection<GKInstance> sortedCandidateSetFollowedInstances = sortInstancesByDbId(candidateSetFollowedInstances);
+			Collection<SimpleInstance> sortedCandidateSetFollowedInstances = sortInstancesByDbId(candidateSetFollowedInstances);
 
 			boolean uncountedInstances = false;
-			for (GKInstance physicalEntityInst : sortedCandidateSetFollowedInstances) {
-				for (GKInstance earlyFollowedInst : sortedFollowedInstances) {
-					if (physicalEntityInst.getAttributeValue(ReactomeJavaConstants.DB_ID) == earlyFollowedInst.getAttributeValue(ReactomeJavaConstants.DB_ID)) {
+			for (SimpleInstance physicalEntityInst : sortedCandidateSetFollowedInstances) {
+				for (SimpleInstance earlyFollowedInst : sortedFollowedInstances) {
+					if (physicalEntityInst.getDbId().equals(earlyFollowedInst.getDbId())) {
 						continue;
 					}
 				}
@@ -195,7 +256,7 @@ public class ProteinCountUtility {
 			}
 			// For instances that are Complex or Polymer, the total, inferrable and max are incremented according to
 			// the results of a recursive countDistinctProteins call.
-			for (GKInstance physicalEntityInst : sortedCandidateSetFollowedInstances) {
+			for (SimpleInstance physicalEntityInst : sortedCandidateSetFollowedInstances) {
 				if (isComplex(physicalEntityInst) || isPolymer(physicalEntityInst)) {
 					List<Integer> candidateComplexCounts = getDistinctProteinCounts(physicalEntityInst);
 					if (candidateComplexCounts.size() > 0) {
@@ -213,9 +274,9 @@ public class ProteinCountUtility {
 						}
 					}
 					// ReferenceGeneProduct instances can only have an inferrable of 1 (So says the Perl version)
-				} else if (physicalEntityInst.getSchemClass().isa(ReactomeJavaConstants.ReferenceGeneProduct)) {
+				} else if (isReferenceGeneProduct(physicalEntityInst)) {
 					candidateTotal = 1;
-					String identifierName = physicalEntityInst.getAttributeValue(ReactomeJavaConstants.identifier).toString();
+					String identifierName = physicalEntityInst.getAttribute(ReactomeJavaConstants.identifier).toString();
 					int count = 0;
 					if (getMappings().getHomologues(identifierName) != null) {
 						count = getMappings().getHomologues(identifierName).length;
@@ -249,24 +310,11 @@ public class ProteinCountUtility {
 		return checkedCandidateCounts;
 	}
 
-	private List<ClassAttributeFollowingInstruction> getClassesToFollow() {
-		Map<String, List<String>> classToAttributesToFollow = getClassToAttributesToFollow();
-
-		List<ClassAttributeFollowingInstruction> classesToFollow = new ArrayList<>();
-		for (String classToFollow : classToAttributesToFollow.keySet()) {
-			List<String> attributesToFollow = classToAttributesToFollow.get(classToFollow);
-			classesToFollow.add(new ClassAttributeFollowingInstruction(
-				classToFollow, attributesToFollow.toArray(new String[0]), new String[]{}
-			));
-		}
-		return classesToFollow;
-	}
-
 	private Map<String, List<String>> getClassToAttributesToFollow() {
 		Map<String, List<String>> classToAttributesToFollow = new LinkedHashMap<>();
 
 		classToAttributesToFollow.put(
-			ReactomeJavaConstants.ReactionlikeEvent,
+			"ReactionLikeEvent",
 			Arrays.asList(ReactomeJavaConstants.input, ReactomeJavaConstants.output, ReactomeJavaConstants.catalystActivity)
 		);
 		classToAttributesToFollow.put(
@@ -288,34 +336,34 @@ public class ProteinCountUtility {
 		return classToAttributesToFollow;
 	}
 
-	private boolean isReferenceGeneProduct(GKInstance entity) {
-		return entity.getSchemClass().isa(ReactomeJavaConstants.ReferenceGeneProduct);
+	private boolean isReferenceGeneProduct(SimpleInstance entity) {
+		return getUtils().isSchemaClassType(entity, ReactomeJavaConstants.ReferenceGeneProduct);
 	}
 
-	private boolean isEntitySet(GKInstance entity) {
-		return entity.getSchemClass().isa(ReactomeJavaConstants.EntitySet);
+	private boolean isEntitySet(SimpleInstance entity) {
+		return getUtils().isSchemaClassType(entity, ReactomeJavaConstants.EntitySet);
 	}
 
-	private boolean isComplex(GKInstance physicalEntity) {
-		return physicalEntity.getSchemClass().isa(ReactomeJavaConstants.Complex);
+	private boolean isComplex(SimpleInstance physicalEntity) {
+		return getUtils().isSchemaClassType(physicalEntity, ReactomeJavaConstants.Complex);
 	}
 
-	private boolean isPolymer(GKInstance physicalEntity) {
-		return physicalEntity.getSchemClass().isa(ReactomeJavaConstants.Polymer);
+	private boolean isPolymer(SimpleInstance physicalEntity) {
+		return getUtils().isSchemaClassType(physicalEntity, ReactomeJavaConstants.Polymer);
 	}
 
-	private boolean hasCandidates(GKInstance candidateSet) throws Exception {
-		return candidateSet.getAttributeValue(ReactomeJavaConstants.hasCandidate) != null;
+	private boolean hasCandidates(SimpleInstance candidateSet) throws Exception {
+		return candidateSet.getAttribute(ReactomeJavaConstants.hasCandidate) != null;
 	}
 
-	private Collection<GKInstance> sortInstancesByDbId(Collection<GKInstance> unsortedInstances) {
+	private Collection<SimpleInstance> sortInstancesByDbId(Collection<SimpleInstance> unsortedInstances) {
 		// Sort instances by DB ID
 		List<Long> dbIds = new ArrayList<>();
-		Collection<GKInstance> sortedInstances = new ArrayList<>();
-		Map<Long,GKInstance> dbIdToInstance = new HashMap<>();
-		for (GKInstance instance : unsortedInstances) {
-			dbIds.add(instance.getDBID());
-			dbIdToInstance.put(instance.getDBID(), instance);
+		Collection<SimpleInstance> sortedInstances = new ArrayList<>();
+		Map<Long,SimpleInstance> dbIdToInstance = new HashMap<>();
+		for (SimpleInstance instance : unsortedInstances) {
+			dbIds.add(instance.getDbId());
+			dbIdToInstance.put(instance.getDbId(), instance);
 		}
 		Collections.sort(dbIds);
 		for (Long id : dbIds) {
@@ -325,7 +373,38 @@ public class ProteinCountUtility {
 		return sortedInstances;
 	}
 
+	// Returns the attribute's values as a list, whether the attribute is single- or multi-valued.
+	// Returns an empty list if the attribute is not valid for the instance's schema class or has no value.
+	private List<SimpleInstance> getAttributeValues(SimpleInstance instance, String attributeName) {
+		List<SimpleInstance> attributeValues = new ArrayList<>();
+		if (!instanceUtilities.isValidAttribute(instance, attributeName)) {
+			return attributeValues;
+		}
+
+		Object attributeValue = instance.getAttribute(attributeName);
+		if (attributeValue instanceof SimpleInstance) {
+			attributeValues.add((SimpleInstance) attributeValue);
+		} else if (attributeValue instanceof Collection) {
+			for (Object attributeValueObj : (Collection<?>) attributeValue) {
+				attributeValues.add((SimpleInstance) attributeValueObj);
+			}
+		}
+		return attributeValues;
+	}
+
+	private boolean isAnySchemaClassType(SimpleInstance instance, Collection<String> schemaClassTypes) {
+		return schemaClassTypes.stream().anyMatch(schemaClassType -> getUtils().isSchemaClassType(instance, schemaClassType));
+	}
+
+	private InstanceUtilities getUtils() {
+		return this.instanceUtilities;
+	}
+
 	private Mappings getMappings() {
 		return this.mappings;
+	}
+
+	private CuratorToolAPI getCuratorToolAPI() {
+		return this.curatorToolAPI;
 	}
 }

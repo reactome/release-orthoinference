@@ -4,16 +4,24 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-import org.gk.model.GKInstance;
 import org.gk.model.ReactomeJavaConstants;
+import org.reactome.curation.model.SimpleInstance;
+import org.springframework.stereotype.Component;
 
+@Component
 public class SpeciesCheckUtility {
+
+	private InstanceUtilities instanceUtilities;
+
+	public SpeciesCheckUtility(InstanceUtilities instanceUtilities) {
+		this.instanceUtilities = instanceUtilities;
+	}
 
 	// Determines if there is a species attribute in any constituent instances of entityInst.
 	// Unless it's an 'OtherEntity' (which will return false), the function will check the instance or iterate on its
 	// sub-instances until it finds an existing 'species' attribute, or else it will return false.
 	@SuppressWarnings("unchecked")
-	public static boolean hasOrContainsSpeciesAttribute(GKInstance entity) throws Exception {
+	public boolean hasOrContainsSpeciesAttribute(SimpleInstance entity) throws Exception {
 		if (isOtherEntity(entity)) {
 			return false;
 		}
@@ -24,7 +32,7 @@ public class SpeciesCheckUtility {
 			hasSpecies(entity);
 	}
 
-	private static boolean isEntitySetContainingSpecies(GKInstance entity) throws Exception {
+	private boolean isEntitySetContainingSpecies(SimpleInstance entity) throws Exception {
 		if (isEntitySet(entity)) {
 			boolean membersHaveSpecies =
 				anyPhysicalEntityInAttributeHasSpecies(entity, ReactomeJavaConstants.hasMember);
@@ -36,47 +44,42 @@ public class SpeciesCheckUtility {
 		return false;
 	}
 
-	private static boolean isComplexContainingSpecies(GKInstance entity) throws Exception {
+	private boolean isComplexContainingSpecies(SimpleInstance entity) throws Exception {
 		return isComplex(entity) && anyPhysicalEntityInAttributeHasSpecies(entity, ReactomeJavaConstants.hasComponent);
 	}
 
-	private static boolean isPolymerContainingSpecies(GKInstance entity) throws Exception {
+	private boolean isPolymerContainingSpecies(SimpleInstance entity) throws Exception {
 		return isPolymer(entity) && anyPhysicalEntityInAttributeHasSpecies(entity, ReactomeJavaConstants.repeatedUnit);
 	}
 
-	private static boolean isOtherEntity(GKInstance entity) {
-		return isSchemaClassType(entity, ReactomeJavaConstants.OtherEntity);
+	private boolean isOtherEntity(SimpleInstance entity) {
+		return instanceUtilities.isSchemaClassType(entity, ReactomeJavaConstants.OtherEntity);
 	}
 
-	private static boolean isEntitySet(GKInstance entity) {
-		return isSchemaClassType(entity, ReactomeJavaConstants.EntitySet);
+	private boolean isEntitySet(SimpleInstance entity) {
+		return instanceUtilities.isSchemaClassType(entity, ReactomeJavaConstants.EntitySet);
 	}
 
-	private static boolean isCandidateSet(GKInstance entity) {
-		return isSchemaClassType(entity, ReactomeJavaConstants.CandidateSet);
+	private boolean isCandidateSet(SimpleInstance entity) {
+		return instanceUtilities.isSchemaClassType(entity, ReactomeJavaConstants.CandidateSet);
 	}
 
-	private static boolean isComplex(GKInstance entity) {
-		return isSchemaClassType(entity, ReactomeJavaConstants.Complex);
+	private boolean isComplex(SimpleInstance entity) {
+		return instanceUtilities.isSchemaClassType(entity, ReactomeJavaConstants.Complex);
 	}
 
-	private static boolean isPolymer(GKInstance entity) {
-		return isSchemaClassType(entity, ReactomeJavaConstants.Polymer);
+	private boolean isPolymer(SimpleInstance entity) {
+		return instanceUtilities. isSchemaClassType(entity, ReactomeJavaConstants.Polymer);
 	}
 
-	private static boolean isSchemaClassType(GKInstance entity, String schemaClassType) {
-		return entity.getSchemClass().isa(schemaClassType);
+	private boolean hasSpecies(SimpleInstance entity) throws Exception {
+		return entity.getAttribute(ReactomeJavaConstants.species) != null;
 	}
 
-	private static boolean hasSpecies(GKInstance entity) throws Exception {
-		return entity.getSchemClass().isValidAttribute(ReactomeJavaConstants.species) &&
-			entity.getAttributeValue(ReactomeJavaConstants.species) != null;
-	}
-
-	private static boolean anyPhysicalEntityInAttributeHasSpecies(GKInstance entity, String attribute)
+	private boolean anyPhysicalEntityInAttributeHasSpecies(SimpleInstance entity, String attribute)
 		throws Exception {
 
-		for (GKInstance physicalEntity : getPhysicalEntitiesByAttribute(entity, attribute)) {
+		for (SimpleInstance physicalEntity : getPhysicalEntitiesByAttribute(entity, attribute)) {
 			if (hasOrContainsSpeciesAttribute(physicalEntity)) {
 				return true;
 			}
@@ -84,10 +87,9 @@ public class SpeciesCheckUtility {
 		return false;
 	}
 
-	private static List<GKInstance> getPhysicalEntitiesByAttribute(GKInstance entity, String attribute)
-		throws Exception {
+	private List<SimpleInstance> getPhysicalEntitiesByAttribute(SimpleInstance entity, String attribute) {
 
-		Collection<GKInstance> attributeInstanceList = entity.getAttributeValuesList(attribute);
+		Collection<SimpleInstance> attributeInstanceList = (Collection<SimpleInstance>) entity.getAttribute(attribute);
 
 		if (attributeInstanceList == null) {
 			return new ArrayList<>();

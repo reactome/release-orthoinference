@@ -4,29 +4,30 @@ import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.gk.model.ClassAttributeFollowingInstruction;
-import org.gk.model.GKInstance;
-import static org.gk.model.InstanceUtilities.followInstanceAttributes;
-
+//import org.gk.model.GKInstance;
 import org.gk.model.ReactomeJavaConstants;
-import org.gk.persistence.MySQLAdaptor;
-import org.springframework.beans.factory.annotation.Qualifier;
+import org.reactome.curation.model.SimpleInstance;
+import org.reactome.server.graph.domain.model.DatabaseObject;
 import org.springframework.stereotype.Component;
+import org.springframework.util.ReflectionUtils;
+import org.springframework.util.StringUtils;
 
 @Component
 public class SkipInstanceChecker {
 
 	private static final Logger logger = LogManager.getLogger();
-	private MySQLAdaptor dba;
 	private InstanceUtilities instanceUtilities;
+	private CuratorToolAPI curatorToolAPI;
+
 	private Set<Long> skipList;
 	private final long HIV_INFECTION_DB_ID = 162906L;
 	private final long INFLUENZA_INFECTION_DB_ID = 168255L;
 	private final long AMYLOID_FIBER_FORMATION_DB_ID = 977225L;
 
-	public SkipInstanceChecker(@Qualifier("currentDBA") MySQLAdaptor dba, InstanceUtilities instanceUtilities) {
-		this.dba = dba;
+	public SkipInstanceChecker(InstanceUtilities instanceUtilities, CuratorToolAPI curatorToolAPI) {
 		this.instanceUtilities = instanceUtilities;
+		this.curatorToolAPI = curatorToolAPI;
+
         try {
             this.skipList = getAllReactionLikeEventDbIdsToSkip();
         } catch (Exception e) {
@@ -39,9 +40,9 @@ public class SkipInstanceChecker {
 	}
 
 	// Skip orthoinference of this instance if:
-	public boolean instanceShouldBeSkipped(GKInstance reactionInst) throws Exception {
+	public boolean instanceShouldBeSkipped(SimpleInstance reactionInst) throws Exception {
 		// it is found in skiplist array
-		if (getSkipList().contains(reactionInst.getDBID())) {
+		if (getSkipList().contains(reactionInst.getDbId())) {
 			logger.info(reactionInst + " is in skipList -- skipping");
 			return true;
 		}
@@ -54,29 +55,29 @@ public class SkipInstanceChecker {
 			return true;
 		}
 		// it is chimeric
-		if (reactionInst.getAttributeValue(ReactomeJavaConstants.isChimeric) != null) {
-			if ((boolean) reactionInst.getAttributeValue(ReactomeJavaConstants.isChimeric)) {
+		if (reactionInst.getAttribute(ReactomeJavaConstants.isChimeric) != null) {
+			if ((boolean) reactionInst.getAttribute(ReactomeJavaConstants.isChimeric)) {
 				logger.info(reactionInst + " is chimeric -- skipping");
 				return true;
 			}
 		}
 		// it has related species
-		if (reactionInst.getAttributeValue("relatedSpecies") != null) {
+		if (reactionInst.getAttribute("relatedSpecies") != null) {
 			logger.info(reactionInst + " has related species -- skipping");
 			return true;
 		}
 		// it is a disease reaction
-		if (reactionInst.getAttributeValue(ReactomeJavaConstants.disease) != null) {
+		if (reactionInst.getAttribute(ReactomeJavaConstants.disease) != null) {
 			logger.info(reactionInst + " is a disease reaction -- skipping");
 			return true;
 		}
 		// it is manually inferred
-		if (reactionInst.getAttributeValue(ReactomeJavaConstants.inferredFrom) != null) {
+		if (reactionInst.getAttribute(ReactomeJavaConstants.inferredFrom) != null) {
 			logger.info(reactionInst + " is manually inferred -- skipping");
 			return true;
 		}
 		// it contains multiple species
-		Collection<GKInstance> speciesInstances = checkIfEntitiesContainMultipleSpecies(reactionInst);
+		Collection<SimpleInstance> speciesInstances = checkIfEntitiesContainMultipleSpecies(reactionInst);
 		if (speciesInstances.size() > 1) {
 			logger.info(reactionInst + " has multiple species -- skipping");
 			return true;
@@ -97,34 +98,55 @@ public class SkipInstanceChecker {
 	private Set<Long> getAllReactionLikeEventDbIdsToSkip() throws Exception {
 		Set<Long> eventDbIdsToSkip = new HashSet<>();
 		for (long pathwayIdToSkip : getPathwayDbIdsToSkip()) {
-			GKInstance pathwayInst = dba.fetchInstance(pathwayIdToSkip);
+			SimpleInstance pathwayInst = curatorToolAPI.findByDbId(pathwayIdToSkip);
 			if (pathwayInst == null) {
 				continue;
 			}
 
-			for (GKInstance reactionLikeEventToSkip : findReactionLikeEventInstancesToSkip(pathwayInst)) {
-				eventDbIdsToSkip.add(reactionLikeEventToSkip.getDBID());
+			for (SimpleInstance reactionLikeEventToSkip : findReactionLikeEventInstancesToSkip(pathwayInst)) {
+				eventDbIdsToSkip.add(reactionLikeEventToSkip.getDbId());
 			}
 		}
 		return eventDbIdsToSkip;
 	}
 
-	private Set<GKInstance> findReactionLikeEventInstancesToSkip(GKInstance pathwayInst) throws Exception {
+	private Set<SimpleInstance> findReactionLikeEventInstancesToSkip(SimpleInstance pathwayInst) {
 		// Finds all ReactionLikeEvents associated with the skiplists Pathway and hasEvent attributes, and
 		// adds them to skiplist.
-		List<ClassAttributeFollowingInstruction> classesToFollow = new ArrayList<>();
-		classesToFollow.add(new ClassAttributeFollowingInstruction(
-			ReactomeJavaConstants.Pathway, new String[]{ReactomeJavaConstants.hasEvent}, new String[]{}));
-		String[] outClasses = new String[] {ReactomeJavaConstants.ReactionlikeEvent};
-		return followInstanceAttributes(pathwayInst, classesToFollow, outClasses);
+		Map<Long, SimpleInstance> reactionLikeEventsToSkip = new HashMap<>();
+		findReactionLikeEventInstancesToSkip(pathwayInst, reactionLikeEventsToSkip, new HashSet<>());
+		return new HashSet<>(reactionLikeEventsToSkip.values());
+	}
+
+	// Follows the hasEvent attribute of the Pathway, and of every Pathway under it, collecting the ReactionlikeEvents
+	// found along the way. Pathways already visited are not followed again, in case hasEvent loops back on itself.
+	private void findReactionLikeEventInstancesToSkip(
+		SimpleInstance pathwayInst, Map<Long, SimpleInstance> reactionLikeEventsToSkip, Set<Long> visitedPathwayDbIds) {
+
+		if (!visitedPathwayDbIds.add(pathwayInst.getDbId())) {
+			return;
+		}
+
+		for (SimpleInstance eventInst : getAttributeValues(pathwayInst, ReactomeJavaConstants.hasEvent)) {
+			if (instanceUtilities.isSchemaClassType(eventInst, "ReactionLikeEvent")) {
+				reactionLikeEventsToSkip.put(eventInst.getDbId(), eventInst);
+			} else if (instanceUtilities.isSchemaClassType(eventInst, ReactomeJavaConstants.Pathway)) {
+				// Referred instances may only be shells, so the Pathway is inflated before its hasEvent is read
+				SimpleInstance inflatedPathwayInst = curatorToolAPI.inflate(eventInst);
+				if (inflatedPathwayInst != null) {
+					findReactionLikeEventInstancesToSkip(
+						inflatedPathwayInst, reactionLikeEventsToSkip, visitedPathwayDbIds);
+				}
+			}
+		}
 	}
 
 	// Goes through all input/output/catalystActivity/regulatedBy attribute instances, and captures all species
 	// associates with them. Returns a collection of species instances.
 	@SuppressWarnings("unchecked")
-	private Collection<GKInstance> checkIfEntitiesContainMultipleSpecies(GKInstance reactionInst)
+	private Collection<SimpleInstance> checkIfEntitiesContainMultipleSpecies(SimpleInstance reactionInst)
 		throws Exception {
-		List<GKInstance> physicalEntityInstances = new ArrayList<>();
+		List<SimpleInstance> physicalEntityInstances = new ArrayList<>();
 		physicalEntityInstances.addAll(getInputs(reactionInst));
 		physicalEntityInstances.addAll(getOutputs(reactionInst));
 		physicalEntityInstances.addAll(getCatalystActivityPhysicalEntities(reactionInst));
@@ -135,33 +157,32 @@ public class SkipInstanceChecker {
 		return findUniqueSpeciesInstances(physicalEntityInstances);
 	}
 
-	private List<GKInstance> getInputs(GKInstance reactionLikeEvent) throws Exception {
-		return reactionLikeEvent.getAttributeValuesList(ReactomeJavaConstants.input);
+	private List<SimpleInstance> getInputs(SimpleInstance reactionLikeEvent) throws Exception {
+		return (List<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.input);
 	}
 
-	private List<GKInstance> getOutputs(GKInstance reactionLikeEvent) throws Exception {
-		return reactionLikeEvent.getAttributeValuesList(ReactomeJavaConstants.output);
+	private List<SimpleInstance> getOutputs(SimpleInstance reactionLikeEvent) throws Exception {
+		return (List<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.output);
 	}
 
-	private List<GKInstance> getCatalystActivityPhysicalEntities(GKInstance reactionLikeEvent)
-		throws Exception {
+	private List<SimpleInstance> getCatalystActivityPhysicalEntities(SimpleInstance reactionLikeEvent) {
 
-		List<GKInstance> catalystActivityPhysicalInstances = new ArrayList<>();
-		for (GKInstance catalystActivityInst :
-			(Collection<GKInstance>) reactionLikeEvent.getAttributeValuesList(ReactomeJavaConstants.catalystActivity)) {
-			catalystActivityPhysicalInstances.addAll(catalystActivityInst.getAttributeValuesList(ReactomeJavaConstants.physicalEntity));
+		List<SimpleInstance> catalystActivityPhysicalInstances = new ArrayList<>();
+		for (SimpleInstance catalystActivityInst :
+			(Collection<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.catalystActivity)) {
+			catalystActivityPhysicalInstances.addAll((Collection<? extends SimpleInstance>) catalystActivityInst.getAttribute(ReactomeJavaConstants.physicalEntity));
 		}
 		return catalystActivityPhysicalInstances;
 	}
 
-	private List<GKInstance> getRegulators(GKInstance reactionLikeEvent) throws Exception {
-		List<GKInstance> regulatorInstances = new ArrayList<>();
+	private List<SimpleInstance> getRegulators(SimpleInstance reactionLikeEvent) throws Exception {
+		List<SimpleInstance> regulatorInstances = new ArrayList<>();
 
-		List<GKInstance> regulatedByInstances = reactionLikeEvent.getAttributeValuesList("regulatedBy");
-		for (GKInstance regulatedByInst : regulatedByInstances) {
-			for (GKInstance regulatorInst :
-				(Collection<GKInstance>) regulatedByInst.getAttributeValuesList(ReactomeJavaConstants.regulator)) {
-				if (regulatorInst.getSchemClass().isa(ReactomeJavaConstants.PhysicalEntity)) {
+		List<SimpleInstance> regulatedByInstances = (List<SimpleInstance>) reactionLikeEvent.getAttribute("regulatedBy");
+		for (SimpleInstance regulatedByInst : regulatedByInstances) {
+			for (SimpleInstance regulatorInst :
+				(Collection<SimpleInstance>) regulatedByInst.getAttribute(ReactomeJavaConstants.regulator)) {
+				if (regulatorInst.getSchemaClassName().equals(ReactomeJavaConstants.PhysicalEntity)) {
 					regulatorInstances.add(regulatorInst);
 				}
 			}
@@ -170,37 +191,34 @@ public class SkipInstanceChecker {
 		return regulatorInstances;
 	}
 
-	private List<GKInstance> removeDuplicates(List<GKInstance> physicalEntities) {
-		Map<String, GKInstance> physicalEntityHash = new HashMap<>();
+	private List<SimpleInstance> removeDuplicates(List<SimpleInstance> physicalEntities) {
+		Map<String, SimpleInstance> physicalEntityHash = new HashMap<>();
 		// Remove duplicates using HashMap
-		for (GKInstance physicalEntityInst : physicalEntities) {
-			physicalEntityHash.put(physicalEntityInst.getDBID().toString(), physicalEntityInst);
+		for (SimpleInstance physicalEntityInst : physicalEntities) {
+			physicalEntityHash.put(physicalEntityInst.getDbId().toString(), physicalEntityInst);
 		}
 
 		return new ArrayList<>(physicalEntityHash.values());
 	}
 
-	private List<GKInstance> addConstituentPhysicalEntities(List<GKInstance> physicalEntities)
+	private List<SimpleInstance> addConstituentPhysicalEntities(List<SimpleInstance> physicalEntities)
 		throws Exception {
 
-		Map<String, GKInstance> physicalEntitiesDbIdToInstance = new HashMap<>();
-		for (GKInstance physicalEntityInst : physicalEntities) {
-			physicalEntitiesDbIdToInstance.put(physicalEntityInst.getDBID().toString(), physicalEntityInst);
-			for (GKInstance constituentInst : recursePhysicalEntityConstituentInstances(physicalEntityInst)) {
-				physicalEntitiesDbIdToInstance.put(constituentInst.getDBID().toString(), constituentInst);
+		Map<String, SimpleInstance> physicalEntitiesDbIdToInstance = new HashMap<>();
+		for (SimpleInstance physicalEntityInst : physicalEntities) {
+			physicalEntitiesDbIdToInstance.put(physicalEntityInst.getDbId().toString(), physicalEntityInst);
+			for (SimpleInstance constituentInst : recursePhysicalEntityConstituentInstances(physicalEntityInst)) {
+				physicalEntitiesDbIdToInstance.put(constituentInst.getDbId().toString(), constituentInst);
 			}
 		}
 		return new ArrayList<>(physicalEntitiesDbIdToInstance.values());
 	}
 
-	private List<GKInstance> findUniqueSpeciesInstances(List<GKInstance> physicalEntities) throws Exception {
-		Map<String, GKInstance> speciesHash = new HashMap<>();
-		for (GKInstance physicalEntityInst : physicalEntities) {
-			if (physicalEntityInst.getSchemClass().isValidAttribute(ReactomeJavaConstants.species)) {
-				for (GKInstance speciesInst :
-					(Collection<GKInstance>) physicalEntityInst.getAttributeValuesList(ReactomeJavaConstants.species)) {
-					speciesHash.put(speciesInst.getDBID().toString(), speciesInst);
-				}
+	private List<SimpleInstance> findUniqueSpeciesInstances(List<SimpleInstance> physicalEntities) throws Exception {
+		Map<Long, SimpleInstance> speciesHash = new HashMap<>();
+		for (SimpleInstance physicalEntityInst : physicalEntities) {
+			for (SimpleInstance speciesInst : getAttributeValues(physicalEntityInst, ReactomeJavaConstants.species)) {
+				speciesHash.put(speciesInst.getDbId(), speciesInst);
 			}
 		}
 		return new ArrayList<>(speciesHash.values());
@@ -209,46 +227,58 @@ public class SkipInstanceChecker {
 	// Looks at referrals of the constituent instances for the species attribute as well
 	// The term 'constituent' is used as a catch-all for instances under the hasMember/hasComponent/repeatedUnit
 	// attributes
-	@SuppressWarnings("unchecked")
-	private Collection<GKInstance> recursePhysicalEntityConstituentInstances(GKInstance physicalEntity)
+	private Collection<SimpleInstance> recursePhysicalEntityConstituentInstances(SimpleInstance physicalEntity)
 		throws Exception {
 		List<String> attributes = Arrays.asList(
 			ReactomeJavaConstants.hasMember, ReactomeJavaConstants.hasComponent,ReactomeJavaConstants.repeatedUnit);
 
-		Map<Long, GKInstance> constituentInstances = new HashMap<>();
+		Map<Long, SimpleInstance> constituentInstances = new HashMap<>();
 		for (String attribute : attributes) {
-			if (physicalEntity.getSchemClass().isValidAttribute(attribute)) {
-				for (GKInstance physicalEntityConstituent : (Collection<GKInstance>) physicalEntity.getAttributeValuesList(attribute)) {
-					constituentInstances.put(physicalEntityConstituent.getDBID(), physicalEntityConstituent);
-				}
+			for (SimpleInstance physicalEntityConstituent : getAttributeValues(physicalEntity, attribute)) {
+				constituentInstances.put(physicalEntityConstituent.getDbId(), physicalEntityConstituent);
 			}
 		}
 
-		Map<Long, GKInstance> finalConstituentInstancesMap = new HashMap<>();
-		for (GKInstance constituentInst : constituentInstances.values()) {
-			finalConstituentInstancesMap.put(constituentInst.getDBID(), constituentInst);
+		Map<Long, SimpleInstance> finalConstituentInstancesMap = new HashMap<>();
+		for (SimpleInstance constituentInst : constituentInstances.values()) {
+			finalConstituentInstancesMap.put(constituentInst.getDbId(), constituentInst);
 			if (isEntitySet(constituentInst) || isComplex(constituentInst) || isPolymer(constituentInst)) {
-				for (GKInstance recursedConstituentInst : recursePhysicalEntityConstituentInstances(constituentInst)) {
-					finalConstituentInstancesMap.put(recursedConstituentInst.getDBID(), recursedConstituentInst);
+				for (SimpleInstance recursedConstituentInst : recursePhysicalEntityConstituentInstances(constituentInst)) {
+					finalConstituentInstancesMap.put(recursedConstituentInst.getDbId(), recursedConstituentInst);
 				}
 			}
 		}
 		return finalConstituentInstancesMap.values();
 	}
 
-	private boolean isEntitySet(GKInstance physicalEntity) {
-		return isSchemaClassType(physicalEntity, ReactomeJavaConstants.EntitySet);
+	// Returns the attribute's values as a list, whether the attribute is single- or multi-valued.
+	// Returns an empty list if the attribute is not valid for the instance's schema class or has no value.
+	private List<SimpleInstance> getAttributeValues(SimpleInstance instance, String attributeName) {
+		List<SimpleInstance> attributeValues = new ArrayList<>();
+		if (!instanceUtilities.isValidAttribute(instance, attributeName)) {
+			return attributeValues;
+		}
+
+		Object attributeValue = instance.getAttribute(attributeName);
+		if (attributeValue instanceof SimpleInstance) {
+			attributeValues.add((SimpleInstance) attributeValue);
+		} else if (attributeValue instanceof Collection) {
+			for (Object attributeValueObj : (Collection<?>) attributeValue) {
+				attributeValues.add((SimpleInstance) attributeValueObj);
+			}
+		}
+		return attributeValues;
 	}
 
-	private boolean isComplex(GKInstance physicalEntity) {
-		return isSchemaClassType(physicalEntity, ReactomeJavaConstants.Complex);
+	private boolean isEntitySet(SimpleInstance physicalEntity) {
+		return instanceUtilities.isSchemaClassType(physicalEntity, ReactomeJavaConstants.EntitySet);
 	}
 
-	private boolean isPolymer(GKInstance physicalEntity) {
-		return isSchemaClassType(physicalEntity, ReactomeJavaConstants.Polymer);
+	private boolean isComplex(SimpleInstance physicalEntity) {
+		return instanceUtilities.isSchemaClassType(physicalEntity, ReactomeJavaConstants.Complex);
 	}
 
-	private boolean isSchemaClassType(GKInstance physicalEntity, String schemaClassType) {
-		return physicalEntity.getSchemClass().isa(schemaClassType);
+	private boolean isPolymer(SimpleInstance physicalEntity) {
+		return instanceUtilities.isSchemaClassType(physicalEntity, ReactomeJavaConstants.Polymer);
 	}
 }
