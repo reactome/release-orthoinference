@@ -136,12 +136,23 @@ public class InstanceUtilities {
 		mockedInst.setDefaultPersonId(getCuratorToolAPI().getPersonId());
 		mockedInst.setDisplayName("Ghost homologue of " + instanceToBeMocked.getDisplayName());
 
-		String mockedInstName = (String) instanceToBeMocked.getAttribute(ReactomeJavaConstants.name);
+		// A shell (dbId, displayName and schemaClass only) has no name or compartment to copy, so one is inflated
+		// first. Only the copied values come from the inflated instance; the instance itself is still the one used.
+		SimpleInstance sourceInst = instanceToBeMocked;
+		if (sourceInst.getAttributes() == null && sourceInst.getDbId() != null && sourceInst.getDbId() > 0) {
+			SimpleInstance inflatedInst = getCuratorToolAPI().inflate(sourceInst);
+			if (inflatedInst != null) {
+				sourceInst = inflatedInst;
+			}
+		}
+
+		// name is multi-valued, so its value is a list; the first name is the one the ghost is named after.
+		String mockedInstName = CuratorToolAPI.getFirstAttributeValueAsString(sourceInst, ReactomeJavaConstants.name);
 		mockedInst.setAttribute(ReactomeJavaConstants.name, "Ghost homologue of " + mockedInstName);
 		mockedInst.setAttribute(ReactomeJavaConstants.inferredFrom, instanceToBeMocked);
 		mockedInst.setAttribute(ReactomeJavaConstants.species, speciesInst);
 		mockedInst.setAttribute(ReactomeJavaConstants.compartment,
-			instanceToBeMocked.getAttribute(ReactomeJavaConstants.compartment));
+			sourceInst.getAttribute(ReactomeJavaConstants.compartment));
 
 		// Caching based on an instance's defining attributes. This reduces the number of 'checkForIdenticalInstance'
 		// calls, which is slow.
