@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.ReflectionUtils;
 import org.springframework.util.StringUtils;
 
+import static org.reactome.util.general.CollectionUtils.safeList;
+
 @Component
 public class SkipInstanceChecker {
 
@@ -169,7 +171,7 @@ public class SkipInstanceChecker {
 
 		List<SimpleInstance> catalystActivityPhysicalInstances = new ArrayList<>();
 		for (SimpleInstance catalystActivityInst :
-			(Collection<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.catalystActivity)) {
+			safeList((Collection<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.catalystActivity))) {
 			catalystActivityPhysicalInstances.addAll((Collection<? extends SimpleInstance>) catalystActivityInst.getAttribute(ReactomeJavaConstants.physicalEntity));
 		}
 		return catalystActivityPhysicalInstances;
@@ -181,7 +183,7 @@ public class SkipInstanceChecker {
 		List<SimpleInstance> regulatedByInstances = (List<SimpleInstance>) reactionLikeEvent.getAttribute("regulatedBy");
 		for (SimpleInstance regulatedByInst : regulatedByInstances) {
 			for (SimpleInstance regulatorInst :
-				(Collection<SimpleInstance>) regulatedByInst.getAttribute(ReactomeJavaConstants.regulator)) {
+				safeList((Collection<SimpleInstance>) regulatedByInst.getAttribute(ReactomeJavaConstants.regulator))) {
 				if (regulatorInst.getSchemaClassName().equals(ReactomeJavaConstants.PhysicalEntity)) {
 					regulatorInstances.add(regulatorInst);
 				}

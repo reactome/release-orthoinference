@@ -18,6 +18,8 @@ import org.reactome.curation.model.SimpleInstance;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
+import static org.reactome.util.general.CollectionUtils.safeList;
+
 @Component
 public class ReactionInferrer {
 
@@ -272,7 +274,7 @@ public class ReactionInferrer {
 
 	@SuppressWarnings("unchecked")
 	private boolean inferReactionCatalysts(SimpleInstance reactionInst, SimpleInstance infReactionInst) throws Exception {
-		Collection<SimpleInstance> catalystInstances = (Collection<SimpleInstance>) reactionInst.getAttribute(ReactomeJavaConstants.catalystActivity);
+		Collection<SimpleInstance> catalystInstances = safeList((Collection<SimpleInstance>) reactionInst.getAttribute(ReactomeJavaConstants.catalystActivity));
 		logCatalystInfo(catalystInstances);
 
 		for (SimpleInstance catalystInst : catalystInstances) {
