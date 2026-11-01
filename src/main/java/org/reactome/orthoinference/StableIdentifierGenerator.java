@@ -20,6 +20,7 @@ public class StableIdentifierGenerator {
     private static Map<String,Integer> seenOrthoIds = new HashMap<>();
 
     private static final String IDENTIFIER_VERSION = "1";
+    private static final String STABLE_ID_ATTRIBUTE = "stId";
 
     private ConfigProperties configProperties;
     private String speciesCode;
@@ -44,18 +45,11 @@ public class StableIdentifierGenerator {
             return null;
         }
 
-        // All Human PhysicalEntitys and Events will have a StableIdentifier instance in the stableIdentifier
-        // attribute
-        SimpleInstance stableIdentifierInst =
-            (SimpleInstance) originalInst.getAttribute(ReactomeJavaConstants.stableIdentifier);
-        if (stableIdentifierInst == null) {
-            logAndThrow("No stable identifier instance found for " + originalInst);
-        }
+        String sourceIdentifier = getSourceIdentifier(originalInst);
 
-        logger.info("Generating orthologous stable identifier for " + stableIdentifierInst.getDisplayName());
+        logger.info("Generating orthologous stable identifier for " + sourceIdentifier);
 
-
-        SimpleInstance orthoStableIdentifierInst = getOrthoStableIdentiferInstance(stableIdentifierInst);
+        SimpleInstance orthoStableIdentifierInst = getOrthoStableIdentiferInstance(sourceIdentifier);
 
         // Populate inferred instance with new StableIdentifier instance
         logger.info("Stable identifier generated: " + orthoStableIdentifierInst.getDisplayName());
@@ -63,10 +57,8 @@ public class StableIdentifierGenerator {
         return orthoStableIdentifierInst;
     }
 
-    private SimpleInstance getOrthoStableIdentiferInstance(SimpleInstance stableIdentifierInst)
-        throws Exception {
-
-        String targetIdentifier = getTargetIdentifier(stableIdentifierInst);
+    private SimpleInstance getOrthoStableIdentiferInstance(String sourceIdentifier) throws Exception {
+        String targetIdentifier = getTargetIdentifier(sourceIdentifier);
 
         // Check that the stable identifier instance does not already exist in DB
         SimpleInstance existingStableIdentifier = getCuratorToolAPI().fetchStableIdentifier(targetIdentifier);
@@ -76,10 +68,9 @@ public class StableIdentifierGenerator {
         return existingStableIdentifier;
     }
 
-    private String getTargetIdentifier(SimpleInstance stableIdentifierInst) throws Exception {
+    private String getTargetIdentifier(String sourceIdentifier) throws Exception {
         // For now, Human is hard-coded as the source species, so we replace the stableIdentifier source species
         // based on that assumption
-        String sourceIdentifier = getSourceIdentifier(stableIdentifierInst);
         String targetIdentifier = sourceIdentifier.replace("HSA", getSpeciesAbbreviation());
         // Paralogs will have the same base stable identifier, but we want to denote when that happens.
         // We pull the value from `seenOrthoIds`, increment it and then add it to the stable identifier name
@@ -93,7 +84,24 @@ public class StableIdentifierGenerator {
         return targetIdentifier;
     }
 
-    private String getSourceIdentifier(SimpleInstance stableIdentifierInst) {
+    private String getSourceIdentifier(SimpleInstance originalInst) {
+        // Human PhysicalEntitys and Events have a StableIdentifier instance in the stableIdentifier attribute, and
+        // its identifier is also kept on the instance itself as stId. Instances in the graph database do not all
+        // have the stableIdentifier relationship, so stId is used when there is no StableIdentifier instance.
+        SimpleInstance stableIdentifierInst =
+            (SimpleInstance) originalInst.getAttribute(ReactomeJavaConstants.stableIdentifier);
+        if (stableIdentifierInst != null) {
+            return getIdentifier(stableIdentifierInst);
+        }
+
+        Object stId = originalInst.getAttribute(STABLE_ID_ATTRIBUTE);
+        if (stId == null) {
+            logAndThrow("No stable identifier found for " + originalInst);
+        }
+        return stId.toString();
+    }
+
+    private String getIdentifier(SimpleInstance stableIdentifierInst) {
         // An instance holds the instances it refers to as shells -- dbId, displayName and schemaClass only -- so the
         // StableIdentifier has to be inflated before its identifier can be read.
         String sourceIdentifier = (String) stableIdentifierInst.getAttribute(ReactomeJavaConstants.identifier);
