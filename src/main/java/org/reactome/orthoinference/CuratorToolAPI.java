@@ -42,6 +42,10 @@ public class CuratorToolAPI {
     // the instance found (or created) for a name is kept rather than queried again for every entry of that species.
     private final Map<String, SimpleInstance> speciesNameToInstance = new HashMap<>();
 
+    // The names of each schema class's multi-valued attributes, looked up once per class. Every instance sent to
+    // curator-tool-ws is checked against them, so they are not fetched again for each instance.
+    private final Map<String, Set<String>> classNameToMultiValuedAttributeNames = new HashMap<>();
+
     // Built by CuratorToolConfig, which takes the controller from the curator-tool-ws context it starts and closes.
     public CuratorToolAPI(CurationController controller, ConfigProperties configProperties) {
         this.controller = controller;
@@ -58,6 +62,7 @@ public class CuratorToolAPI {
             simpleInstance.setDbId(nextPlaceholderDbId());
         }
 
+        prepareAttributeValues(simpleInstance);
         SimpleInstance committedInstance = controller.commit(simpleInstance);
         // Nothing was stored, so callers cannot go on to use the instance -- for a new one, the dbId it would have
         // been given is the very thing that is missing. Reported here rather than as a NullPointerException at
@@ -173,6 +178,9 @@ public class CuratorToolAPI {
         // The matches come back as shells -- dbId, displayName and schemaClass only. They are inflated because
         // callers go on to add attribute values to them and commit them, and committing a shell would clear every
         // attribute of the stored instance.
+        // The match converts the instance the same way a commit does, so a single value given for a multi-valued
+        // attribute would be dropped from the match rather than matched on.
+        prepareAttributeValues(instance);
         return controller.matchInstances(instance)
             .stream()
             .map(this::inflate)
@@ -224,6 +232,87 @@ public class CuratorToolAPI {
 
     public long getPersonId() {
         return this.personId;
+    }
+
+    /**
+     * Puts the instance's attribute values, and those of every instance it refers to, in the form curator-tool-ws's
+     * DatabaseObjectInstanceConverter needs. The instances are changed in place:
+     * <ul>
+     *   <li>An attribute with a null value is removed. The converter looks up a setter by the value's class, so
+     *   a null value fails with a NullPointerException. A commit replaces every attribute of the stored instance,
+     *   so a removed attribute is stored the same way a null one would be.</li>
+     *   <li>Null elements are removed from a multi-valued attribute's list, which the converter also cannot handle.</li>
+     *   <li>A single value given for a multi-valued attribute is wrapped in a list. The graph model's setter for
+     *   such an attribute takes a List, and the converter does not wrap the value itself: it logs "Cannot find a
+     *   set method" and skips the attribute, so the value is not stored or matched on.</li>
+     * </ul>
+     *
+     * @param instance - the instance about to be sent to curator-tool-ws.
+     */
+    private void prepareAttributeValues(SimpleInstance instance) {
+        prepareAttributeValues(instance, Collections.newSetFromMap(new IdentityHashMap<>()));
+    }
+
+    private void prepareAttributeValues(SimpleInstance instance, Set<SimpleInstance> visitedInstances) {
+        // Instances can refer to each other in cycles, so each is prepared only once.
+        if (!visitedInstances.add(instance) || instance.getAttributes() == null) {
+            return;
+        }
+
+        Set<String> multiValuedAttributeNames = getMultiValuedAttributeNames(instance.getSchemaClassName());
+        Iterator<Map.Entry<String, Object>> attributeIterator = instance.getAttributes().entrySet().iterator();
+        while (attributeIterator.hasNext()) {
+            Map.Entry<String, Object> attribute = attributeIterator.next();
+            Object value = attribute.getValue();
+            if (value == null) {
+                attributeIterator.remove();
+                continue;
+            }
+
+            if (value instanceof Collection) {
+                Collection<?> values = (Collection<?>) value;
+                if (values.contains(null)) {
+                    // A new list rather than removing from this one, which may be shared or unmodifiable.
+                    List<Object> nonNullValues = values.stream().filter(Objects::nonNull).collect(Collectors.toList());
+                    attribute.setValue(nonNullValues);
+                    values = nonNullValues;
+                }
+                for (Object element : values) {
+                    if (element instanceof SimpleInstance) {
+                        prepareAttributeValues((SimpleInstance) element, visitedInstances);
+                    }
+                }
+            } else {
+                if (multiValuedAttributeNames.contains(attribute.getKey())) {
+                    attribute.setValue(new ArrayList<>(Collections.singletonList(value)));
+                }
+                if (value instanceof SimpleInstance) {
+                    prepareAttributeValues((SimpleInstance) value, visitedInstances);
+                }
+            }
+        }
+    }
+
+    /**
+     * Returns the names of the schema class's multi-valued attributes, including those it inherits. Whether an
+     * attribute is multi-valued comes from the graph model, so it agrees with whether the setter the converter
+     * uses takes a List.
+     *
+     * @param className - the schema class, e.g. "Reaction".
+     * @return the multi-valued attribute names, or an empty set if the class is null or not in the schema.
+     */
+    private Set<String> getMultiValuedAttributeNames(String className) {
+        if (className == null) {
+            return Collections.emptySet();
+        }
+        return classNameToMultiValuedAttributeNames.computeIfAbsent(className, name ->
+            controller.getAttributes(name)
+                .stream()
+                .filter(attribute -> attribute.getProperties() != null &&
+                    "+".equals(attribute.getProperties().getCardinality()))
+                .map(CurationAttribute::getName)
+                .collect(Collectors.toSet())
+        );
     }
 
     private void updateDisplayName(SimpleInstance referenceSequence) {
@@ -401,7 +490,15 @@ public class CuratorToolAPI {
         );
     }
 
-    private static String getFirstAttributeValueAsString(SimpleInstance instance, String attributeName) {
+    /**
+     * Returns the instance's first value for the attribute as a string, whether the attribute is multi-valued (its
+     * value a list) or single-valued.
+     *
+     * @param instance - the instance to read.
+     * @param attributeName - the attribute, e.g. "name".
+     * @return the first value as a string, or null if the attribute has no value.
+     */
+    public static String getFirstAttributeValueAsString(SimpleInstance instance, String attributeName) {
         List<Object> values = getAttributeValues(instance, attributeName);
         return values.isEmpty() ? null : values.get(0).toString();
     }
