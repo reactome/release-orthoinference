@@ -10,7 +10,6 @@ import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.gk.model.GKInstance;
 
 import org.gk.model.ReactomeJavaConstants;
 import org.gk.persistence.MySQLAdaptor;
@@ -139,7 +138,7 @@ public class EventsInferrer {
 			return true;
 		}
 
-		GKInstance evidenceTypeInst = (GKInstance) prevInfInst.getAttribute(ReactomeJavaConstants.evidenceType);
+		SimpleInstance evidenceTypeInst = (SimpleInstance) prevInfInst.getAttribute(ReactomeJavaConstants.evidenceType);
 		if (evidenceTypeInst != null && evidenceTypeInst.getDisplayName().contains("electronic")) {
 			getReactionInferrer().addAlreadyInferredEvents(reactionInst, prevInfInst);
 		} else {
