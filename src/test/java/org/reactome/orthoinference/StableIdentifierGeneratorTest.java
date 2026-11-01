@@ -109,7 +109,19 @@ public class StableIdentifierGeneratorTest {
 
         RuntimeException exception = assertThrows(RuntimeException.class,
             () -> stIdGenerator.generateOrthologousStableId(new SimpleInstance(), originalInst));
-        assertThat(exception.getMessage(), is(equalTo("No stable identifier instance found for " + originalInst)));
+        assertThat(exception.getMessage(), is(equalTo("No stable identifier found for " + originalInst)));
+    }
+
+    @Test
+    public void stIdIsUsedWhenThereIsNoStableIdentifierInst() throws Exception {
+        SimpleInstance originalInst = createOriginalInst(null);
+        originalInst.setAttribute("stId", "R-HSA-100006");
+
+        SimpleInstance orthoStableIdentifierInst =
+            stIdGenerator.generateOrthologousStableId(new SimpleInstance(), originalInst);
+
+        assertThat(orthoStableIdentifierInst.getAttribute(ReactomeJavaConstants.identifier),
+            is(equalTo("R-ABC-100006")));
     }
 
     @Test
