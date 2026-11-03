@@ -1,25 +1,17 @@
 package org.reactome.orthoinference;
 
 import java.io.IOException;
-import java.sql.SQLException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.gk.model.GKInstance;
-
-import static org.gk.model.ReactomeJavaConstants.compartment;
-import static org.reactome.util.general.CollectionUtils.safeList;
 
 import org.gk.model.ReactomeJavaConstants;
-import org.gk.persistence.MySQLAdaptor;
-import org.gk.schema.SchemaClass;
 import org.json.simple.parser.ParseException;
 import org.reactome.curation.model.SimpleInstance;
-import org.reactome.release.common.database.InstanceEditUtils;
 import org.reactome.server.graph.domain.model.DatabaseObject;
 import org.reactome.server.graph.domain.model.PhysicalEntity;
-import org.reactome.util.general.CollectionUtils;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
@@ -46,7 +38,6 @@ public class InstanceUtilities {
 	private SimpleInstance summation;
 
 	private SimpleInstance speciesInst;
-	private GKInstance instanceEdit;
 	private Map<String,SimpleInstance> mockedIdenticals = new HashMap<>();
 
 	public InstanceUtilities(
@@ -171,6 +162,14 @@ public class InstanceUtilities {
 	// Checks that equivalent instances don't already exist in the DB, substituting if they do
 	public SimpleInstance checkForIdenticalInstances(SimpleInstance inferredInst, SimpleInstance originalInst)
 		throws Exception {
+		// An instance with a positive dbId is already stored -- e.g. the single inferred member that
+		// createInfEntitySet substitutes for its EntitySet -- so it is its own identical instance. curator-tool-ws
+		// does not always match an instance to itself, and committing it again here would send a copy whose
+		// "modified" InstanceEdit is stale (later commits went through refreshed copies), which curator-tool-ws
+		// rejects with an InstanceChangedException.
+		if (inferredInst.getDbId() != null && inferredInst.getDbId() > 0) {
+			return inferredInst;
+		}
 		List<SimpleInstance> identicalInstances = getCuratorToolAPI().fetchIdenticalInstances(inferredInst);
 		if (!identicalInstances.isEmpty()) {
 			// TODO: In future, could iterate through array of returned values and pull the 'most identical'.
@@ -406,6 +405,16 @@ public class InstanceUtilities {
 			}
 		}
 		return compartments;
+	}
+
+	public SimpleInstance getInflatedInstance(SimpleInstance instance, String attribute) {
+		Object attributeValue = instance.getAttribute(attribute);
+		return attributeValue != null ? curatorToolAPI.inflate((SimpleInstance) attributeValue) : null;
+	}
+
+	public List<SimpleInstance> getInflatedInstances(SimpleInstance instance, String attribute) {
+		return safeList((Collection<SimpleInstance>) instance.getAttribute(attribute)).
+			stream().map(i -> curatorToolAPI.inflate(i)).collect(Collectors.toList());
 	}
 
 	private String getSpeciesName() throws IOException, ParseException {
