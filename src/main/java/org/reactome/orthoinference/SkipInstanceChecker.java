@@ -4,13 +4,9 @@ import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-//import org.gk.model.GKInstance;
 import org.gk.model.ReactomeJavaConstants;
 import org.reactome.curation.model.SimpleInstance;
-import org.reactome.server.graph.domain.model.DatabaseObject;
 import org.springframework.stereotype.Component;
-import org.springframework.util.ReflectionUtils;
-import org.springframework.util.StringUtils;
 
 import static org.reactome.util.general.CollectionUtils.safeList;
 
@@ -159,20 +155,21 @@ public class SkipInstanceChecker {
 		return findUniqueSpeciesInstances(physicalEntityInstances);
 	}
 
-	private List<SimpleInstance> getInputs(SimpleInstance reactionLikeEvent) throws Exception {
-		return (List<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.input);
+	private List<SimpleInstance> getInputs(SimpleInstance reactionLikeEvent) {
+		return safeList((List<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.input));
 	}
 
-	private List<SimpleInstance> getOutputs(SimpleInstance reactionLikeEvent) throws Exception {
-		return (List<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.output);
+	private List<SimpleInstance> getOutputs(SimpleInstance reactionLikeEvent) {
+		return safeList((List<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.output));
 	}
 
 	private List<SimpleInstance> getCatalystActivityPhysicalEntities(SimpleInstance reactionLikeEvent) {
 
 		List<SimpleInstance> catalystActivityPhysicalInstances = new ArrayList<>();
-		for (SimpleInstance catalystActivityInst :
-			safeList((Collection<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.catalystActivity))) {
-			catalystActivityPhysicalInstances.addAll((Collection<? extends SimpleInstance>) catalystActivityInst.getAttribute(ReactomeJavaConstants.physicalEntity));
+		for (SimpleInstance catalystActivityInst : instanceUtilities.getInflatedInstances(reactionLikeEvent, ReactomeJavaConstants.catalystActivity)) {
+			catalystActivityPhysicalInstances.add(
+				instanceUtilities.getInflatedInstance(catalystActivityInst, ReactomeJavaConstants.physicalEntity)
+			);
 		}
 		return catalystActivityPhysicalInstances;
 	}
@@ -180,13 +177,11 @@ public class SkipInstanceChecker {
 	private List<SimpleInstance> getRegulators(SimpleInstance reactionLikeEvent) throws Exception {
 		List<SimpleInstance> regulatorInstances = new ArrayList<>();
 
-		List<SimpleInstance> regulatedByInstances = (List<SimpleInstance>) reactionLikeEvent.getAttribute("regulatedBy");
+		List<SimpleInstance> regulatedByInstances = instanceUtilities.getInflatedInstances(reactionLikeEvent, "regulatedBy");
 		for (SimpleInstance regulatedByInst : regulatedByInstances) {
-			for (SimpleInstance regulatorInst :
-				safeList((Collection<SimpleInstance>) regulatedByInst.getAttribute(ReactomeJavaConstants.regulator))) {
-				if (regulatorInst.getSchemaClassName().equals(ReactomeJavaConstants.PhysicalEntity)) {
-					regulatorInstances.add(regulatorInst);
-				}
+			SimpleInstance regulatorInst = instanceUtilities.getInflatedInstance(regulatedByInst, ReactomeJavaConstants.regulator);
+			if (instanceUtilities.isSchemaClassType(regulatorInst, ReactomeJavaConstants.PhysicalEntity)) {
+				regulatorInstances.add(regulatorInst);
 			}
 		}
 
