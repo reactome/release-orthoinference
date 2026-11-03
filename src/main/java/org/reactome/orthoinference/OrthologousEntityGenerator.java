@@ -58,7 +58,7 @@ public class OrthologousEntityGenerator {
 	public SimpleInstance createOrthoEntity(SimpleInstance entityInst, boolean override) throws Exception {
 		logger.info("Attempting PE inference: " + entityInst);
 		SimpleInstance infEntityInst = null;
-		if (!isDrugOrOtherEntity(entityInst)) {
+		if (isDrugOrOtherEntity(entityInst)) {
 			// This used to have a conditional statement based on the returned value of the 'check_intracellular'
 			// function.
 			// That function doesn't exist anymore (only seemed to apply to the 'mtub' species, which hasn't been
