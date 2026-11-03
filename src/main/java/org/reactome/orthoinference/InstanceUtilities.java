@@ -245,6 +245,20 @@ public class InstanceUtilities {
 		getCuratorToolAPI().commit(currentInstance);
 	}
 
+	// Returns a shell of the instance -- dbId, displayName and schemaClass, with no attributes -- which is all
+	// curator-tool-ws needs to link to an instance that is already stored. An instance that is not stored yet is
+	// returned as it is, since a commit needs its attributes to create it.
+	private SimpleInstance createReference(SimpleInstance instance) {
+		if (instance.getDbId() == null || instance.getDbId() < 0) {
+			return instance;
+		}
+		SimpleInstance reference = new SimpleInstance();
+		reference.setDbId(instance.getDbId());
+		reference.setDisplayName(instance.getDisplayName());
+		reference.setSchemaClassName(instance.getSchemaClassName());
+		return reference;
+	}
+
 	// Checks if the instanceToCheck already contains the instanceToUse in the multi-value attribute
 	@SuppressWarnings("unchecked")
 	public SimpleInstance addAttributeValueIfNecessary(SimpleInstance instanceToBeCheckedForExistingAttribute,
@@ -275,7 +289,10 @@ public class InstanceUtilities {
 			}
 		}
 		if (!attributeExists) {
-			attributeInstancesFromInferredInstance.add(instanceContainingAttributeToBeChecked);
+			// Only a reference (dbId, displayName and schemaClass) is added, not the instance itself. The two
+			// instances are often linked both ways (inferredFrom/inferredTo), and if each held the other with all its
+			// attributes, committing either would hand curator-tool-ws a cycle that it walks until the stack overflows.
+			attributeInstancesFromInferredInstance.add(createReference(instanceContainingAttributeToBeChecked));
 			instanceToBeCheckedForExistingAttribute.setAttribute(attribute, attributeInstancesFromInferredInstance);
 		}
 		return instanceToBeCheckedForExistingAttribute;
