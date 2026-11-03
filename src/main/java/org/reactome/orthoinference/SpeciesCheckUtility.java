@@ -72,7 +72,7 @@ public class SpeciesCheckUtility {
 		return instanceUtilities. isSchemaClassType(entity, ReactomeJavaConstants.Polymer);
 	}
 
-	private boolean hasSpecies(SimpleInstance entity) throws Exception {
+	private boolean hasSpecies(SimpleInstance entity) {
 		return entity.getAttribute(ReactomeJavaConstants.species) != null;
 	}
 
