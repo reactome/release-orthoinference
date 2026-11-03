@@ -77,9 +77,9 @@ public class OrthologousEntityGenerator {
 			logger.info("No species attribute found in PE, using original instance");
 			infEntityInst = entityInst;
 		// Will either infer an EWAS or return a mock GEE instance if needed (i.e. if override is currently 'True')
-		} else if (entityInst.getSchemaClassName().equals(ReactomeJavaConstants.GenomeEncodedEntity)) {
+		} else if (instanceUtilities.isSchemaClassType(entityInst, ReactomeJavaConstants.GenomeEncodedEntity)) {
 			// TODO: Try using 'isa' here instead of contains
-			if (entityInst.getSchemaClassName().equals(ReactomeJavaConstants.EntityWithAccessionedSequence)) {
+			if (instanceUtilities.isSchemaClassType(entityInst, ReactomeJavaConstants.EntityWithAccessionedSequence)) {
 				infEntityInst = createInfEWAS(entityInst, override);
 			} else {
 				if (override) {
@@ -130,14 +130,17 @@ public class OrthologousEntityGenerator {
 			if (infEWASInstances.size() > 1) {
 				logger.info("Multiple EWAS homologues produced for single EWAS. Converting to DefinedSet");
 				SimpleInstance infDefinedSetInst = new SimpleInstance();
-				String definedSetName = "Homologues of " + ewasInst.getAttribute(name);
+				infDefinedSetInst.setSchemaClassName(ReactomeJavaConstants.DefinedSet);
+				// name is multi-valued, so the set is named after the EWAS's first name rather than the whole List.
+				String definedSetName = "Homologues of " +
+					CuratorToolAPI.getFirstAttributeValueAsString(ewasInst, ReactomeJavaConstants.name);
 				infDefinedSetInst.setAttribute(name, definedSetName);
 				infDefinedSetInst.setAttribute(ReactomeJavaConstants.compartment, instanceUtilities.getCompartments(ewasInst));
 				
 				infDefinedSetInst.setAttribute(ReactomeJavaConstants.species, getSpeciesInstance());
 				infDefinedSetInst.setAttribute(ReactomeJavaConstants.hasMember, infEWASInstances);
 				String definedSetDisplayName = infDefinedSetInst.getAttribute(ReactomeJavaConstants.name) +
-					" [" +((SimpleInstance) ewasInst.getAttribute(compartment)).getDisplayName() + "]";
+					" [" + getFirstCompartmentDisplayName(ewasInst) + "]";
 				infDefinedSetInst.setDisplayName(definedSetDisplayName);
 				// Caching based on an instance's defining attributes. This reduces the number of
 				// 'checkForIdenticalInstance' calls, which is slow.
@@ -210,14 +213,14 @@ public class OrthologousEntityGenerator {
 			// 'components' while Polymers will infer all 'repeatedUnits'.
 			// TODO: Log the ratio of inferred complex/polyer from human?
 			if (complexInst.getSchemaClassName().equals(ReactomeJavaConstants.Complex)) {
-				Collection<SimpleInstance> componentInstances = (Collection<SimpleInstance>) complexInst.getAttribute(ReactomeJavaConstants.hasComponent);
+				Collection<SimpleInstance> componentInstances = instanceUtilities.getInflatedInstances(complexInst, ReactomeJavaConstants.hasComponent);
 				logger.info("Complex components: " + componentInstances);
 				for (SimpleInstance componentInst : componentInstances) {
 					infComponentInstances.add(createOrthoEntity(componentInst, true));
 				}
 				infComplexInst.setAttribute(ReactomeJavaConstants.hasComponent, infComponentInstances);
 			} else if (complexInst.getSchemaClassName().equals(ReactomeJavaConstants.Polymer)) {
-				Collection<SimpleInstance> repeatedUnitInstances = (Collection<SimpleInstance>) complexInst.getAttribute(ReactomeJavaConstants.repeatedUnit);
+				Collection<SimpleInstance> repeatedUnitInstances = instanceUtilities.getInflatedInstances(complexInst, ReactomeJavaConstants.repeatedUnit);
 				logger.info("Polymer repeated units: " + repeatedUnitInstances);
 				for (SimpleInstance repeatedUnitInst : repeatedUnitInstances) {
 					infComponentInstances.add(createOrthoEntity(repeatedUnitInst, true));
@@ -267,7 +270,7 @@ public class OrthologousEntityGenerator {
 			Set<String> existingMemberInstances = new HashSet<>();
 			List<SimpleInstance> infMembersList = new ArrayList<>();
 			Collection<SimpleInstance> memberInstances =
-				(Collection<SimpleInstance>) entitySetInst.getAttribute(ReactomeJavaConstants.hasMember);
+				instanceUtilities.getInflatedInstances(entitySetInst, ReactomeJavaConstants.hasMember);
 			if (!entitySetInst.getSchemaClassName().equals(ReactomeJavaConstants.CandidateSet)) {
 				logger.info("Total member instances: " + memberInstances.size());
 				logger.info("Member instances: " + memberInstances);
@@ -308,8 +311,8 @@ public class OrthologousEntityGenerator {
 				Set<String> existingCandidateInstances = new HashSet<>();
 				List<SimpleInstance> infCandidatesList = new ArrayList<>();
 				// Equivalent to infer_members function in infer_events.pl
-				Collection<SimpleInstance> candidateInstances = (Collection<SimpleInstance>)
-					entitySetInst.getAttribute(ReactomeJavaConstants.hasCandidate);
+				Collection<SimpleInstance> candidateInstances = instanceUtilities.getInflatedInstances(
+					entitySetInst, ReactomeJavaConstants.hasCandidate);
 				logger.info("Total candidate instances: " + candidateInstances.size());
 				logger.info("Candidate instances: " + candidateInstances);
 				for (SimpleInstance candidateInst : candidateInstances) {
@@ -386,7 +389,11 @@ public class OrthologousEntityGenerator {
 				// All members are stored in this inferred instances 'hasMember' attribute near the beginning of this
 				// function.
 			}
-			infEntitySetInst.setDisplayName(entitySetInst.getDisplayName());
+			// Only a new set takes the source set's name. When a single inferred member stands in for the set, it is
+			// already stored and shared through the caches, so renaming it would change its local name and cache key.
+			if (infEntitySetInst.getDbId() == null || infEntitySetInst.getDbId() < 0) {
+				infEntitySetInst.setDisplayName(entitySetInst.getDisplayName());
+			}
 			// Caching based on an instance's defining attributes. This reduces the number of
 			// 'checkForIdenticalInstance' calls, which is slow.
 			String cacheKey = instanceUtilities.getCacheKey(infEntitySetInst);
@@ -420,6 +427,11 @@ public class OrthologousEntityGenerator {
 		complexSummationInst.setDisplayName(complexSummationText);
 		complexSummationInst = instanceUtilities.checkForIdenticalInstances(complexSummationInst, null);
 		return complexSummationInst;
+	}
+
+	private String getFirstCompartmentDisplayName(SimpleInstance ewasInst) {
+		List<SimpleInstance> compartmentNames = (List<SimpleInstance>) ewasInst.getAttribute(ReactomeJavaConstants.Compartment);
+		return compartmentNames != null && !compartmentNames.isEmpty() ?  compartmentNames.get(0).getDisplayName() : "";
 	}
 
 	private EWASInferrer getEWASInferrer() {
