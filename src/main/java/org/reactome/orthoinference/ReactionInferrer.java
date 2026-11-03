@@ -251,8 +251,7 @@ public class ReactionInferrer {
 	@SuppressWarnings("unchecked")
 	private boolean inferReactionInputsOrOutputs(
 		SimpleInstance reactionInst, SimpleInstance infReactionInst, String attribute) throws Exception {
-		Collection<SimpleInstance> attributeInstances =
-			(Collection<SimpleInstance>) reactionInst.getAttribute(attribute);
+		Collection<SimpleInstance> attributeInstances = getUtils().getInflatedInstances(reactionInst, attribute);
 		logger.info("Total " + attribute + " instances: " + attributeInstances.size());
 		logger.info(capitalizeFirstLetter(attribute) + " instances: " + attributeInstances);
 
@@ -274,7 +273,7 @@ public class ReactionInferrer {
 
 	@SuppressWarnings("unchecked")
 	private boolean inferReactionCatalysts(SimpleInstance reactionInst, SimpleInstance infReactionInst) throws Exception {
-		Collection<SimpleInstance> catalystInstances = safeList((Collection<SimpleInstance>) reactionInst.getAttribute(ReactomeJavaConstants.catalystActivity));
+		Collection<SimpleInstance> catalystInstances = getUtils().getInflatedInstances(reactionInst, ReactomeJavaConstants.catalystActivity);
 		logCatalystInfo(catalystInstances);
 
 		for (SimpleInstance catalystInst : catalystInstances) {
@@ -332,7 +331,7 @@ public class ReactionInferrer {
 	}
 
 	private boolean inferPhysicalEntity(SimpleInstance sourceCatalyst, SimpleInstance inferredCatalyst) throws Exception {
-		SimpleInstance catalystPEInst = (SimpleInstance) sourceCatalyst.getAttribute(ReactomeJavaConstants.physicalEntity);
+		SimpleInstance catalystPEInst = getUtils().getInflatedInstance(sourceCatalyst, ReactomeJavaConstants.physicalEntity);
 		if (catalystPEInst != null) {
 			logger.info("Catalyst PE instance: " + catalystPEInst);
 			SimpleInstance infCatalystPEInst = getOrthologousEntityGenerator().createOrthoEntity(catalystPEInst, false);
@@ -349,7 +348,7 @@ public class ReactionInferrer {
 	private void inferActiveUnits(SimpleInstance sourceCatalyst, SimpleInstance inferredCatalyst) throws Exception {
 		List<SimpleInstance> activeUnits = new ArrayList<>();
 		Collection<SimpleInstance> activeUnitInstances =
-				(Collection<SimpleInstance>) sourceCatalyst.getAttribute(ReactomeJavaConstants.activeUnit);
+			getUtils().getInflatedInstances(sourceCatalyst, ReactomeJavaConstants.activeUnit);
 
 		logger.info("Total active unit instances: " + activeUnitInstances);
 		if (!activeUnitInstances.isEmpty()) {
@@ -394,11 +393,11 @@ public class ReactionInferrer {
 
 	@SuppressWarnings("unchecked")
 	private Collection<SimpleInstance> getRegulationsForReaction(SimpleInstance reactionInst) {
-		return (Collection<SimpleInstance>) reactionInst.getAttribute(ReactomeJavaConstants.regulatedBy);
+		return getUtils().getInflatedInstances(reactionInst, ReactomeJavaConstants.regulatedBy);
 	}
 
 	private SimpleInstance inferSingleRegulation(SimpleInstance regulation) throws Exception {
-		SimpleInstance regulator = (SimpleInstance) regulation.getAttribute(ReactomeJavaConstants.regulator);
+		SimpleInstance regulator = getUtils().getInflatedInstance(regulation, ReactomeJavaConstants.regulator);
 		if (regulator == null) {
 			logger.warn("Regulation instance has no regulator, skipping");
 			return null;
