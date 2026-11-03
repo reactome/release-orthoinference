@@ -1,18 +1,15 @@
 package org.reactome.orthoinference;
 
-import java.sql.SQLException;
 import java.util.*;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.gk.model.GKInstance;
 
 import org.gk.model.ReactomeJavaConstants;
-import org.gk.persistence.MySQLAdaptor;
-import org.gk.schema.GKSchemaClass;
-import org.gk.schema.SchemaClass;
 import org.reactome.curation.model.SimpleInstance;
 import org.springframework.stereotype.Component;
+
+import static org.reactome.util.general.CollectionUtils.safeList;
 
 @Component
 public class EWASInferrer {
@@ -82,16 +79,14 @@ public class EWASInferrer {
 		infEWASInst.setAttribute(ReactomeJavaConstants.referenceEntity, infReferenceGeneProductInst);
 
 		inferStartAndEndCoordinates(ewasInst, infEWASInst);
-		infEWASInst.setAttribute(ReactomeJavaConstants.name, homologueId);
-
-		// If the species-specific gene name was retrieved from UniProt's mapping service, it is added
-		// as the primary name for the EWAS.
+		// name is multi-valued, so it is held as a List. If the species-specific gene name was retrieved from
+		// UniProt's mapping service, it is added as the primary name for the EWAS.
+		List<String> ewasNames = new ArrayList<>();
 		if (getMappings().homologueHasGeneName(homologueId)) {
-			List<String> ewasNames = (List<String>) infEWASInst.getAttribute(ReactomeJavaConstants.name);
-
-			ewasNames.add(0, getMappings().getGeneName(homologueId));
-			infEWASInst.setAttribute(ReactomeJavaConstants.name, ewasNames);
+			ewasNames.add(getMappings().getGeneName(homologueId));
 		}
+		ewasNames.add(homologueId);
+		infEWASInst.setAttribute(ReactomeJavaConstants.name, ewasNames);
 		// New display name is generated using the updated 'name' attribute
 		infEWASInst.setDisplayName(generateEWASDisplayName(infEWASInst));
 
@@ -107,28 +102,30 @@ public class EWASInferrer {
 			SimpleInstance infModifiedResidueInst = instanceUtilities.createNewInferredGKInstance(modifiedResidueInst);
 			infModifiedResidueInst.setAttribute(ReactomeJavaConstants.referenceSequence, infReferenceGeneProductInst);
 			infModifiedResidueDisplayName += infReferenceGeneProductInst.getDisplayName();
-			for (int coordinateValue :
-				(Collection<Integer>) modifiedResidueInst.getAttribute(ReactomeJavaConstants.coordinate)) {
+
+			Integer coordinateValue = (Integer) modifiedResidueInst.getAttribute(ReactomeJavaConstants.coordinate);
+			if (coordinateValue != null) {
 				infModifiedResidueInst.setAttribute(ReactomeJavaConstants.coordinate, coordinateValue);
 			}
 			if (instanceUtilities.isValidAttribute(infModifiedResidueInst, ReactomeJavaConstants.modification)) {
-				for (SimpleInstance modifiedInst :
-					(Collection<SimpleInstance>) modifiedResidueInst.getAttribute(ReactomeJavaConstants.modification)) {
-					infModifiedResidueInst.setAttribute(ReactomeJavaConstants.modification, modifiedInst);
-				}
+				List<SimpleInstance> modificationInstances = new ArrayList<>(
+					instanceUtilities.getInflatedInstances(modifiedResidueInst, ReactomeJavaConstants.modification)
+				);
+				infModifiedResidueInst.setAttribute(ReactomeJavaConstants.modification, modificationInstances);
+
 				if (infModifiedResidueInst.getAttribute(ReactomeJavaConstants.modification) != null) {
-					infModifiedResidueDisplayName += " " +
-						((SimpleInstance) infModifiedResidueInst.getAttribute(ReactomeJavaConstants.modification)).getDisplayName();
+					infModifiedResidueDisplayName += " " + getModificationDisplayName(infModifiedResidueInst);
 				}
 			}
 			// Update name depending on the presence of 'phospho' in the Psimod's name attribute
-			SimpleInstance firstPsiModInst = (SimpleInstance) modifiedResidueInst.getAttribute(ReactomeJavaConstants.psiMod);
-			if (phosFlag && firstPsiModInst.getAttribute(ReactomeJavaConstants.name).toString().contains("phospho")) {
-				String phosphoName = "phospho-" + infEWASInst.getAttribute(ReactomeJavaConstants.name);
-				List<String> ewasNames = (ArrayList<String>) infEWASInst.getAttribute(ReactomeJavaConstants.name);
-				String originalName = ewasNames.remove(0);
+			SimpleInstance firstPsiModInst = instanceUtilities.getInflatedInstance(modifiedResidueInst, ReactomeJavaConstants.psiMod);
+			if (phosFlag && firstPsiModInst != null && nameHasPhospho(firstPsiModInst)) {
+				// The first name is the one prefixed; concatenating the attribute itself would prefix the whole List.
+				List<String> currentNames = new ArrayList<>((List<String>) infEWASInst.getAttribute(ReactomeJavaConstants.name));
+				String originalName = currentNames.remove(0);
+				String phosphoName = "phospho-" + originalName;
 
-				ewasNames.add(0, phosphoName);
+				currentNames.add(0, phosphoName);
 				// In the Perl version, this code block modifies the 'name' attribute to include
 				// 'phosopho-', but in the process it drops the other names contained. I believe this is
 				// unintentional.
@@ -136,23 +133,31 @@ public class EWASInferrer {
 				// names, while attributes containing 'phospho-' would only contain a single name attribute.
 				// I've assumed this is incorrect for the rewrite -- Instances that modify the name
 				// attribute to prepend 'phospho-' retain their name array. (Justin Cook 2018)
-				infEWASInst.setAttribute(ReactomeJavaConstants.name, ewasNames);
+				infEWASInst.setAttribute(ReactomeJavaConstants.name, currentNames);
 
-				String phosphoDisplayName = phosphoName +
-					" [" + ((GKInstance) ewasInst.getAttribute(ReactomeJavaConstants.compartment)).getDisplayName() + "]";
+				// compartment is multi-valued, so it may be a List rather than a single instance.
+				Object compartmentValue = ewasInst.getAttribute(ReactomeJavaConstants.compartment);
+				if (compartmentValue instanceof List) {
+					List<?> compartments = (List<?>) compartmentValue;
+					compartmentValue = compartments.isEmpty() ? null : compartments.get(0);
+				}
+				String compartmentName = compartmentValue instanceof SimpleInstance ?
+					((SimpleInstance) compartmentValue).getDisplayName() : "";
+				String phosphoDisplayName = phosphoName + " [" + compartmentName + "]";
 				infEWASInst.setDisplayName(phosphoDisplayName);
 				// This flag ensures the 'phospho-' is only prepended once.
 				logger.info("Updated EWAS name to reflect phosphorylation. Original: " + originalName +
 					". Updated: " + phosphoName);
 				phosFlag = false;
 			}
-			for (GKInstance psiModInst :
-				(Collection<GKInstance>) modifiedResidueInst.getAttribute(ReactomeJavaConstants.psiMod)) {
-				infModifiedResidueInst.setAttribute(ReactomeJavaConstants.psiMod, psiModInst);
-			}
+
+            List<SimpleInstance> psiModInstances = new ArrayList<>(
+				instanceUtilities.getInflatedInstances(modifiedResidueInst, ReactomeJavaConstants.psiMod)
+			);
+			infModifiedResidueInst.setAttribute(ReactomeJavaConstants.psiMod, psiModInstances);
+
 			if (infModifiedResidueInst.getAttribute(ReactomeJavaConstants.psiMod) != null) {
-				infModifiedResidueDisplayName += " " +
-					((GKInstance) infModifiedResidueInst.getAttribute(ReactomeJavaConstants.psiMod)).getDisplayName();
+				infModifiedResidueDisplayName += " " + getPsiModDisplayName(infModifiedResidueInst);
 			}
 			infModifiedResidueInst.setDisplayName(modifiedResidueInst.getDisplayName());
 			// Update name to reflect that coordinate values are taken from humans. This takes place after
@@ -171,12 +176,9 @@ public class EWASInferrer {
 			// This was because they were never populated. This block is the fix.
 			if (instanceUtilities.isSchemaClassType(infModifiedResidueInst, ReactomeJavaConstants.InterChainCrosslinkedResidue)) {
 				if (modifiedResidueInst.getAttribute(ReactomeJavaConstants.secondReferenceSequence) != null) {
-					List<SimpleInstance> secondReferenceSequenceInstances = new ArrayList<>();
-					for (SimpleInstance secondRefSequenceInst : (Collection<SimpleInstance>)
-						modifiedResidueInst.getAttribute(ReactomeJavaConstants.secondReferenceSequence)) {
-
-						secondReferenceSequenceInstances.add(secondRefSequenceInst);
-					}
+					List<SimpleInstance> secondReferenceSequenceInstances = new ArrayList<>(
+						instanceUtilities.getInflatedInstances(modifiedResidueInst, ReactomeJavaConstants.secondReferenceSequence)
+					);
 					infModifiedResidueInst.setAttribute(
 						ReactomeJavaConstants.secondReferenceSequence, secondReferenceSequenceInstances);
 				}
@@ -221,7 +223,25 @@ public class EWASInferrer {
 	}
 
 	private List<SimpleInstance> getModifiedResidues(SimpleInstance ewasInst) {
-		return (List<SimpleInstance>) ewasInst.getAttribute(ReactomeJavaConstants.hasModifiedResidue);
+		return safeList((List<SimpleInstance>) ewasInst.getAttribute(ReactomeJavaConstants.hasModifiedResidue));
+	}
+
+	private String getModificationDisplayName(SimpleInstance infModifiedResidueInst) {
+		List<SimpleInstance> modifications = (List<SimpleInstance>) infModifiedResidueInst.getAttribute(ReactomeJavaConstants.modification);
+		return modifications != null && !modifications.isEmpty() ? modifications.get(0).getDisplayName() : "";
+	}
+
+	private boolean nameHasPhospho(SimpleInstance psiModInst) {
+		Object psiModInstName = psiModInst.getAttribute(ReactomeJavaConstants.name);
+		if (psiModInstName == null) {
+			return false;
+		}
+		return psiModInstName.toString().contains("phospho");
+	}
+
+	private String getPsiModDisplayName(SimpleInstance infModifiedResidueInst) {
+		List<SimpleInstance> psiMods = (List<SimpleInstance>) infModifiedResidueInst.getAttribute(ReactomeJavaConstants.psiMod);
+		return psiMods != null && !psiMods.isEmpty() ? psiMods.get(0).getDisplayName() : "";
 	}
 
 //	private static GKInstance inferModifiedResidue(GKInstance modifiedResidueInst, GKInstance ewasInst, GKInstance infEWASInst, GKInstance infReferenceGeneProductInst, boolean phosFlag) throws Exception {
@@ -255,9 +275,8 @@ public class EWASInferrer {
 	}
 
 	private String getReferenceEntityIdentifier(SimpleInstance ewasInst) {
-		return ((SimpleInstance) ewasInst
-			.getAttribute(ReactomeJavaConstants.referenceEntity))
-			.getAttribute(ReactomeJavaConstants.identifier).toString();
+		SimpleInstance referenceEntity = instanceUtilities.getInflatedInstance(ewasInst, ReactomeJavaConstants.referenceEntity);
+		return referenceEntity.getAttribute(ReactomeJavaConstants.identifier).toString();
 	}
 
 	private SimpleInstance inferReferenceGeneProduct(SimpleInstance ewasInst, String homologue) throws Exception {
@@ -304,24 +323,23 @@ public class EWASInferrer {
 		// name differently based on coordinate value (see infer_events.pl lines 1190-1192).
 		// The name of the entity needs to be at the front of the 'name' array if the coordinate is over 1,
 		// and rearranging arrays in Java for this was a bit tricky.
-		List<Integer> inferredStartCoordinates = new ArrayList<>();
-		for (int startCoord : (Collection<Integer>) ewasInst.getAttribute(ReactomeJavaConstants.startCoordinate)) {
-			inferredStartCoordinates.add(startCoord);
+		Integer startCoord = (Integer) ewasInst.getAttribute(ReactomeJavaConstants.startCoordinate);
+		if (startCoord != null) {
+			infEWASInst.setAttribute(ReactomeJavaConstants.startCoordinate, startCoord);
 		}
-		infEWASInst.setAttribute(ReactomeJavaConstants.startCoordinate, inferredStartCoordinates);
 
-		List<Integer> inferredEndCoordinates = new ArrayList<>();
-		for (int endCoord : (Collection<Integer>) ewasInst.getAttribute(ReactomeJavaConstants.endCoordinate)) {
-			inferredEndCoordinates.add(endCoord);
+		Integer endCoord = (Integer) ewasInst.getAttribute(ReactomeJavaConstants.endCoordinate);
+		if (endCoord != null) {
+			infEWASInst.setAttribute(ReactomeJavaConstants.endCoordinate, endCoord);
 		}
-		infEWASInst.setAttribute(ReactomeJavaConstants.endCoordinate, inferredEndCoordinates);
 
 		if (infEWASInst.getAttribute(ReactomeJavaConstants.startCoordinate) != null &&
 			(int) infEWASInst.getAttribute(ReactomeJavaConstants.startCoordinate) > 1 ||
 			infEWASInst.getAttribute(ReactomeJavaConstants.endCoordinate) != null &&
 				(int) infEWASInst.getAttribute(ReactomeJavaConstants.endCoordinate) > 1) {
-			List<String> infEWASInstNames = (ArrayList<String>) (ewasInst).getAttribute(ReactomeJavaConstants.name);
-			infEWASInst.setAttribute(ReactomeJavaConstants.name, infEWASInstNames.get(0));
+			// The source name may come back as a single value or a List; only its first value is copied.
+			infEWASInst.setAttribute(ReactomeJavaConstants.name,
+				CuratorToolAPI.getFirstAttributeValueAsString(ewasInst, ReactomeJavaConstants.name));
 		}
 	}
 
