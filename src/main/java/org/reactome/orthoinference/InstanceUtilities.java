@@ -241,8 +241,24 @@ public class InstanceUtilities {
 			logger.warn(instance + " has been deleted -- not adding " + value + " to its " + attribute);
 			return;
 		}
+		// Committing an unchanged instance would cost a full write and change nothing.
+		if (hasAttributeValue(currentInstance, value, attribute)) {
+			return;
+		}
 		addAttributeValueIfNecessary(currentInstance, value, attribute);
 		getCuratorToolAPI().commit(currentInstance);
+	}
+
+	// True if the attribute already holds an instance with the value's dbId. A SimpleInstance holds an unset attribute
+	// as null and a single value as itself rather than in a List; getAttributeValues handles both.
+	private boolean hasAttributeValue(SimpleInstance instance, SimpleInstance value, String attribute) {
+		Long valueDbId = value.getDbId();
+		for (SimpleInstance attributeValue : getAttributeValues(instance, attribute)) {
+			if (attributeValue.getDbId() != null && attributeValue.getDbId().equals(valueDbId)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// Returns a shell of the instance -- dbId, displayName and schemaClass, with no attributes -- which is all
@@ -269,26 +285,12 @@ public class InstanceUtilities {
 		// and hasEvent, which are all multivalue attribute classes.
 		// We also know that it will always be a GKInstance passed through here (see arguments), so we are able to
 		// forego both checks.
-		// A SimpleInstance holds an unset attribute as null and a single value as itself rather than in a List, so the
-		// existing values are copied into a new List, which also leaves the instance's own List unchanged until it is set.
-		Object existingValue = instanceToBeCheckedForExistingAttribute.getAttribute(attribute);
-		List<SimpleInstance> attributeInstancesFromInferredInstance = new ArrayList<>();
-		if (existingValue instanceof List) {
-			attributeInstancesFromInferredInstance.addAll((List<SimpleInstance>) existingValue);
-		} else if (existingValue != null) {
-			attributeInstancesFromInferredInstance.add((SimpleInstance) existingValue);
-		}
-		Set<Long> dbIdsFromAttributeInstances = new HashSet<>();
-		for (SimpleInstance attributeInstance : attributeInstancesFromInferredInstance) {
-			dbIdsFromAttributeInstances.add(attributeInstance.getDbId());
-		}
-		boolean attributeExists = false;
-		for (Long attributeInstanceDbId : dbIdsFromAttributeInstances) {
-			if (attributeInstanceDbId.equals(instanceContainingAttributeToBeChecked.getDbId())) {
-				attributeExists = true;
-			}
-		}
-		if (!attributeExists) {
+		if (!hasAttributeValue(
+			instanceToBeCheckedForExistingAttribute, instanceContainingAttributeToBeChecked, attribute)) {
+			// The existing values are copied into a new List, which leaves the instance's own List unchanged until
+			// it is set.
+			List<SimpleInstance> attributeInstancesFromInferredInstance =
+				getAttributeValues(instanceToBeCheckedForExistingAttribute, attribute);
 			// Only a reference (dbId, displayName and schemaClass) is added, not the instance itself. The two
 			// instances are often linked both ways (inferredFrom/inferredTo), and if each held the other with all its
 			// attributes, committing either would hand curator-tool-ws a cycle that it walks until the stack overflows.
