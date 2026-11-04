@@ -28,6 +28,11 @@ public class OrthologousEntityGenerator {
 	private static Map<Long,SimpleInstance> homolEWASIdenticals = new HashMap<>();
 	private static Map<Long,SimpleInstance> complexPolymerIdenticals = new HashMap<>();
 	private static Map<Long,SimpleInstance> inferredEntitySetIdenticals = new HashMap<>();
+	// Results inferred with override, keyed by the source instance's dbId. Kept apart from the caches above because
+	// without override the same source can be rejected (null), which must not be answered from an override result.
+	// Where both are inferred they are the same instance, so the caches above are checked first.
+	private static Map<Long,SimpleInstance> complexPolymerOverrideIdenticals = new HashMap<>();
+	private static Map<Long,SimpleInstance> inferredEntitySetOverrideIdenticals = new HashMap<>();
 	private static Map<String,SimpleInstance> definedSetIdenticals = new HashMap<>();
 	private static Map<String,SimpleInstance> complexIdenticals = new HashMap<>();
 	private static Map<String,SimpleInstance> entitySetIdenticals = new HashMap<>();
@@ -183,6 +188,11 @@ public class OrthologousEntityGenerator {
 	// inferrable for inference to continue.
 	private SimpleInstance createInfComplexPolymer(SimpleInstance complexInst, boolean override)
 		throws Exception {
+		if (override && complexPolymerIdenticals.get(complexInst.getDbId()) == null &&
+			complexPolymerOverrideIdenticals.get(complexInst.getDbId()) != null) {
+			logger.info("Inferred Complex/Polymer already exists");
+			return complexPolymerOverrideIdenticals.get(complexInst.getDbId());
+		}
 		if (complexPolymerIdenticals.get(complexInst.getDbId()) == null) {
 			List<Integer> complexProteinCounts = getProteinCountUtility().getDistinctProteinCounts(complexInst);
 			int complexTotalProteinCounts = complexProteinCounts.get(0);
@@ -246,8 +256,9 @@ public class OrthologousEntityGenerator {
 			instanceUtilities.addInferredToValue(complexInst, infComplexInst);
 			
 			if (override) {
+				complexPolymerOverrideIdenticals.put(complexInst.getDbId(), infComplexInst);
 				return infComplexInst;
-			} 
+			}
 			complexPolymerIdenticals.put(complexInst.getDbId(), infComplexInst);
 		} else {
 			logger.info("Inferred Complex/Polymer already exists");
@@ -265,6 +276,11 @@ public class OrthologousEntityGenerator {
 	@SuppressWarnings("unchecked")
 	private SimpleInstance createInfEntitySet(SimpleInstance entitySetInst, boolean override)
 		throws Exception {
+		if (override && inferredEntitySetIdenticals.get(entitySetInst.getDbId()) == null &&
+			inferredEntitySetOverrideIdenticals.get(entitySetInst.getDbId()) != null) {
+			logger.info("Inferred EntitySet already exists");
+			return inferredEntitySetOverrideIdenticals.get(entitySetInst.getDbId());
+		}
 		if (inferredEntitySetIdenticals.get(entitySetInst.getDbId()) == null) {
 			// Equivalent to infer_members function in infer_events.pl
 			Set<String> existingMemberInstances = new HashSet<>();
@@ -375,7 +391,9 @@ public class OrthologousEntityGenerator {
 				if (infMembersList.size() == 0) {
 					if (override) {
 						logger.info("Mock DefinedSet instance needed");
-						return instanceUtilities.createMockGKInstance(entitySetInst);
+						SimpleInstance mockedInst = instanceUtilities.createMockGKInstance(entitySetInst);
+						inferredEntitySetOverrideIdenticals.put(entitySetInst.getDbId(), mockedInst);
+						return mockedInst;
 					} else {
 						logger.info("No member instances found -- terminating inference");
 						return nullInst;
@@ -409,6 +427,7 @@ public class OrthologousEntityGenerator {
 				instanceUtilities.addInferredToValue(entitySetInst, infEntitySetInst);
 			}
 			if (override) {
+				inferredEntitySetOverrideIdenticals.put(entitySetInst.getDbId(), infEntitySetInst);
 				return infEntitySetInst;
 			}
 			inferredEntitySetIdenticals.put(entitySetInst.getDbId(), infEntitySetInst);
