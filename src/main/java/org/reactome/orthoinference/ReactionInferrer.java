@@ -192,9 +192,16 @@ public class ReactionInferrer {
 			return;
 		}
 
+		// The inferred reaction is new, so everything it links to is set on it before it is committed, and it is
+		// committed once. Each link added after a commit would cost a refresh and another commit.
+		addRegulations(infReactionInst, inferredRegulations);
+		addLinksToSourceReaction(infReactionInst, reactionInst);
 		infReactionInst = storeInferredReaction(infReactionInst);
-		infReactionInst = updateInferredFromAndOrthologousEventAttributes(reactionInst, infReactionInst);
-		infReactionInst = processInferredRegulations(infReactionInst, inferredRegulations);
+
+		// The source reaction's link back needs the inferred reaction's dbId, so it can only be added once the
+		// inferred reaction is stored. Added rather than set, so the orthologous events already inferred for other
+		// species are kept.
+		getUtils().addOrthologousEventValue(reactionInst, infReactionInst);
 
 		inferredEventMap.put(reactionInst.getDbId(), infReactionInst);
 		recordInferredEvent(reactionInst, infReactionInst);
@@ -204,38 +211,29 @@ public class ReactionInferrer {
 		return curatorToolAPI.commit(infReactionInst);
 	}
 
-	// Links the source and inferred reactions through inferredFrom and orthologousEvent. Each value is added to an
-	// up-to-date copy and committed, so the inferred reaction held here is stale afterwards and a fresh copy is returned.
-	private SimpleInstance updateInferredFromAndOrthologousEventAttributes(
-		SimpleInstance reactionInst, SimpleInstance infReactionInst) {
+	// Links the inferred reaction, which is not stored yet, to its source reaction through inferredFrom and
+	// orthologousEvent.
+	private void addLinksToSourceReaction(SimpleInstance infReactionInst, SimpleInstance reactionInst) {
 		if (getUtils().isValidAttribute(infReactionInst, ReactomeJavaConstants.inferredFrom)) {
-			getUtils().addInferredFromValue(infReactionInst, reactionInst);
+			getUtils().addAttributeValueIfNecessary(infReactionInst, reactionInst, ReactomeJavaConstants.inferredFrom);
 		}
-		getUtils().addOrthologousEventValue(infReactionInst, reactionInst);
-		// Added rather than set, so the orthologous events already inferred for other species are kept.
-		getUtils().addOrthologousEventValue(reactionInst, infReactionInst);
-
-		return curatorToolAPI.refresh(infReactionInst);
+		getUtils().addAttributeValueIfNecessary(infReactionInst, reactionInst, ReactomeJavaConstants.orthologousEvent);
 	}
 
-	// Adds the inferred regulations to the inferred reaction's regulatedBy attribute. They are added to an up-to-date
-	// copy and committed together, so the inferred reaction held here is stale afterwards and a fresh copy is returned.
-	private SimpleInstance processInferredRegulations(SimpleInstance infReactionInst, List<SimpleInstance> inferredRegulations) throws Exception {
+	// Stores the inferred regulations (or finds identical stored ones) and adds them to the regulatedBy attribute of
+	// the inferred reaction, which is not stored yet. A regulation refers only to its regulator, not to the reaction,
+	// so it can be stored before the reaction is.
+	private void addRegulations(SimpleInstance infReactionInst, List<SimpleInstance> inferredRegulations) throws Exception {
 		if (inferredRegulations.isEmpty()) {
-			return infReactionInst;
+			return;
 		}
 
 		logger.info("Number of regulator(s) inferred: " + inferredRegulations.size());
-		SimpleInstance currentInfReactionInst = curatorToolAPI.refresh(infReactionInst);
 		for (SimpleInstance infRegulation : inferredRegulations) {
 			infRegulation = instanceUtilities.checkForIdenticalInstances(infRegulation, null);
 			// Added rather than set, so each regulation is kept instead of replacing the one before it.
-			currentInfReactionInst = getUtils().addAttributeValueIfNecessary(
-				currentInfReactionInst, infRegulation, ReactomeJavaConstants.regulatedBy);
+			getUtils().addAttributeValueIfNecessary(infReactionInst, infRegulation, ReactomeJavaConstants.regulatedBy);
 		}
-		curatorToolAPI.commit(currentInfReactionInst);
-
-		return curatorToolAPI.refresh(currentInfReactionInst);
 	}
 
 	private void recordInferredEvent(SimpleInstance reactionInst, SimpleInstance infReactionInst) throws Exception {
