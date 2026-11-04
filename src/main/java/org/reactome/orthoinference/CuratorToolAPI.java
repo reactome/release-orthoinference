@@ -46,6 +46,13 @@ public class CuratorToolAPI {
     // curator-tool-ws is checked against them, so they are not fetched again for each instance.
     private final Map<String, Set<String>> classNameToMultiValuedAttributeNames = new HashMap<>();
 
+    // Number of calls to, and time spent in, each kind of curator-tool-ws call, keyed by a label for the call. Kept to
+    // find where the run spends its time; see logCallStats.
+    private final Map<String, CallStats> callStats = new LinkedHashMap<>();
+    // The dbIds inflated so far, so that inflating one again can be counted separately ("inflate (repeat)").
+    private final Set<Long> inflatedDbIds = new HashSet<>();
+    private final long startNanos = System.nanoTime();
+
     // Built by CuratorToolConfig, which takes the controller from the curator-tool-ws context it starts and closes.
     public CuratorToolAPI(CurationController controller, ConfigProperties configProperties) {
         this.controller = controller;
@@ -63,7 +70,7 @@ public class CuratorToolAPI {
         }
 
         prepareAttributeValues(simpleInstance);
-        SimpleInstance committedInstance = controller.commit(simpleInstance);
+        SimpleInstance committedInstance = timed("commit", () -> controller.commit(simpleInstance));
         // Nothing was stored, so callers cannot go on to use the instance -- for a new one, the dbId it would have
         // been given is the very thing that is missing. Reported here rather than as a NullPointerException at
         // whichever caller dereferences the result first.
@@ -128,15 +135,15 @@ public class CuratorToolAPI {
         // instead maps it -- and every instance it refers to -- through graph-core's domain model, which fails on
         // any node whose stored values do not match the model's types (e.g. a GO term with a single string name,
         // where the model expects a list).
-        if (!controller.existsByDbId(dbId)) {
+        if (!timed("existsByDbId", () -> controller.existsByDbId(dbId))) {
             return null;
         }
-        return controller.findByDdIdInInstance(dbId);
+        return timed("findByDbId", () -> controller.findByDdIdInInstance(dbId));
     }
 
     public SimpleInstance findByDisplayName(String className, String displayName) {
         // NB: the controller takes the display name first and a comma-separated list of class names second.
-        return controller.findByDisplayName(displayName, className);
+        return timed("findByDisplayName", () -> controller.findByDisplayName(displayName, className));
     }
 
     public void deleteInstance(SimpleInstance instance) {
@@ -144,7 +151,7 @@ public class CuratorToolAPI {
             instance.setDefaultPersonId(getPersonId());
         }
 
-        controller.delete(instance);
+        timed("delete", () -> controller.delete(instance));
         if (instance.getDbId() != null) {
             deletedDbIds.add(instance.getDbId());
             committedDbIds.remove(instance.getDbId());
@@ -152,7 +159,7 @@ public class CuratorToolAPI {
     }
 
     public void deleteByDbId(long noReferrerDbId) {
-        SimpleInstance instance = controller.findByDdIdInInstance(noReferrerDbId);
+        SimpleInstance instance = timed("findByDbId", () -> controller.findByDdIdInInstance(noReferrerDbId));
         // Nothing stored under that db id -- there is nothing to delete, and passing the null on would fail inside
         // curator-tool-ws instead of saying which db id was asked for.
         if (instance == null) {
@@ -163,7 +170,9 @@ public class CuratorToolAPI {
     }
 
     public SimpleInstance inflate(SimpleInstance shellInstance) {
-        return controller.findByDdIdInInstance(shellInstance.getDbId());
+        Long dbId = shellInstance.getDbId();
+        String label = inflatedDbIds.add(dbId) ? "inflate (first)" : "inflate (repeat)";
+        return timed(label, () -> controller.findByDdIdInInstance(dbId));
     }
 
     /**
@@ -181,7 +190,7 @@ public class CuratorToolAPI {
         // The match converts the instance the same way a commit does, so a single value given for a multi-valued
         // attribute would be dropped from the match rather than matched on.
         prepareAttributeValues(instance);
-        return controller.matchInstances(instance)
+        return timed("matchInstances", () -> controller.matchInstances(instance))
             .stream()
             .map(this::inflate)
             .filter(Objects::nonNull)
@@ -189,7 +198,7 @@ public class CuratorToolAPI {
     }
 
     public List<SimpleInstance> getReferrers(SimpleInstance instance, String referrerAttributeName) throws Exception {
-        return controller.getReferrers(instance.getDbId())
+        return timed("getReferrers", () -> controller.getReferrers(instance.getDbId()))
             .stream()
             .filter(g -> referrerAttributeName.equals(g.getAttributeName()))
             .findFirst()
@@ -198,7 +207,7 @@ public class CuratorToolAPI {
     }
 
     public Collection<NamedReferrerList> getReferrers(SimpleInstance instance) throws Exception {
-        return controller.getReferrers(instance.getDbId());
+        return timed("getReferrers", () -> controller.getReferrers(instance.getDbId()));
     }
 
     /**
@@ -208,7 +217,7 @@ public class CuratorToolAPI {
      * @return the attribute names, or an empty list if the class is not in the schema.
      */
     public List<String> getAttributeNames(String className) {
-        return controller.getAttributes(className)
+        return timed("getAttributes", () -> controller.getAttributes(className))
             .stream()
             .map(CurationAttribute::getName)
             .collect(Collectors.toList());
@@ -222,7 +231,7 @@ public class CuratorToolAPI {
      * @return the defining attribute names, or an empty list if the class is not in the schema.
      */
     public List<String> getDefiningAttributeNames(String className) {
-        return controller.getAttributes(className)
+        return timed("getAttributes", () -> controller.getAttributes(className))
             .stream()
             .filter(attribute -> attribute.getDefiningType() == CurationAttribute.DefiningType.ALL_DEFINING ||
                 attribute.getDefiningType() == CurationAttribute.DefiningType.ANY_DEFINING)
@@ -306,7 +315,7 @@ public class CuratorToolAPI {
             return Collections.emptySet();
         }
         return classNameToMultiValuedAttributeNames.computeIfAbsent(className, name ->
-            controller.getAttributes(name)
+            timed("getAttributes", () -> controller.getAttributes(name))
                 .stream()
                 .filter(attribute -> attribute.getProperties() != null &&
                     "+".equals(attribute.getProperties().getCardinality()))
@@ -368,14 +377,14 @@ public class CuratorToolAPI {
     }
 
     public SimpleInstance fetchSpecies(String speciesName) {
-        InstanceList speciesInstances = controller.searchInstances(
+        InstanceList speciesInstances = timed("searchInstances", () -> controller.searchInstances(
             ReactomeJavaConstants.Species,
             0,
             1,
             Optional.of(ReactomeJavaConstants.name),
             Optional.of("equal"),
             searchKeysRequest(speciesName)
-        );
+        ));
 
         return !speciesInstances.isEmpty() ? speciesInstances.getInstances().get(0) : null;
     }
@@ -387,14 +396,14 @@ public class CuratorToolAPI {
      * @return the ReferenceDatabase shell instance, or null if there is none.
      */
     public SimpleInstance fetchReferenceDatabase(String referenceDatabaseName) {
-        InstanceList referenceDatabaseInstances = controller.searchInstances(
+        InstanceList referenceDatabaseInstances = timed("searchInstances", () -> controller.searchInstances(
             ReactomeJavaConstants.ReferenceDatabase,
             0,
             1,
             Optional.of(ReactomeJavaConstants.name),
             Optional.of("equal"),
             searchKeysRequest(referenceDatabaseName)
-        );
+        ));
 
         return !referenceDatabaseInstances.isEmpty() ? referenceDatabaseInstances.getInstances().get(0) : null;
     }
@@ -406,14 +415,14 @@ public class CuratorToolAPI {
      * @return the StableIdentifier shell instance, or null if there is none.
      */
     public SimpleInstance fetchStableIdentifier(String identifier) {
-        InstanceList stableIdentifierInstances = controller.searchInstances(
+        InstanceList stableIdentifierInstances = timed("searchInstances", () -> controller.searchInstances(
             ReactomeJavaConstants.StableIdentifier,
             0,
             1,
             Optional.of(ReactomeJavaConstants.identifier),
             Optional.of("equal"),
             searchKeysRequest(identifier)
-        );
+        ));
 
         return !stableIdentifierInstances.isEmpty() ? stableIdentifierInstances.getInstances().get(0) : null;
     }
@@ -450,14 +459,14 @@ public class CuratorToolAPI {
     }
 
     private InstanceList searchBySpecies(String className, String speciesName, int skip, int limit) {
-        return controller.searchInstances(
+        return timed("searchInstances", () -> controller.searchInstances(
             className,
             skip,
             limit,
             Optional.of(ReactomeJavaConstants.species),
             Optional.of("equal"),
             searchKeysRequest(speciesName)
-        );
+        ));
     }
 
     /**
@@ -509,5 +518,51 @@ public class CuratorToolAPI {
             return Collections.emptyList();
         }
         return value instanceof List ? new ArrayList<>((List<?>) value) : Collections.singletonList(value);
+    }
+
+    /**
+     * Logs, for each kind of curator-tool-ws call made so far, how many times it was called and the time spent in it,
+     * most time first, with the time elapsed since this API was created for comparison.
+     *
+     * @param header - a line logged above the figures, e.g. how far through the run they were taken.
+     */
+    public void logCallStats(String header) {
+        long elapsedMillis = (System.nanoTime() - startNanos) / 1_000_000;
+        StringBuilder report = new StringBuilder(header)
+            .append(" -- curator-tool-ws calls after ").append(elapsedMillis).append(" ms:");
+        callStats.entrySet().stream()
+            .sorted((a, b) -> Long.compare(b.getValue().totalNanos, a.getValue().totalNanos))
+            .forEach(entry -> {
+                CallStats stats = entry.getValue();
+                long totalMillis = stats.totalNanos / 1_000_000;
+                report.append(String.format("%n  %-20s calls=%-9d total=%-9d ms (%5.1f%%) avg=%.2f ms",
+                    entry.getKey(), stats.count, totalMillis,
+                    elapsedMillis > 0 ? 100.0 * totalMillis / elapsedMillis : 0.0,
+                    stats.count > 0 ? stats.totalNanos / 1_000_000.0 / stats.count : 0.0));
+            });
+        logger.info(report.toString());
+    }
+
+    // Runs the call, adding its duration to the figures kept under the label. A call made inside another timed call
+    // (e.g. a nested commit) is counted under both labels.
+    private <T, E extends Exception> T timed(String label, ThrowingSupplier<T, E> call) throws E {
+        long start = System.nanoTime();
+        try {
+            return call.get();
+        } finally {
+            CallStats stats = callStats.computeIfAbsent(label, key -> new CallStats());
+            stats.count++;
+            stats.totalNanos += System.nanoTime() - start;
+        }
+    }
+
+    @FunctionalInterface
+    private interface ThrowingSupplier<T, E extends Exception> {
+        T get() throws E;
+    }
+
+    private static final class CallStats {
+        private long count;
+        private long totalNanos;
     }
 }
