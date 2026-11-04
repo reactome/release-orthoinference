@@ -147,6 +147,8 @@ public class OrthologousEntityGenerator {
 				String definedSetDisplayName = infDefinedSetInst.getAttribute(ReactomeJavaConstants.name) +
 					" [" + getFirstCompartmentDisplayName(ewasInst) + "]";
 				infDefinedSetInst.setDisplayName(definedSetDisplayName);
+				// Set before the set is stored, so it is stored with it.
+				instanceUtilities.addInferredFromValueBeforeStoring(infDefinedSetInst, ewasInst);
 				// Caching based on an instance's defining attributes. This reduces the number of
 				// 'checkForIdenticalInstance' calls, which is slow.
 				String cacheKey = instanceUtilities.getCacheKey(infDefinedSetInst);
@@ -241,7 +243,9 @@ public class OrthologousEntityGenerator {
 				return nullInst;
 			}
 			infComplexInst.setDisplayName(complexInst.getDisplayName());
-			
+			// Set before the complex is stored, so it is stored with it.
+			instanceUtilities.addInferredFromValueBeforeStoring(infComplexInst, complexInst);
+
 			// Caching based on an instance's defining attributes. This reduces the number of
 			// 'checkForIdenticalInstance' calls, which is slow.
 			String cacheKey = instanceUtilities.getCacheKey(infComplexInst);
@@ -411,6 +415,12 @@ public class OrthologousEntityGenerator {
 			// already stored and shared through the caches, so renaming it would change its local name and cache key.
 			if (infEntitySetInst.getDbId() == null || infEntitySetInst.getDbId() < 0) {
 				infEntitySetInst.setDisplayName(entitySetInst.getDisplayName());
+			}
+			// Set before the set is stored, so it is stored with it -- under the same condition as the
+			// addInferredFromValue below. Left alone when a stored member or ghost stands in for the set.
+			if (instanceUtilities.isValidAttribute(infEntitySetInst, ReactomeJavaConstants.species) &&
+				entitySetInst.getAttribute(ReactomeJavaConstants.species) != null) {
+				instanceUtilities.addInferredFromValueBeforeStoring(infEntitySetInst, entitySetInst);
 			}
 			// Caching based on an instance's defining attributes. This reduces the number of
 			// 'checkForIdenticalInstance' calls, which is slow.

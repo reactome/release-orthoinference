@@ -203,6 +203,17 @@ public class InstanceUtilities {
 		addAttributeValueAndCommit(inferredInst, sourceInst, ReactomeJavaConstants.inferredFrom);
 	}
 
+	// Adds the source instance to the inferredFrom attribute of an inferred instance that is not stored yet, without
+	// committing, so that the value is stored by the instance's first commit rather than by a second one.
+	// An instance that is already stored is left alone: a value set only in memory on it would make
+	// addInferredFromValue find the value present and skip the commit, so it would never be stored.
+	public void addInferredFromValueBeforeStoring(SimpleInstance inferredInst, SimpleInstance sourceInst) {
+		if (inferredInst.getDbId() != null && inferredInst.getDbId() > 0) {
+			return;
+		}
+		addAttributeValueIfNecessary(inferredInst, sourceInst, ReactomeJavaConstants.inferredFrom);
+	}
+
 	// Adds the orthologous instance to the event's orthologousEvent attribute and commits the event.
 	public void addOrthologousEventValue(SimpleInstance eventInst, SimpleInstance orthologousEventInst) {
 		addAttributeValueAndCommit(eventInst, orthologousEventInst, ReactomeJavaConstants.orthologousEvent);

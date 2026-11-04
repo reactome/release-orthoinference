@@ -206,6 +206,9 @@ public class EWASInferrer {
 			infModifiedResidueInstances.add(infModifiedResidueInst);
 		}
 		infEWASInst.setAttribute(ReactomeJavaConstants.hasModifiedResidue, infModifiedResidueInstances);
+		// Set before the EWAS is stored, so it is stored with it. inferredFrom is not a defining attribute, so it
+		// does not affect the cache key or the identical-instance match.
+		instanceUtilities.addInferredFromValueBeforeStoring(infEWASInst, ewasInst);
 		// Caching based on an instance's defining attributes. This reduces the number of
 		// 'checkForIdenticalInstance' calls, which slows things.
 		String cacheKey = instanceUtilities.getCacheKey(infEWASInst);
