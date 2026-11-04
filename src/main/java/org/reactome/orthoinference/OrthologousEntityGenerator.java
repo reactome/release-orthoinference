@@ -24,10 +24,10 @@ public class OrthologousEntityGenerator {
 
 
 	private static SimpleInstance nullInst = null;
-	private static Map<SimpleInstance,SimpleInstance> orthologousEntityIdenticals = new HashMap<>();
-	private static Map<SimpleInstance,SimpleInstance> homolEWASIdenticals = new HashMap<>();
-	private static Map<SimpleInstance,SimpleInstance> complexPolymerIdenticals = new HashMap<>();
-	private static Map<SimpleInstance,SimpleInstance> inferredEntitySetIdenticals = new HashMap<>();
+	private static Map<Long,SimpleInstance> orthologousEntityIdenticals = new HashMap<>();
+	private static Map<Long,SimpleInstance> homolEWASIdenticals = new HashMap<>();
+	private static Map<Long,SimpleInstance> complexPolymerIdenticals = new HashMap<>();
+	private static Map<Long,SimpleInstance> inferredEntitySetIdenticals = new HashMap<>();
 	private static Map<String,SimpleInstance> definedSetIdenticals = new HashMap<>();
 	private static Map<String,SimpleInstance> complexIdenticals = new HashMap<>();
 	private static Map<String,SimpleInstance> entitySetIdenticals = new HashMap<>();
@@ -67,9 +67,9 @@ public class OrthologousEntityGenerator {
 			return entityInst;
 		}
 
-		if (orthologousEntityIdenticals.get(entityInst) != null) {
+		if (orthologousEntityIdenticals.get(entityInst.getDbId()) != null) {
 			logger.info("Inferred PE instance already exists");
-			return orthologousEntityIdenticals.get(entityInst);
+			return orthologousEntityIdenticals.get(entityInst.getDbId());
 		}
 
 		// Checks that a species attribute exists in either the current instance or in constituent instances.
@@ -113,7 +113,7 @@ public class OrthologousEntityGenerator {
 		if (override) {
 			return infEntityInst;
 		}
-		orthologousEntityIdenticals.put(entityInst, infEntityInst);
+		orthologousEntityIdenticals.put(entityInst.getDbId(), infEntityInst);
 			logger.info("PE inference completed: " + entityInst);
 			return infEntityInst;
 	}
@@ -122,7 +122,7 @@ public class OrthologousEntityGenerator {
 	// returned EWAS instance, it's re-structured to a DefinedSet instance. If there is no EWAS instances inferred,
 	// it will either return null or, if override is set, return a mock instance.
 	private SimpleInstance createInfEWAS(SimpleInstance ewasInst, boolean override) throws Exception {
-		if (homolEWASIdenticals.get(ewasInst) == null) {
+		if (homolEWASIdenticals.get(ewasInst.getDbId()) == null) {
 			// Attempt to infer the EWAS 
 			List<SimpleInstance> infEWASInstances = getEWASInferrer().inferEWAS(ewasInst);
 			// If number of EWAS instances is greater than 1, then it is considered a DefinedSet. A new inferred
@@ -153,10 +153,10 @@ public class OrthologousEntityGenerator {
 				}
 				instanceUtilities.addInferredFromValue(infDefinedSetInst, ewasInst);
 				instanceUtilities.addInferredToValue(ewasInst, infDefinedSetInst);
-				homolEWASIdenticals.put(ewasInst, infDefinedSetInst);
+				homolEWASIdenticals.put(ewasInst.getDbId(), infDefinedSetInst);
 				logger.info("Successfully converted to DefinedSet");
 			} else if (infEWASInstances.size() == 1) {
-				homolEWASIdenticals.put(ewasInst, infEWASInstances.get(0));
+				homolEWASIdenticals.put(ewasInst.getDbId(), infEWASInstances.get(0));
 			} else {
 				if (override) {
 					logger.info("Mock EWAS instance needed");
@@ -168,7 +168,7 @@ public class OrthologousEntityGenerator {
 		} else {
 			logger.info("Inferred EWAS already exists");
 		}
-		return homolEWASIdenticals.get(ewasInst);
+		return homolEWASIdenticals.get(ewasInst.getDbId());
 	}
 
 	private boolean isDrugOrOtherEntity(SimpleInstance entityInst) {
@@ -183,7 +183,7 @@ public class OrthologousEntityGenerator {
 	// inferrable for inference to continue.
 	private SimpleInstance createInfComplexPolymer(SimpleInstance complexInst, boolean override)
 		throws Exception {
-		if (complexPolymerIdenticals.get(complexInst) == null) {
+		if (complexPolymerIdenticals.get(complexInst.getDbId()) == null) {
 			List<Integer> complexProteinCounts = getProteinCountUtility().getDistinctProteinCounts(complexInst);
 			int complexTotalProteinCounts = complexProteinCounts.get(0);
 			int complexInferrableProteinCounts = complexProteinCounts.get(1);
@@ -248,11 +248,11 @@ public class OrthologousEntityGenerator {
 			if (override) {
 				return infComplexInst;
 			} 
-			complexPolymerIdenticals.put(complexInst, infComplexInst);
+			complexPolymerIdenticals.put(complexInst.getDbId(), infComplexInst);
 		} else {
 			logger.info("Inferred Complex/Polymer already exists");
 		}
-		return complexPolymerIdenticals.get(complexInst);
+		return complexPolymerIdenticals.get(complexInst.getDbId());
 	}
 	
 	// EntitySet inference function. This function will initially call createOrthoEntity on all 'members' before
@@ -265,7 +265,7 @@ public class OrthologousEntityGenerator {
 	@SuppressWarnings("unchecked")
 	private SimpleInstance createInfEntitySet(SimpleInstance entitySetInst, boolean override)
 		throws Exception {
-		if (inferredEntitySetIdenticals.get(entitySetInst) == null) {
+		if (inferredEntitySetIdenticals.get(entitySetInst.getDbId()) == null) {
 			// Equivalent to infer_members function in infer_events.pl
 			Set<String> existingMemberInstances = new HashSet<>();
 			List<SimpleInstance> infMembersList = new ArrayList<>();
@@ -411,11 +411,11 @@ public class OrthologousEntityGenerator {
 			if (override) {
 				return infEntitySetInst;
 			}
-			inferredEntitySetIdenticals.put(entitySetInst, infEntitySetInst);
+			inferredEntitySetIdenticals.put(entitySetInst.getDbId(), infEntitySetInst);
 		} else {
 			logger.info("Inferred EntitySet already exists");
 		}
-		return inferredEntitySetIdenticals.get(entitySetInst);
+		return inferredEntitySetIdenticals.get(entitySetInst.getDbId());
 	}
 
 	public SimpleInstance getComplexSummationInstance() throws Exception {

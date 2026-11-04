@@ -34,6 +34,8 @@ import static org.reactome.util.general.CollectionUtils.safeList;
 @Component
 public class EventsInferrer {
 	private static final Logger logger = LogManager.getLogger();
+	// How many RlEs are processed between each log of the curator-tool-ws call figures.
+	private static final int CALL_STATS_INTERVAL = 100;
 
 	private ConfigProperties configProperties;
 	private String speciesCode;
@@ -44,7 +46,7 @@ public class EventsInferrer {
 	private InstanceUtilities utils;
 	private CuratorToolAPI curatorToolAPI;
 
-	private static Map<SimpleInstance,SimpleInstance> manualEventToNonHumanSource = new HashMap<>();
+	private static Map<Long,SimpleInstance> manualEventToNonHumanSource = new HashMap<>();
 	private static List<SimpleInstance> manualHumanEvents = new ArrayList<>();
 	private static OrthologousPathwayDiagramGenerator orthologousPathwayDiagramGenerator;
 
@@ -105,7 +107,13 @@ public class EventsInferrer {
 	}
 
 	private void processReactions(Map<Long, SimpleInstance> reactionMap) throws Exception {
+		int processedCount = 0;
 		for (Map.Entry<Long, SimpleInstance> entry : reactionMap.entrySet()) {
+			processedCount++;
+			if (processedCount % CALL_STATS_INTERVAL == 0) {
+				getCuratorToolAPI().logCallStats(processedCount + "/" + reactionMap.size() + " RlEs processed");
+			}
+
 			SimpleInstance reactionInst = entry.getValue();
 			logger.info("Attempting RlE inference: " + reactionInst);
 
@@ -115,6 +123,7 @@ public class EventsInferrer {
 
 			inferReactionWithErrorHandling(reactionInst);
 		}
+		getCuratorToolAPI().logCallStats("All " + reactionMap.size() + " RlEs processed");
 	}
 
 	private boolean isAlreadyInferred(SimpleInstance reactionInst) throws Exception {
@@ -142,7 +151,7 @@ public class EventsInferrer {
 			getReactionInferrer().addAlreadyInferredEvents(reactionInst, prevInfInst);
 		} else {
 			logger.info("Inferred RlE already exists, skipping inference");
-			manualEventToNonHumanSource.put(reactionInst, prevInfInst);
+			manualEventToNonHumanSource.put(reactionInst.getDbId(), prevInfInst);
 			manualHumanEvents.add(reactionInst);
 		}
 		return true;

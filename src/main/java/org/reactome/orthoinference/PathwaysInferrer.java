@@ -23,7 +23,7 @@ public class PathwaysInferrer {
 	private CuratorToolAPI curatorToolAPI;
 
 	private static List<SimpleInstance> updatedInferrableHumanEvents = new ArrayList<>();
-	private static Map<SimpleInstance, SimpleInstance> sourceInstanceToInferredInstance = new HashMap<>();
+	private static Map<Long, SimpleInstance> sourceInstanceToInferredInstance = new HashMap<>();
 
 	public PathwaysInferrer(
 		ConfigProperties configProperties,
@@ -105,7 +105,7 @@ public class PathwaysInferrer {
 	}
 
 	private boolean hasNotBeenInferred(SimpleInstance sourcePathwayReferralInst) {
-		return sourceInstanceToInferredInstance.get(sourcePathwayReferralInst) == null;
+		return sourceInstanceToInferredInstance.get(sourcePathwayReferralInst.getDbId()) == null;
 	}
 
 	private void inferPathway(SimpleInstance humanPathway) throws Exception {
@@ -128,7 +128,7 @@ public class PathwaysInferrer {
 		inferredPathway.setAttribute(ReactomeJavaConstants.orthologousEvent, humanPathway);
 
 		inferredPathway.setDisplayName(humanPathway.getDisplayName());
-		sourceInstanceToInferredInstance.put(humanPathway, inferredPathway);
+		sourceInstanceToInferredInstance.put(humanPathway.getDbId(), inferredPathway);
 		SimpleInstance orthoStableIdentifierInst = stableIdentifierGenerator
 			.generateOrthologousStableId(inferredPathway, humanPathway);
 		inferredPathway.setAttribute(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
@@ -154,11 +154,11 @@ public class PathwaysInferrer {
 				continue;
 			}
 
-			SimpleInstance inferredPathwayInst = sourceInstanceToInferredInstance.get(humanPathwayInst);
+			SimpleInstance inferredPathwayInst = sourceInstanceToInferredInstance.get(humanPathwayInst.getDbId());
 			List<SimpleInstance> inferredEventInstances = getInferredEventInstances(humanPathwayInst);
 			if (!isPathway(inferredPathwayInst)) {
 				logger.info(humanPathwayInst + " and " +
-					sourceInstanceToInferredInstance.get(humanPathwayInst) + " have different classes " +
+					sourceInstanceToInferredInstance.get(humanPathwayInst.getDbId()) + " have different classes " +
 					"(likely connected via manual inference");
 				continue;
 			}
@@ -173,7 +173,7 @@ public class PathwaysInferrer {
 					currentInferredPathwayInst, infEventInst, ReactomeJavaConstants.hasEvent);
 			}
 			curatorToolAPI.commit(currentInferredPathwayInst);
-			sourceInstanceToInferredInstance.put(humanPathwayInst, curatorToolAPI.refresh(currentInferredPathwayInst));
+			sourceInstanceToInferredInstance.put(humanPathwayInst.getDbId(), curatorToolAPI.refresh(currentInferredPathwayInst));
 
 			seenInferredPathway.add(humanPathwayInst.getDbId());
 		}
@@ -184,8 +184,8 @@ public class PathwaysInferrer {
 		List<SimpleInstance> inferredEventInstances = new ArrayList<>();
 		for (SimpleInstance eventInst :
 			getUtils().getAttributeValues(humanPathwayInst, ReactomeJavaConstants.hasEvent)) {
-			if (sourceInstanceToInferredInstance.get(eventInst) != null) {
-				inferredEventInstances.add(sourceInstanceToInferredInstance.get(eventInst));
+			if (sourceInstanceToInferredInstance.get(eventInst.getDbId()) != null) {
+				inferredEventInstances.add(sourceInstanceToInferredInstance.get(eventInst.getDbId()));
 			}
 		}
 		return inferredEventInstances;
@@ -193,23 +193,23 @@ public class PathwaysInferrer {
 
 
 	private void inferPrecedingEvents() throws Exception {
-		Set<SimpleInstance> seenPrecedingEvent = new HashSet<>();
+		Set<Long> seenPrecedingEvent = new HashSet<>();
 		for (SimpleInstance inferrableEventInst : updatedInferrableHumanEvents) {
-			if (!seenPrecedingEvent.contains(inferrableEventInst)) {
+			if (!seenPrecedingEvent.contains(inferrableEventInst.getDbId())) {
 				if (inferrableEventInst.getAttribute(ReactomeJavaConstants.precedingEvent)!= null) {
 					logger.info("Adding preceding event to " + inferrableEventInst);
 					List<SimpleInstance> precedingEventInstances = new ArrayList<>();
 					// Find all preceding events for source instance that have an inferred counterpart
 					for (SimpleInstance precedingEventInst :
 						instanceUtilities.getAttributeValues(inferrableEventInst, ReactomeJavaConstants.precedingEvent)) {
-						if (sourceInstanceToInferredInstance.get(precedingEventInst) != null) {
-							precedingEventInstances.add(sourceInstanceToInferredInstance.get(precedingEventInst));
+						if (sourceInstanceToInferredInstance.get(precedingEventInst.getDbId()) != null) {
+							precedingEventInstances.add(sourceInstanceToInferredInstance.get(precedingEventInst.getDbId()));
 						}
 					}
 					// The inferred instance may have been committed since it was put in the map, so an up-to-date
 					// copy is checked and added to.
 					SimpleInstance inferredEventInst =
-						curatorToolAPI.refresh(sourceInstanceToInferredInstance.get(inferrableEventInst));
+						curatorToolAPI.refresh(sourceInstanceToInferredInstance.get(inferrableEventInst.getDbId()));
 					Set<String> inferredPrecedingEvents = new HashSet<>();
 					// Find any inferred preceding events that already exist for the inferred instance
 					// (don't want to add any redundant preceding events)
@@ -232,10 +232,10 @@ public class PathwaysInferrer {
 								inferredEventInst, precedingEventInst, ReactomeJavaConstants.precedingEvent);
 						}
 						curatorToolAPI.commit(inferredEventInst);
-						sourceInstanceToInferredInstance.put(inferrableEventInst, curatorToolAPI.refresh(inferredEventInst));
+						sourceInstanceToInferredInstance.put(inferrableEventInst.getDbId(), curatorToolAPI.refresh(inferredEventInst));
 					}
 				}
-				seenPrecedingEvent.add(inferrableEventInst);
+				seenPrecedingEvent.add(inferrableEventInst.getDbId());
 			}
 		}
 	}
@@ -249,7 +249,7 @@ public class PathwaysInferrer {
 			.contains(event.getSchemaClassName());
 	}
 
-	public void setInferredEvent(Map<SimpleInstance, SimpleInstance> inferredEventCopy) {
+	public void setInferredEvent(Map<Long, SimpleInstance> inferredEventCopy) {
 		sourceInstanceToInferredInstance = inferredEventCopy;
 	}
 

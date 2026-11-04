@@ -33,8 +33,8 @@ public class ReactionInferrer {
 	private InstanceUtilities instanceUtilities;
 	private ProteinCountUtility proteinCountUtility;
 
-	private static Map<SimpleInstance, SimpleInstance> inferredCatalystMap = new HashMap<>();
-	private static Map<SimpleInstance, SimpleInstance> inferredEventMap = new HashMap<>();
+	private static Map<Long, SimpleInstance> inferredCatalystMap = new HashMap<>();
+	private static Map<Long, SimpleInstance> inferredEventMap = new HashMap<>();
 	private static Integer eligibleCount = 0;
 	private static Integer inferredCount = 0;
 	private static List<SimpleInstance> inferrableHumanEvents = new ArrayList<>();
@@ -86,7 +86,7 @@ public class ReactionInferrer {
 		finalizeInferredReaction(reactionInst, infReactionInst);
 	}
 
-	public Map<SimpleInstance, SimpleInstance> getInferredEvent() {
+	public Map<Long, SimpleInstance> getInferredEvent() {
 		return inferredEventMap;
 	}
 
@@ -103,12 +103,12 @@ public class ReactionInferrer {
 	}
 
 	public void addAlreadyInferredEvents(SimpleInstance reactionInst, SimpleInstance previouslyInferredReactionInst) {
-		inferredEventMap.put(reactionInst, previouslyInferredReactionInst);
+		inferredEventMap.put(reactionInst.getDbId(), previouslyInferredReactionInst);
 		inferrableHumanEvents.add(reactionInst);
 	}
 
 	private boolean alreadyInferred(SimpleInstance reactionInst) {
-		SimpleInstance inferredEvent = inferredEventMap.get(reactionInst);
+		SimpleInstance inferredEvent = inferredEventMap.get(reactionInst.getDbId());
 		if (inferredEvent != null) {
 			logger.info("Already inferred RlE instance: " + inferredEvent);
 			return true;
@@ -196,7 +196,7 @@ public class ReactionInferrer {
 		infReactionInst = updateInferredFromAndOrthologousEventAttributes(reactionInst, infReactionInst);
 		infReactionInst = processInferredRegulations(infReactionInst, inferredRegulations);
 
-		inferredEventMap.put(reactionInst, infReactionInst);
+		inferredEventMap.put(reactionInst.getDbId(), infReactionInst);
 		recordInferredEvent(reactionInst, infReactionInst);
 	}
 
@@ -296,13 +296,13 @@ public class ReactionInferrer {
 		}
 	}
 	private SimpleInstance getOrCreateInferredCatalyst(SimpleInstance sourceCatalyst) throws Exception {
-		if (inferredCatalystMap.get(sourceCatalyst) != null) {
+		if (inferredCatalystMap.get(sourceCatalyst.getDbId()) != null) {
 			logger.info("Inferred catalyst already exists");
-			return inferredCatalystMap.get(sourceCatalyst);
+			return inferredCatalystMap.get(sourceCatalyst.getDbId());
 		}
 
 		SimpleInstance inferredCatalyst = createInferredCatalyst(sourceCatalyst);
-		inferredCatalystMap.put(sourceCatalyst, inferredCatalyst);
+		inferredCatalystMap.put(sourceCatalyst.getDbId(), inferredCatalyst);
 		return inferredCatalyst;
 	}
 
