@@ -56,6 +56,12 @@ public class CuratorToolConfig {
         jmxDisabled.put("spring.application.admin.enabled", "false");
         jmxDisabled.put("spring.jmx.enabled", "false");
         environment.getPropertySources().addFirst(new MapPropertySource("curator-tool-ws JMX disabled", jmxDisabled));
+        // curator-tool-ws creates a TEXT index on DatabaseObject.displayName at start-up for its name searches, which
+        // orthoinference never makes. Keeping the index up to date adds about 5 ms to the commit of every inferred
+        // instance, so it is not created for the run: drop it before the run and rebuild it afterwards. curator-tool-ws
+        // recreates it the next time it starts on its own, so a run that stops early does not leave it missing for good.
+        environment.getPropertySources().addFirst(new MapPropertySource("curator-tool-ws displayName TEXT index off",
+            Map.of("displayname-text-index.create", "false")));
         environment.getPropertySources().addLast(
             new ResourcePropertySource("curator-tool-ws application.properties", curatorToolProperties()));
 
