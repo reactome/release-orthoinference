@@ -70,7 +70,10 @@ public class CuratorToolAPI {
         }
 
         prepareAttributeValues(simpleInstance);
-        SimpleInstance committedInstance = timed("commit", () -> controller.commit(simpleInstance));
+        // Orthoinference names each inferred instance's StableIdentifier after its human source
+        // (R-MMU-<human dbId>), so curator-tool-ws is told to keep it rather than rename it after the inferred
+        // instance's own dbId.
+        SimpleInstance committedInstance = timed("commit", () -> controller.commit(simpleInstance, true));
         // Nothing was stored, so callers cannot go on to use the instance -- for a new one, the dbId it would have
         // been given is the very thing that is missing. Reported here rather than as a NullPointerException at
         // whichever caller dereferences the result first.
