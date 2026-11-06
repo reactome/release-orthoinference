@@ -51,6 +51,20 @@ public class CuratorToolAPI {
     private final Map<String, CallStats> callStats = new LinkedHashMap<>();
     // The dbIds inflated so far, so that inflating one again can be counted separately ("inflate (repeat)").
     private final Set<Long> inflatedDbIds = new HashSet<>();
+
+    // Inflated instances, by dbId, as they were read from the database; inflate hands out copies of them. The run
+    // reads the same human instances again and again (an EWAS is inflated each time a reaction it takes part in is
+    // inferred) while changing few of them, so most inflates can be answered from here. An entry is dropped when a
+    // commit may have changed what reading the instance would return -- see forgetInstancesChangedBy -- and the
+    // whole cache is dropped on a delete. The least recently used entries are dropped beyond the limit.
+    private static final int INFLATED_INSTANCE_CACHE_LIMIT = 200_000;
+    private final Map<Long, SimpleInstance> inflatedInstanceCache =
+        new LinkedHashMap<Long, SimpleInstance>(16, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<Long, SimpleInstance> eldest) {
+                return size() > INFLATED_INSTANCE_CACHE_LIMIT;
+            }
+        };
     private final long startNanos = System.nanoTime();
 
     // Built by CuratorToolConfig, which takes the controller from the curator-tool-ws context it starts and closes.
@@ -70,10 +84,19 @@ public class CuratorToolAPI {
         }
 
         prepareAttributeValues(simpleInstance);
-        // Orthoinference names each inferred instance's StableIdentifier after its human source
-        // (R-MMU-<human dbId>), so curator-tool-ws is told to keep it rather than rename it after the inferred
-        // instance's own dbId.
-        SimpleInstance committedInstance = timed("commit", () -> controller.commit(simpleInstance, true));
+        // Collected before the commit: it replaces the placeholder dbIds of new instances, and the cached copy of the
+        // instance names what it referred to before.
+        Set<Long> possiblyChangedDbIds = getDbIdsPossiblyChangedByCommit(simpleInstance);
+        SimpleInstance committedInstance;
+        try {
+            // Orthoinference names each inferred instance's StableIdentifier after its human source
+            // (R-MMU-<human dbId>), so curator-tool-ws is told to keep it rather than rename it after the inferred
+            // instance's own dbId.
+            committedInstance = timed("commit", () -> controller.commit(simpleInstance, true));
+        } finally {
+            // Also when the commit fails, since it may have written part of what it was given.
+            possiblyChangedDbIds.forEach(inflatedInstanceCache::remove);
+        }
         // Nothing was stored, so callers cannot go on to use the instance -- for a new one, the dbId it would have
         // been given is the very thing that is missing. Reported here rather than as a NullPointerException at
         // whichever caller dereferences the result first.
@@ -93,6 +116,53 @@ public class CuratorToolAPI {
             deletedDbIds.remove(dbId);
         }
         return committedInstance;
+    }
+
+    /**
+     * Returns the dbIds of the stored instances whose inflated form a commit of the instance may change: the
+     * instance itself and every stored instance it refers to, both as given and as last read. Committing an instance
+     * rewrites its relationships, and an instance at the other end of one can see it from its own side -- e.g. an
+     * inferred instance's inferredFrom is its source's inferredTo, so committing the former changes the latter.
+     * The same goes for the new instances committed along with it (e.g. a new ModifiedResidue in a new EWAS).
+     */
+    private Set<Long> getDbIdsPossiblyChangedByCommit(SimpleInstance instance) {
+        Set<Long> dbIds = new HashSet<>();
+        collectDbIdsPossiblyChangedByCommit(instance, dbIds, Collections.newSetFromMap(new IdentityHashMap<>()));
+        SimpleInstance cachedInstance = instance.getDbId() != null ? inflatedInstanceCache.get(instance.getDbId()) : null;
+        if (cachedInstance != null) {
+            collectDbIdsPossiblyChangedByCommit(cachedInstance, dbIds, Collections.newSetFromMap(new IdentityHashMap<>()));
+        }
+        return dbIds;
+    }
+
+    private void collectDbIdsPossiblyChangedByCommit(SimpleInstance instance, Set<Long> dbIds,
+                                                     Set<SimpleInstance> visitedInstances) {
+        if (!visitedInstances.add(instance)) {
+            return;
+        }
+        Long dbId = instance.getDbId();
+        if (dbId != null && dbId > 0) {
+            dbIds.add(dbId);
+        }
+        if (instance.getAttributes() == null) {
+            return;
+        }
+        for (Object value : instance.getAttributes().values()) {
+            Collection<?> values = value instanceof Collection ? (Collection<?>) value : Collections.singletonList(value);
+            for (Object element : values) {
+                if (!(element instanceof SimpleInstance)) {
+                    continue;
+                }
+                SimpleInstance referredInstance = (SimpleInstance) element;
+                Long referredDbId = referredInstance.getDbId();
+                if (referredDbId == null || referredDbId < 0) {
+                    // A new instance, committed along with this one.
+                    collectDbIdsPossiblyChangedByCommit(referredInstance, dbIds, visitedInstances);
+                } else {
+                    dbIds.add(referredDbId);
+                }
+            }
+        }
     }
 
     /**
@@ -154,7 +224,13 @@ public class CuratorToolAPI {
             instance.setDefaultPersonId(getPersonId());
         }
 
-        timed("delete", () -> controller.delete(instance));
+        try {
+            timed("delete", () -> controller.delete(instance));
+        } finally {
+            // A delete also changes every instance that referred to the deleted one, which nothing here keeps track
+            // of. Orthoinference deletes rarely, so the whole cache is dropped.
+            inflatedInstanceCache.clear();
+        }
         if (instance.getDbId() != null) {
             deletedDbIds.add(instance.getDbId());
             committedDbIds.remove(instance.getDbId());
@@ -174,8 +250,28 @@ public class CuratorToolAPI {
 
     public SimpleInstance inflate(SimpleInstance shellInstance) {
         Long dbId = shellInstance.getDbId();
+        SimpleInstance cachedInstance = inflatedInstanceCache.get(dbId);
+        if (cachedInstance != null) {
+            return timed("inflate (cached)", () -> copyOf(cachedInstance));
+        }
         String label = inflatedDbIds.add(dbId) ? "inflate (first)" : "inflate (repeat)";
-        return timed(label, () -> controller.findByDdIdInInstance(dbId));
+        SimpleInstance inflatedInstance = timed(label, () -> controller.findByDdIdInInstance(dbId));
+        if (inflatedInstance != null && dbId != null && dbId > 0) {
+            inflatedInstanceCache.put(dbId, copyOf(inflatedInstance));
+        }
+        return inflatedInstance;
+    }
+
+    // A copy that can be changed without changing the original: callers add values to the instances they inflate
+    // before committing them. Its attribute lists are copied too; the instances in them are shells (dbId,
+    // displayName and schemaClass only), which callers do not change.
+    private static SimpleInstance copyOf(SimpleInstance instance) {
+        SimpleInstance copy = instance.cloneInstance();
+        if (copy.getAttributes() != null) {
+            copy.getAttributes().replaceAll((attributeName, value) ->
+                value instanceof List ? new ArrayList<>((List<?>) value) : value);
+        }
+        return copy;
     }
 
     /**
