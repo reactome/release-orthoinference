@@ -198,10 +198,10 @@ public class ReactionInferrer {
 		addLinksToSourceReaction(infReactionInst, reactionInst);
 		infReactionInst = storeInferredReaction(infReactionInst);
 
-		// The source reaction's link back needs the inferred reaction's dbId, so it can only be added once the
-		// inferred reaction is stored. Added rather than set, so the orthologous events already inferred for other
-		// species are kept.
-		getUtils().addOrthologousEventValue(reactionInst, infReactionInst);
+		// The source reaction's orthologousEvent link to the inferred reaction is the inferred reaction's inferredFrom,
+		// stored by the commit above, so the source reaction is not committed again. Added rather than set, so the
+		// orthologous events already inferred for other species are kept.
+		getUtils().addValueStoredByInferredFrom(reactionInst, infReactionInst, ReactomeJavaConstants.orthologousEvent);
 
 		inferredEventMap.put(reactionInst.getDbId(), infReactionInst);
 		recordInferredEvent(reactionInst, infReactionInst);

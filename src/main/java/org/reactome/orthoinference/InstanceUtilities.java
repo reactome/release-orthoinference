@@ -214,6 +214,26 @@ public class InstanceUtilities {
 		addAttributeValueIfNecessary(inferredInst, sourceInst, ReactomeJavaConstants.inferredFrom);
 	}
 
+	/**
+	 * Adds the inferred instance to the source instance's inferredTo (PhysicalEntity, Regulation) or orthologousEvent
+	 * (Event) attribute WITHOUT committing the source instance. Only for an inferred instance that is already stored
+	 * with the source in its inferredFrom.
+	 *
+	 * In the graph model, the inferred instance's inferredFrom and the source's inferredTo/orthologousEvent are the
+	 * same "inferredTo" relationship, seen from opposite ends, so storing the inferred instance's inferredFrom has
+	 * already stored this value. Committing the source as well would change nothing, but would cost a full rewrite
+	 * of every one of the source's relationships. The value is still added to the caller's copy so that the copy
+	 * agrees with the database. Should the copy be committed later, curator-tool-ws never clears these two
+	 * attributes before a commit and merges their edges rather than duplicating them, so the copy is safe to commit.
+	 *
+	 * @param sourceInst - the (human) instance the inferred instance was inferred from.
+	 * @param inferredInst - the stored inferred instance, whose inferredFrom holds sourceInst.
+	 * @param attribute - inferredTo or orthologousEvent.
+	 */
+	public void addValueStoredByInferredFrom(SimpleInstance sourceInst, SimpleInstance inferredInst, String attribute) {
+		addAttributeValueIfNecessary(sourceInst, inferredInst, attribute);
+	}
+
 	// Adds the orthologous instance to the event's orthologousEvent attribute and commits the event.
 	public void addOrthologousEventValue(SimpleInstance eventInst, SimpleInstance orthologousEventInst) {
 		addAttributeValueAndCommit(eventInst, orthologousEventInst, ReactomeJavaConstants.orthologousEvent);

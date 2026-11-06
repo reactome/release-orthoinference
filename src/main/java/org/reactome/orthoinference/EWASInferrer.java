@@ -220,7 +220,7 @@ public class EWASInferrer {
 		}
 
 		instanceUtilities.addInferredFromValue(infEWASInst, ewasInst);
-		instanceUtilities.addInferredToValue(ewasInst, infEWASInst);
+		instanceUtilities.addValueStoredByInferredFrom(ewasInst, infEWASInst, ReactomeJavaConstants.inferredTo);
 		logger.info("Successfully inferred EWAS instance for " + homologue + " homologue");
 		return infEWASInst;
 	}

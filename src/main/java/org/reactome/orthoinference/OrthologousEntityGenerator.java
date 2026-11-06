@@ -159,7 +159,7 @@ public class OrthologousEntityGenerator {
 					definedSetIdenticals.put(cacheKey, infDefinedSetInst);
 				}
 				instanceUtilities.addInferredFromValue(infDefinedSetInst, ewasInst);
-				instanceUtilities.addInferredToValue(ewasInst, infDefinedSetInst);
+				instanceUtilities.addValueStoredByInferredFrom(ewasInst, infDefinedSetInst, ReactomeJavaConstants.inferredTo);
 				homolEWASIdenticals.put(ewasInst.getDbId(), infDefinedSetInst);
 				logger.info("Successfully converted to DefinedSet");
 			} else if (infEWASInstances.size() == 1) {
@@ -257,7 +257,7 @@ public class OrthologousEntityGenerator {
 			}
 
 			instanceUtilities.addInferredFromValue(infComplexInst, complexInst);
-			instanceUtilities.addInferredToValue(complexInst, infComplexInst);
+			instanceUtilities.addValueStoredByInferredFrom(complexInst, infComplexInst, ReactomeJavaConstants.inferredTo);
 			
 			if (override) {
 				complexPolymerOverrideIdenticals.put(complexInst.getDbId(), infComplexInst);
@@ -434,7 +434,8 @@ public class OrthologousEntityGenerator {
 			if (instanceUtilities.isValidAttribute(infEntitySetInst, ReactomeJavaConstants.species) &&
 				entitySetInst.getAttribute(ReactomeJavaConstants.species) != null) {
 				instanceUtilities.addInferredFromValue(infEntitySetInst, entitySetInst);
-				instanceUtilities.addInferredToValue(entitySetInst, infEntitySetInst);
+				instanceUtilities.addValueStoredByInferredFrom(
+					entitySetInst, infEntitySetInst, ReactomeJavaConstants.inferredTo);
 			}
 			if (override) {
 				inferredEntitySetOverrideIdenticals.put(entitySetInst.getDbId(), infEntitySetInst);
