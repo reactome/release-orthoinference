@@ -163,7 +163,7 @@ public class EventsInferrer {
 			logger.info("Successfully inferred " + reactionInst);
 		} catch (Exception e) {
 			logger.error("Failed to infer reaction: " + reactionInst, e);
-			throw new RuntimeException("Failed to infer reaction", e);
+			throw new RuntimeException("Failed to infer reaction " + reactionInst, e);
 		}
 	}
 
