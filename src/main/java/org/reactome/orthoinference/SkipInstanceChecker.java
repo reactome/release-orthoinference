@@ -155,21 +155,36 @@ public class SkipInstanceChecker {
 		return findUniqueSpeciesInstances(physicalEntityInstances);
 	}
 
+	// Referred instances are shells (dbId, displayName and schemaClass only), so the inputs and outputs are inflated
+	// before their species and constituents are read.
 	private List<SimpleInstance> getInputs(SimpleInstance reactionLikeEvent) {
-		return safeList((List<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.input));
+		return inflateAll(safeList((List<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.input)));
 	}
 
 	private List<SimpleInstance> getOutputs(SimpleInstance reactionLikeEvent) {
-		return safeList((List<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.output));
+		return inflateAll(safeList((List<SimpleInstance>) reactionLikeEvent.getAttribute(ReactomeJavaConstants.output)));
+	}
+
+	private List<SimpleInstance> inflateAll(List<SimpleInstance> instances) {
+		List<SimpleInstance> inflatedInstances = new ArrayList<>();
+		for (SimpleInstance instance : instances) {
+			SimpleInstance inflatedInst = curatorToolAPI.inflate(instance);
+			if (inflatedInst != null) {
+				inflatedInstances.add(inflatedInst);
+			}
+		}
+		return inflatedInstances;
 	}
 
 	private List<SimpleInstance> getCatalystActivityPhysicalEntities(SimpleInstance reactionLikeEvent) {
 
 		List<SimpleInstance> catalystActivityPhysicalInstances = new ArrayList<>();
 		for (SimpleInstance catalystActivityInst : instanceUtilities.getInflatedInstances(reactionLikeEvent, ReactomeJavaConstants.catalystActivity)) {
-			catalystActivityPhysicalInstances.add(
-				instanceUtilities.getInflatedInstance(catalystActivityInst, ReactomeJavaConstants.physicalEntity)
-			);
+			SimpleInstance physicalEntityInst =
+				instanceUtilities.getInflatedInstance(catalystActivityInst, ReactomeJavaConstants.physicalEntity);
+			if (physicalEntityInst != null) {
+				catalystActivityPhysicalInstances.add(physicalEntityInst);
+			}
 		}
 		return catalystActivityPhysicalInstances;
 	}
@@ -180,7 +195,8 @@ public class SkipInstanceChecker {
 		List<SimpleInstance> regulatedByInstances = instanceUtilities.getInflatedInstances(reactionLikeEvent, "regulatedBy");
 		for (SimpleInstance regulatedByInst : regulatedByInstances) {
 			SimpleInstance regulatorInst = instanceUtilities.getInflatedInstance(regulatedByInst, ReactomeJavaConstants.regulator);
-			if (instanceUtilities.isSchemaClassType(regulatorInst, ReactomeJavaConstants.PhysicalEntity)) {
+			if (regulatorInst != null &&
+				instanceUtilities.isSchemaClassType(regulatorInst, ReactomeJavaConstants.PhysicalEntity)) {
 				regulatorInstances.add(regulatorInst);
 			}
 		}
@@ -211,7 +227,7 @@ public class SkipInstanceChecker {
 		return new ArrayList<>(physicalEntitiesDbIdToInstance.values());
 	}
 
-	private List<SimpleInstance> findUniqueSpeciesInstances(List<SimpleInstance> physicalEntities) throws Exception {
+	private List<SimpleInstance> findUniqueSpeciesInstances(List<SimpleInstance> physicalEntities) {
 		Map<Long, SimpleInstance> speciesHash = new HashMap<>();
 		for (SimpleInstance physicalEntityInst : physicalEntities) {
 			for (SimpleInstance speciesInst : getAttributeValues(physicalEntityInst, ReactomeJavaConstants.species)) {
@@ -231,7 +247,8 @@ public class SkipInstanceChecker {
 
 		Map<Long, SimpleInstance> constituentInstances = new HashMap<>();
 		for (String attribute : attributes) {
-			for (SimpleInstance physicalEntityConstituent : getAttributeValues(physicalEntity, attribute)) {
+			// Constituents are shells too, so each is inflated before its species and own constituents are read
+			for (SimpleInstance physicalEntityConstituent : inflateAll(getAttributeValues(physicalEntity, attribute))) {
 				constituentInstances.put(physicalEntityConstituent.getDbId(), physicalEntityConstituent);
 			}
 		}
