@@ -76,12 +76,19 @@ public class EWASInferrer {
 		SimpleInstance infEWASInst = instanceUtilities.createNewInferredGKInstance(ewasInst);
 		infEWASInst.setAttribute(ReactomeJavaConstants.referenceEntity, infReferenceGeneProductInst);
 
-		inferStartAndEndCoordinates(ewasInst, infEWASInst);
-		// name is multi-valued, so it is held as a List. If the species-specific gene name was retrieved from
-		// UniProt's mapping service, it is added as the primary name for the EWAS.
+		boolean hasCoordinateOverOne = inferStartAndEndCoordinates(ewasInst, infEWASInst);
+		// name is multi-valued, so it is held as a List, built in the same order as the Perl and pre-graph Java
+		// versions: [species gene name (if UniProt's mapping service gave one), source EWAS's first name (if a
+		// coordinate is over 1; see infer_events.pl lines 1190-1192), homologue identifier].
 		List<String> ewasNames = new ArrayList<>();
 		if (getMappings().homologueHasGeneName(homologueId)) {
 			ewasNames.add(getMappings().getGeneName(homologueId));
+		}
+		if (hasCoordinateOverOne) {
+			String sourceName = CuratorToolAPI.getFirstAttributeValueAsString(ewasInst, ReactomeJavaConstants.name);
+			if (sourceName != null) {
+				ewasNames.add(sourceName);
+			}
 		}
 		ewasNames.add(homologueId);
 		infEWASInst.setAttribute(ReactomeJavaConstants.name, ewasNames);
@@ -305,11 +312,9 @@ public class EWASInferrer {
 		return homologue.contains(":") ? homologue.split(":")[1] : homologue;
 	}
 
-	private void inferStartAndEndCoordinates(SimpleInstance ewasInst, SimpleInstance infEWASInst) {
-		// Method for adding start/end coordinates. It is convoluted due to a quirk with assigning the
-		// name differently based on coordinate value (see infer_events.pl lines 1190-1192).
-		// The name of the entity needs to be at the front of the 'name' array if the coordinate is over 1,
-		// and rearranging arrays in Java for this was a bit tricky.
+	// Copies the start/end coordinates and returns whether either is over 1, in which case the source EWAS's name is
+	// added to the inferred EWAS's names (see infer_events.pl lines 1190-1192).
+	private boolean inferStartAndEndCoordinates(SimpleInstance ewasInst, SimpleInstance infEWASInst) {
 		Integer startCoord = (Integer) ewasInst.getAttribute(ReactomeJavaConstants.startCoordinate);
 		if (startCoord != null) {
 			infEWASInst.setAttribute(ReactomeJavaConstants.startCoordinate, startCoord);
@@ -320,14 +325,7 @@ public class EWASInferrer {
 			infEWASInst.setAttribute(ReactomeJavaConstants.endCoordinate, endCoord);
 		}
 
-		if (infEWASInst.getAttribute(ReactomeJavaConstants.startCoordinate) != null &&
-			(int) infEWASInst.getAttribute(ReactomeJavaConstants.startCoordinate) > 1 ||
-			infEWASInst.getAttribute(ReactomeJavaConstants.endCoordinate) != null &&
-				(int) infEWASInst.getAttribute(ReactomeJavaConstants.endCoordinate) > 1) {
-			// The source name may come back as a single value or a List; only its first value is copied.
-			infEWASInst.setAttribute(ReactomeJavaConstants.name,
-				CuratorToolAPI.getFirstAttributeValueAsString(ewasInst, ReactomeJavaConstants.name));
-		}
+		return (startCoord != null && startCoord > 1) || (endCoord != null && endCoord > 1);
 	}
 
 	// Homologous Protein IDs can exist in ${source}_${target}_mapping.txt but the corresponding Gene ID might not
