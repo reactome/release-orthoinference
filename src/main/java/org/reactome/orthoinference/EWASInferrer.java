@@ -106,13 +106,12 @@ public class EWASInferrer {
 				infModifiedResidueInst.setAttribute(ReactomeJavaConstants.coordinate, coordinateValue);
 			}
 			if (instanceUtilities.isValidAttribute(infModifiedResidueInst, ReactomeJavaConstants.modification)) {
-				List<SimpleInstance> modificationInstances = new ArrayList<>(
-					instanceUtilities.getInflatedInstances(modifiedResidueInst, ReactomeJavaConstants.modification)
-				);
-				infModifiedResidueInst.setAttribute(ReactomeJavaConstants.modification, modificationInstances);
-
-				if (infModifiedResidueInst.getAttribute(ReactomeJavaConstants.modification) != null) {
-					infModifiedResidueDisplayName += " " + getModificationDisplayName(infModifiedResidueInst);
+				// modification is single-valued, so it is set as the instance itself rather than in a List.
+				SimpleInstance modificationInst =
+					instanceUtilities.getInflatedInstance(modifiedResidueInst, ReactomeJavaConstants.modification);
+				if (modificationInst != null) {
+					infModifiedResidueInst.setAttribute(ReactomeJavaConstants.modification, modificationInst);
+					infModifiedResidueDisplayName += " " + modificationInst.getDisplayName();
 				}
 			}
 			// Update name depending on the presence of 'phospho' in the Psimod's name attribute
@@ -149,13 +148,10 @@ public class EWASInferrer {
 				phosFlag = false;
 			}
 
-            List<SimpleInstance> psiModInstances = new ArrayList<>(
-				instanceUtilities.getInflatedInstances(modifiedResidueInst, ReactomeJavaConstants.psiMod)
-			);
-			infModifiedResidueInst.setAttribute(ReactomeJavaConstants.psiMod, psiModInstances);
-
-			if (infModifiedResidueInst.getAttribute(ReactomeJavaConstants.psiMod) != null) {
-				infModifiedResidueDisplayName += " " + getPsiModDisplayName(infModifiedResidueInst);
+			// psiMod is single-valued, so it is set as the instance itself rather than in a List.
+			if (firstPsiModInst != null) {
+				infModifiedResidueInst.setAttribute(ReactomeJavaConstants.psiMod, firstPsiModInst);
+				infModifiedResidueDisplayName += " " + firstPsiModInst.getDisplayName();
 			}
 			infModifiedResidueInst.setDisplayName(modifiedResidueInst.getDisplayName());
 			// Update name to reflect that coordinate values are taken from humans. This takes place after
@@ -227,22 +223,12 @@ public class EWASInferrer {
 		return instanceUtilities.getInflatedInstances(ewasInst, ReactomeJavaConstants.hasModifiedResidue);
 	}
 
-	private String getModificationDisplayName(SimpleInstance infModifiedResidueInst) {
-		List<SimpleInstance> modifications = (List<SimpleInstance>) infModifiedResidueInst.getAttribute(ReactomeJavaConstants.modification);
-		return modifications != null && !modifications.isEmpty() ? modifications.get(0).getDisplayName() : "";
-	}
-
 	private boolean nameHasPhospho(SimpleInstance psiModInst) {
 		Object psiModInstName = psiModInst.getAttribute(ReactomeJavaConstants.name);
 		if (psiModInstName == null) {
 			return false;
 		}
 		return psiModInstName.toString().contains("phospho");
-	}
-
-	private String getPsiModDisplayName(SimpleInstance infModifiedResidueInst) {
-		List<SimpleInstance> psiMods = (List<SimpleInstance>) infModifiedResidueInst.getAttribute(ReactomeJavaConstants.psiMod);
-		return psiMods != null && !psiMods.isEmpty() ? psiMods.get(0).getDisplayName() : "";
 	}
 
 //	private static GKInstance inferModifiedResidue(GKInstance modifiedResidueInst, GKInstance ewasInst, GKInstance infEWASInst, GKInstance infReferenceGeneProductInst, boolean phosFlag) throws Exception {

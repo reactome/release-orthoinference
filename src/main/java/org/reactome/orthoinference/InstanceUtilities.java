@@ -457,14 +457,18 @@ public class InstanceUtilities {
 		return compartments;
 	}
 
+	// Returns the attribute's first value, inflated, or null if it has none. A SimpleInstance holds a single value as
+	// itself and multiple values as a List; getAttributeValues handles both.
 	public SimpleInstance getInflatedInstance(SimpleInstance instance, String attribute) {
-		Object attributeValue = instance.getAttribute(attribute);
-		return attributeValue != null ? curatorToolAPI.inflate((SimpleInstance) attributeValue) : null;
+		List<SimpleInstance> attributeValues = getAttributeValues(instance, attribute);
+		return attributeValues.isEmpty() ? null : curatorToolAPI.inflate(attributeValues.get(0));
 	}
 
+	// Returns the attribute's values, inflated. A SimpleInstance holds a single value (e.g. psiMod) as itself rather
+	// than in a List, so the value cannot simply be cast to a Collection; getAttributeValues handles both.
 	public List<SimpleInstance> getInflatedInstances(SimpleInstance instance, String attribute) {
-		return safeList((Collection<SimpleInstance>) instance.getAttribute(attribute)).
-			stream().map(i -> curatorToolAPI.inflate(i)).collect(Collectors.toList());
+		return getAttributeValues(instance, attribute).stream()
+			.map(i -> curatorToolAPI.inflate(i)).collect(Collectors.toList());
 	}
 
 	private String getSpeciesName() throws IOException, ParseException {
