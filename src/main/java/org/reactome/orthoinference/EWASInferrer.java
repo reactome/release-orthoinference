@@ -9,8 +9,6 @@ import org.gk.model.ReactomeJavaConstants;
 import org.reactome.curation.model.SimpleInstance;
 import org.springframework.stereotype.Component;
 
-import static org.reactome.util.general.CollectionUtils.safeList;
-
 @Component
 public class EWASInferrer {
 
@@ -226,7 +224,7 @@ public class EWASInferrer {
 	}
 
 	private List<SimpleInstance> getModifiedResidues(SimpleInstance ewasInst) {
-		return safeList((List<SimpleInstance>) ewasInst.getAttribute(ReactomeJavaConstants.hasModifiedResidue));
+		return instanceUtilities.getInflatedInstances(ewasInst, ReactomeJavaConstants.hasModifiedResidue);
 	}
 
 	private String getModificationDisplayName(SimpleInstance infModifiedResidueInst) {
