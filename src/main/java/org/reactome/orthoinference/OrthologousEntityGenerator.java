@@ -219,7 +219,12 @@ public class OrthologousEntityGenerator {
 				"  Inferrable: " + complexInferrableProteinCounts);
 			SimpleInstance infComplexInst = instanceUtilities.createNewInferredGKInstance(complexInst);
 			infComplexInst.setAttribute(ReactomeJavaConstants.summation, complexSummationInst);
-			infComplexInst.setAttribute(ReactomeJavaConstants.name, complexInst.getAttribute(ReactomeJavaConstants.name));
+			// Only the source complex's first name is kept, as in the Perl and pre-graph Java versions. (EntitySets, by
+			// contrast, keep all of their source's names.)
+			String complexName = CuratorToolAPI.getFirstAttributeValueAsString(complexInst, ReactomeJavaConstants.name);
+			if (complexName != null) {
+				infComplexInst.setAttribute(ReactomeJavaConstants.name, new ArrayList<>(Collections.singletonList(complexName)));
+			}
 			List<SimpleInstance> infComponentInstances = new ArrayList<>();
 			// Inference handling is different depending on if it is a Complex or a Polymer. Complexes will infer all
 			// 'components' while Polymers will infer all 'repeatedUnits'.
