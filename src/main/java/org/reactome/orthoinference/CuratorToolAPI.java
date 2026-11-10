@@ -28,7 +28,7 @@ public class CuratorToolAPI {
     private final CurationController controller;
     private final long personId;
 
-    // The GO instances are loaded once, up-front, and kept in memory for the whole run. The server rejects a
+    // The instances are loaded once, up-front, and kept in memory for the whole run. The server rejects a
     // commit whose "modified" InstanceEdit does not match the stored one (optimistic locking) and a commit
     // replaces *all* of the stored instance's attributes, so an in-memory copy must be re-read once this run has
     // written to it. These sets record what this run has written to and what it has removed.
@@ -279,10 +279,19 @@ public class CuratorToolAPI {
      * only matches a reference attribute on the dbIds of the instances it refers to, so a referred instance that
      * has not been committed yet is left out of the match.
      *
+     * <p>
+     * An ALL_DEFINING attribute with no value on the instance only matches instances that also have no value for it,
+     * as in MySQLAdaptor.fetchIdenticalInstances. curator-tool-ws instead leaves such an attribute out of the match,
+     * so, e.g., a ModifiedResidue with no coordinate would match a residue at any coordinate on the same sequence.
+     *
      * @param instance - the instance whose defining attributes are searched on.
      * @return the matching instances, or an empty list if there are none or no defining attribute has a value.
      */
     public List<SimpleInstance> fetchIdenticalInstances(SimpleInstance instance) {
+        List<String> emptyAllDefiningAttributeNames = getAllDefiningAttributeNames(instance.getSchemaClassName())
+            .stream()
+            .filter(attributeName -> hasNoValue(instance, attributeName))
+            .collect(Collectors.toList());
         // The matches come back as shells -- dbId, displayName and schemaClass only. They are inflated because
         // callers go on to add attribute values to them and commit them, and committing a shell would clear every
         // attribute of the stored instance.
@@ -293,7 +302,13 @@ public class CuratorToolAPI {
             .stream()
             .map(this::inflate)
             .filter(Objects::nonNull)
+            .filter(match -> emptyAllDefiningAttributeNames.stream()
+                .allMatch(attributeName -> hasNoValue(match, attributeName)))
             .collect(Collectors.toList());
+    }
+
+    private static boolean hasNoValue(SimpleInstance instance, String attributeName) {
+        return getAttributeValues(instance, attributeName).stream().allMatch(Objects::isNull);
     }
 
     public List<SimpleInstance> getReferrers(SimpleInstance instance, String referrerAttributeName) throws Exception {
@@ -334,6 +349,20 @@ public class CuratorToolAPI {
             .stream()
             .filter(attribute -> attribute.getDefiningType() == CurationAttribute.DefiningType.ALL_DEFINING ||
                 attribute.getDefiningType() == CurationAttribute.DefiningType.ANY_DEFINING)
+            .map(CurationAttribute::getName)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Returns the names of the schema class's ALL_DEFINING attributes, including those it inherits.
+     *
+     * @param className - the schema class, e.g. "ModifiedResidue".
+     * @return the ALL_DEFINING attribute names, or an empty list if the class is not in the schema.
+     */
+    public List<String> getAllDefiningAttributeNames(String className) {
+        return timed("getAttributes", () -> controller.getAttributes(className))
+            .stream()
+            .filter(attribute -> attribute.getDefiningType() == CurationAttribute.DefiningType.ALL_DEFINING)
             .map(CurationAttribute::getName)
             .collect(Collectors.toList());
     }
@@ -421,58 +450,6 @@ public class CuratorToolAPI {
                 .map(CurationAttribute::getName)
                 .collect(Collectors.toSet())
         );
-    }
-
-    private void updateDisplayName(SimpleInstance referenceSequence) {
-        // A search returns shell instances -- dbId, displayName and schemaClass only -- so the instance has to be
-        // inflated before there are any attributes to build a display name out of. Committing a shell would also
-        // clear every attribute of the stored instance, since a commit replaces all of them.
-        SimpleInstance inflatedReferenceSequence = inflate(referenceSequence);
-        if (inflatedReferenceSequence == null) {
-            logger.warn("No instance found for db id " + referenceSequence.getDbId() +
-                " -- skipping its display name update");
-            return;
-        }
-
-        String currentDisplayName = inflatedReferenceSequence.getDisplayName();
-        String newDisplayName = getReferenceSequenceDisplayName(inflatedReferenceSequence);
-
-        if (!newDisplayName.equals(currentDisplayName)) {
-            inflatedReferenceSequence.setDisplayName(newDisplayName);
-            commit(inflatedReferenceSequence);
-        }
-    }
-
-    public String getReferenceSequenceDisplayName(SimpleInstance referenceSequence) {
-        String dbName = null;
-        SimpleInstance refDB =
-            (SimpleInstance) referenceSequence.getAttribute(ReactomeJavaConstants.referenceDatabase);
-        if (refDB != null) {
-            dbName = refDB.getDisplayName();
-        }
-        if (dbName == null) {
-            dbName = "Unknown";
-        }
-
-        String identifier = getFirstAttributeValueAsString(referenceSequence, ReactomeJavaConstants.variantIdentifier);
-
-        if (identifier == null) {
-            identifier = getFirstAttributeValueAsString(referenceSequence, ReactomeJavaConstants.identifier);
-        }
-        if (identifier == null) {
-            identifier = "Unknown";
-        }
-
-        // geneName and name are multi-valued attributes, so their values are Lists rather than the Strings this used
-        // to cast them to; the first value is the one that belongs in the display name.
-        String name = getFirstAttributeValueAsString(referenceSequence, ReactomeJavaConstants.geneName);
-        if (name == null) {
-            name = getFirstAttributeValueAsString(referenceSequence, ReactomeJavaConstants.name);
-        }
-        if (name == null) {
-            name = "Unknown";
-        }
-        return dbName + ":" + identifier + " " + name;
     }
 
     public SimpleInstance fetchSpecies(String speciesName) {
