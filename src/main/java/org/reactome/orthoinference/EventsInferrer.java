@@ -75,7 +75,8 @@ public class EventsInferrer {
 		//SimpleInstance humanSpeciesInstance = getHumanSpeciesInstance();
 		Map<Long, SimpleInstance> reactionMap = getHumanReactionMap();
 		processReactions(reactionMap);
-		//generatePathwaysAndDiagrams();
+		generatePathways();
+		//generateDiagrams();
 
 		outputReport(speciesCode, configProperties.getReleaseVersion());
 		logger.info("Finished orthoinference of " + getSpeciesName());
@@ -167,11 +168,13 @@ public class EventsInferrer {
 		}
 	}
 
-//	private void generatePathwaysAndDiagrams() throws Exception {
+	private void generatePathways() throws Exception {
+		getPathwaysInferrer().setInferredEvent(getReactionInferrer().getInferredEvent());
+		getPathwaysInferrer().inferPathways(getReactionInferrer().getInferrableHumanEvents());
+	}
+
+//	private void generateDiagrams() {
 //		SimpleInstance humanSpeciesInstance = getHumanSpeciesInstance();
-//		getPathwaysInferrer().setInferredEvent(getReactionInferrer().getInferredEvent());
-//		getPathwaysInferrer().inferPathways(getReactionInferrer().getInferrableHumanEvents());
-//
 //		orthologousPathwayDiagramGenerator = new OrthologousPathwayDiagramGenerator(
 //				getCurrentDBA(),
 //				getPrevDBA(),
