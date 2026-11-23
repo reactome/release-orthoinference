@@ -91,7 +91,12 @@ public class PathwaysInferrer {
 			return;
 		}
 
-		for (SimpleInstance humanPathwayReferralInstance : humanPathwayReferralInstances) {
+		for (SimpleInstance humanPathwayReferralShell : humanPathwayReferralInstances) {
+			SimpleInstance humanPathwayReferralInstance = curatorToolAPI.inflate(humanPathwayReferralShell);
+			if (humanPathwayReferralInstance == null) {
+				throw new IllegalStateException("No Pathway found for db id " + humanPathwayReferralShell.getDbId() +
+					" (" + humanPathwayReferralShell.getDisplayName() + ") referring to " + humanEvent + " via hasEvent");
+			}
 			logger.info("Generating inferred Pathway: " + humanPathwayReferralInstance);
 			// Pathways that have been inferred already are skipped, as are Pathways that are only children of the
 			// Disease TopLevelPathway.
