@@ -398,7 +398,7 @@ public class InstanceUtilities {
 	 * @throws Exception -- Thrown by MySQLAdaptor.
 	 */
 	private Set<Long> getTopLevelPathwayDbIds(SimpleInstance pathway) throws Exception {
-		List<SimpleInstance> parentPathways = safeList(getCuratorToolAPI().getReferrers(pathway, ReactomeJavaConstants.Event));
+		List<SimpleInstance> parentPathways = safeList(getCuratorToolAPI().getReferrers(pathway, ReactomeJavaConstants.hasEvent));
 		if (parentPathways.isEmpty()) {
 			return new HashSet<>(Arrays.asList(pathway.getDbId()));
 		}
