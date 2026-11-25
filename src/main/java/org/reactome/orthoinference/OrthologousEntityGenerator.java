@@ -303,9 +303,9 @@ public class OrthologousEntityGenerator {
 			for (SimpleInstance memberInst : memberInstances) {
 				SimpleInstance infMemberInst = createOrthoEntity(memberInst, false);
 				if (infMemberInst != null &&
-					!existingMemberInstances.contains(infMemberInst.getAttribute(ReactomeJavaConstants.name).toString())) {
+					!existingMemberInstances.contains(getFirstName(infMemberInst))) {
 
-					existingMemberInstances.add(infMemberInst.getAttribute(ReactomeJavaConstants.name).toString());
+					existingMemberInstances.add(getFirstName(infMemberInst));
 					infMembersList.add(infMemberInst);
 				}
 			}
@@ -343,10 +343,10 @@ public class OrthologousEntityGenerator {
 				for (SimpleInstance candidateInst : candidateInstances) {
 					SimpleInstance infCandidateInst = createOrthoEntity(candidateInst, false);
 					if (infCandidateInst != null &&
-						!existingMemberInstances.contains(infCandidateInst.getAttribute(ReactomeJavaConstants.name).toString()) &&
-						!existingCandidateInstances.contains(infCandidateInst.getAttribute(ReactomeJavaConstants.name).toString())) {
+						!existingMemberInstances.contains(getFirstName(infCandidateInst)) &&
+						!existingCandidateInstances.contains(getFirstName(infCandidateInst))) {
 
-						existingCandidateInstances.add(infCandidateInst.getAttribute(ReactomeJavaConstants.name).toString());
+						existingCandidateInstances.add(getFirstName(infCandidateInst));
 						infCandidatesList.add(infCandidateInst);
 					}
 				}
@@ -464,9 +464,18 @@ public class OrthologousEntityGenerator {
 		return complexSummationInst;
 	}
 
+	// compartment is the attribute (ReactomeJavaConstants.Compartment is the class name). It is multi-valued, so it may
+	// be held as a List or, when there is one value, as the instance itself.
 	private String getFirstCompartmentDisplayName(SimpleInstance ewasInst) {
-		List<SimpleInstance> compartmentNames = (List<SimpleInstance>) ewasInst.getAttribute(ReactomeJavaConstants.Compartment);
-		return compartmentNames != null && !compartmentNames.isEmpty() ?  compartmentNames.get(0).getDisplayName() : "";
+		List<SimpleInstance> compartments = instanceUtilities.getAttributeValues(ewasInst, ReactomeJavaConstants.compartment);
+		return compartments.isEmpty() ? "" : compartments.get(0).getDisplayName();
+	}
+
+	// Inferred members and candidates are de-duplicated on their first name, as in the GKInstance version
+	// (getAttributeValue(name)). name is multi-valued, so the whole List would also include e.g. the source EWAS's
+	// isoform name and keep apart members that are the same inferred instance.
+	private static String getFirstName(SimpleInstance instance) {
+		return String.valueOf(CuratorToolAPI.getFirstAttributeValueAsString(instance, ReactomeJavaConstants.name));
 	}
 
 	private EWASInferrer getEWASInferrer() {
