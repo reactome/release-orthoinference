@@ -351,9 +351,13 @@ public class InstanceUtilities {
 	// the attribute values (DB IDs if the attribute is an instance).
 	// This allows for identical instances held in memory to be used before trying to use fetchIdenticalInstances,
 	// which is expensive.
+	// The key starts with the schema class and names each attribute before its values. Without them, instances of
+	// different classes sharing a cache could collide -- e.g. a DefinedSet with members A and B, and a CandidateSet
+	// with candidate A and member B, would both have the key "A|B|null|", and one would be used for the other.
 	public String getCacheKey(SimpleInstance inferredInst) {
-		StringBuilder key = new StringBuilder();
+		StringBuilder key = new StringBuilder(inferredInst.getSchemaClassName()).append(CACHE_KEY_SEPARATOR);
 		for (String definingAttrName : getCuratorToolAPI().getDefiningAttributeNames(inferredInst.getSchemaClassName())) {
+			key.append(definingAttrName).append("=");
 			Object attributeValue = inferredInst.getAttribute(definingAttrName);
 			// A SimpleInstance holds a multi-valued attribute's values as a List and a single value as itself.
 			if (attributeValue instanceof List) {
