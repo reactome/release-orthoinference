@@ -172,9 +172,14 @@ public class InstanceUtilities {
 		}
 		List<SimpleInstance> identicalInstances = getCuratorToolAPI().fetchIdenticalInstances(inferredInst);
 		if (!identicalInstances.isEmpty()) {
-			// TODO: In future, could iterate through array of returned values and pull the 'most identical'.
-			// For now, this mimics Perl.
-			return identicalInstances.get(0);
+			// The match includes subclasses -- e.g. a search for a ReferenceGeneProduct also finds a ReferenceIsoform
+			// with the same identifier -- and comes back in no particular order, as MySQLAdaptor's did. An instance of
+			// exactly the inferred instance's class is preferred, then the lowest dbId, so the choice is deterministic.
+			return identicalInstances.stream()
+				.min(Comparator.comparing((SimpleInstance identical) ->
+						!identical.getSchemaClassName().equals(inferredInst.getSchemaClassName()))
+					.thenComparing(SimpleInstance::getDbId, Comparator.nullsLast(Comparator.naturalOrder())))
+				.get();
 		}
 		if (isPhysicalEntity(inferredInst)) {
 			SimpleInstance orthoStableIdentifierInst = stableIdentifierGenerator
