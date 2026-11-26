@@ -92,8 +92,10 @@ public class EventsInferrer {
 		}
 
 		// The search returns shell instances -- dbId, displayName and schemaClass only -- so each is inflated to have
-		// the attributes the inference reads.
-		Map<Long, SimpleInstance> reactionMap = new LinkedHashMap<>();
+		// the attributes the inference reads. As in the GKInstance version, the reactions are inferred in ascending dbId
+		// order: when two human instances infer to the same entity, the first one inferred names it and gives it its
+		// stable identifier, so the search result's order would change the inferred names.
+		Map<Long, SimpleInstance> reactionMap = new TreeMap<>();
 		for (SimpleInstance reactionShell : reactionInstances) {
 			SimpleInstance reactionInst = getCuratorToolAPI().inflate(reactionShell);
 			if (reactionInst == null) {
