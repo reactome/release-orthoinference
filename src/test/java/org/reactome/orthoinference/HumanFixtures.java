@@ -11,6 +11,8 @@ import java.util.List;
 /**
  * Builds human (source) instances and stores them in an {@link InMemoryCuratorToolAPI}, shaped as curator-tool-ws
  * returns them: multi-valued attributes as Lists, and every PhysicalEntity and Event with a R-HSA StableIdentifier.
+ * The existing* methods instead build target-species instances already in the database, as a previous release
+ * would have left them.
  */
 class HumanFixtures {
 
@@ -64,6 +66,27 @@ class HumanFixtures {
 		return storeWithStableId(ewas);
 	}
 
+	SimpleInstance ewasWithCoordinates(String name, String uniProtId, int startCoordinate, int endCoordinate) {
+		SimpleInstance ewas = ewas(name, uniProtId);
+		ewas.setAttribute(ReactomeJavaConstants.startCoordinate, startCoordinate);
+		ewas.setAttribute(ReactomeJavaConstants.endCoordinate, endCoordinate);
+		return store(ewas);
+	}
+
+	// A cross-link to a second protein, with no coordinate, as e.g. a ubiquitin conjugation is often curated.
+	SimpleInstance interChainCrosslink(SimpleInstance modification, SimpleInstance secondReferenceSequence) {
+		SimpleInstance psiMod = instance("PsiMod", "N6-glycyl-L-lysine");
+		psiMod.setAttribute(ReactomeJavaConstants.name, list("N6-glycyl-L-lysine"));
+		psiMod.setAttribute(ReactomeJavaConstants.identifier, "00134");
+		store(psiMod);
+
+		SimpleInstance residue = instance(ReactomeJavaConstants.InterChainCrosslinkedResidue, "crosslink");
+		residue.setAttribute(ReactomeJavaConstants.psiMod, psiMod);
+		residue.setAttribute(ReactomeJavaConstants.modification, modification);
+		residue.setAttribute(ReactomeJavaConstants.secondReferenceSequence, list(secondReferenceSequence));
+		return store(residue);
+	}
+
 	SimpleInstance phosphoSerine(int coordinate) {
 		SimpleInstance psiMod = instance("PsiMod", "O-phospho-L-serine");
 		psiMod.setAttribute(ReactomeJavaConstants.name, list("O-phospho-L-serine"));
@@ -86,6 +109,28 @@ class HumanFixtures {
 		complex.setAttribute(ReactomeJavaConstants.species, list(humanSpecies));
 		complex.setAttribute(ReactomeJavaConstants.hasComponent, list(components));
 		return storeWithStableId(complex);
+	}
+
+	SimpleInstance polymer(String name, SimpleInstance... repeatedUnits) {
+		SimpleInstance polymer = physicalEntity(ReactomeJavaConstants.Polymer, name);
+		polymer.setAttribute(ReactomeJavaConstants.species, list(humanSpecies));
+		polymer.setAttribute(ReactomeJavaConstants.repeatedUnit, list(repeatedUnits));
+		return storeWithStableId(polymer);
+	}
+
+	// A protein with no reference sequence, so it cannot be mapped to a homologue.
+	SimpleInstance genomeEncodedEntity(String name) {
+		SimpleInstance gee = physicalEntity(ReactomeJavaConstants.GenomeEncodedEntity, name);
+		gee.setAttribute(ReactomeJavaConstants.species, list(humanSpecies));
+		return storeWithStableId(gee);
+	}
+
+	SimpleInstance chemicalDrug(String name) {
+		return storeWithStableId(physicalEntity(ReactomeJavaConstants.ChemicalDrug, name));
+	}
+
+	SimpleInstance otherEntity(String name) {
+		return storeWithStableId(physicalEntity(ReactomeJavaConstants.OtherEntity, name));
 	}
 
 	SimpleInstance definedSet(String name, SimpleInstance... members) {
@@ -123,6 +168,31 @@ class HumanFixtures {
 			regulationClass + " by " + regulator.getDisplayName());
 		regulation.setAttribute(ReactomeJavaConstants.regulator, regulator);
 		return store(regulation);
+	}
+
+	// ---- Target-species instances already in the database, e.g. from a previous release ------------------------
+
+	SimpleInstance existingReferenceGeneProduct(String schemaClass, String uniProtId, SimpleInstance species) {
+		SimpleInstance rgp = instance(schemaClass, "UniProt:" + uniProtId);
+		rgp.setAttribute(ReactomeJavaConstants.identifier, uniProtId);
+		rgp.setAttribute(ReactomeJavaConstants.referenceDatabase, uniProt);
+		rgp.setAttribute(ReactomeJavaConstants.species, list(species));
+		return store(rgp);
+	}
+
+	SimpleInstance existingEwas(SimpleInstance referenceGeneProduct, SimpleInstance species, String stableId) {
+		String name = (String) referenceGeneProduct.getAttribute(ReactomeJavaConstants.identifier);
+		SimpleInstance ewas = physicalEntity(ReactomeJavaConstants.EntityWithAccessionedSequence, name);
+		ewas.setAttribute(ReactomeJavaConstants.species, list(species));
+		ewas.setAttribute(ReactomeJavaConstants.referenceEntity, referenceGeneProduct);
+		return storeWithStableId(ewas, stableId);
+	}
+
+	SimpleInstance existingComplex(String name, SimpleInstance species, String stableId, SimpleInstance... components) {
+		SimpleInstance complex = physicalEntity(ReactomeJavaConstants.Complex, name);
+		complex.setAttribute(ReactomeJavaConstants.species, list(species));
+		complex.setAttribute(ReactomeJavaConstants.hasComponent, list(components));
+		return storeWithStableId(complex, stableId);
 	}
 
 	// ---- Events -------------------------------------------------------------------------------------------------
@@ -213,7 +283,10 @@ class HumanFixtures {
 	}
 
 	private SimpleInstance storeWithStableId(SimpleInstance instance) {
-		String identifier = "R-HSA-" + instance.getDbId();
+		return storeWithStableId(instance, "R-HSA-" + instance.getDbId());
+	}
+
+	private SimpleInstance storeWithStableId(SimpleInstance instance, String identifier) {
 		SimpleInstance stableIdentifier = instance(ReactomeJavaConstants.StableIdentifier, identifier + ".1");
 		stableIdentifier.setAttribute(ReactomeJavaConstants.identifier, identifier);
 		stableIdentifier.setAttribute(ReactomeJavaConstants.identifierVersion, "1");

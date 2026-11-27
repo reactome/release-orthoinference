@@ -30,8 +30,11 @@ import static org.hamcrest.Matchers.*;
  * <pre>
  *   P00001..P00005 -> Q00001..Q00005   (one homologue each; Q00001 and Q00002 have gene names)
  *   P00010         -> Q00010, Q00011   (two homologues)
+ *   P00020         -> Q00020, Q00021   (Q00021 has no Ensembl gene in the gene-protein mapping)
+ *   P00022         -> Q00022           (which has no Ensembl gene)
  *   P00098, P00099 -> none
  * </pre>
+ * Each target protein Qnnnnn is encoded by the Ensembl gene ENSTSTGnnnnn.
  */
 class ReactionInferenceScenarioTest {
 
@@ -52,11 +55,20 @@ class ReactionInferenceScenarioTest {
 
 	@BeforeEach
 	void setUp() throws Exception {
+		wire(null);
+	}
+
+	/**
+	 * Builds the inference classes afresh against a new, empty in-memory database.
+	 *
+	 * @param alternateReferenceDatabaseJson - the species' "alt_refdb" entry in Species.json, or null for none.
+	 */
+	private void wire(String alternateReferenceDatabaseJson) throws Exception {
 		// The inference classes cache what they infer in static fields, which would carry over between tests.
 		clearStaticState(ReactionInferrer.class, OrthologousEntityGenerator.class, EWASInferrer.class,
 			StableIdentifierGenerator.class);
 
-		ConfigProperties config = new ConfigProperties(writeConfigFixtures());
+		ConfigProperties config = new ConfigProperties(writeConfigFixtures(alternateReferenceDatabaseJson));
 		api = new InMemoryCuratorToolAPI(config);
 		fx = new HumanFixtures(api);
 
@@ -506,7 +518,429 @@ class ReactionInferenceScenarioTest {
 		}
 	}
 
+	@Nested
+	@DisplayName("Instances already in the database")
+	class ExistingInstances {
+
+		@Test
+		void previouslyInferredEwasIsReusedRatherThanCreated() throws Exception {
+			SimpleInstance existingRgp =
+				fx.existingReferenceGeneProduct(ReactomeJavaConstants.ReferenceGeneProduct, "Q00001", targetSpecies);
+			SimpleInstance existingEwas = fx.existingEwas(existingRgp, targetSpecies, "R-TST-1");
+			SimpleInstance prot1 = fx.ewas("PROT1", "P00001");
+			SimpleInstance reaction = fx.reaction("PROT1 => PROT2").input(prot1).output(fx.ewas("PROT2", "P00002")).build();
+
+			SimpleInstance inferredInput = single(infer(reaction), ReactomeJavaConstants.input);
+
+			assertThat(inferredInput.getDbId(), is(existingEwas.getDbId()));
+			assertThat(stableIdentifier(inferredInput), is("R-TST-1"));
+			// Now also inferred from this release's human EWAS.
+			assertThat(dbIds(values(inferredInput, ReactomeJavaConstants.inferredFrom)), hasItem(prot1.getDbId()));
+			assertThat(newInstancesFor(ReactomeJavaConstants.EntityWithAccessionedSequence, "Q00001"), is(0L));
+			assertThat(newInstancesFor(ReactomeJavaConstants.ReferenceGeneProduct, "Q00001"), is(0L));
+		}
+
+		@Test
+		void previouslyInferredComplexIsReusedWhenItsComponentsAre() throws Exception {
+			SimpleInstance existingEwas1 = fx.existingEwas(
+				fx.existingReferenceGeneProduct(ReactomeJavaConstants.ReferenceGeneProduct, "Q00001", targetSpecies),
+				targetSpecies, "R-TST-1");
+			SimpleInstance existingEwas2 = fx.existingEwas(
+				fx.existingReferenceGeneProduct(ReactomeJavaConstants.ReferenceGeneProduct, "Q00002", targetSpecies),
+				targetSpecies, "R-TST-2");
+			SimpleInstance existingComplex =
+				fx.existingComplex("PROT1:PROT2", targetSpecies, "R-TST-3", existingEwas1, existingEwas2);
+			SimpleInstance complex = fx.complex("PROT1:PROT2", fx.ewas("PROT1", "P00001"), fx.ewas("PROT2", "P00002"));
+			SimpleInstance reaction = fx.reaction("complex binds ATP")
+				.input(complex, fx.simpleEntity("ATP")).output(fx.simpleEntity("ADP")).build();
+
+			SimpleInstance inferredComplex = inputOfClass(infer(reaction), ReactomeJavaConstants.Complex);
+
+			assertThat(inferredComplex.getDbId(), is(existingComplex.getDbId()));
+			assertThat(api.committedInstancesOfClass(ReactomeJavaConstants.Complex), is(empty()));
+		}
+
+		@Test
+		void storedInstanceOfExactlyTheInferredClassIsPreferredOverASubclass() throws Exception {
+			// The isoform has the lower dbId, so only the class preference picks the ReferenceGeneProduct.
+			fx.existingReferenceGeneProduct(ReactomeJavaConstants.ReferenceIsoform, "Q00001", targetSpecies);
+			SimpleInstance existingRgp =
+				fx.existingReferenceGeneProduct(ReactomeJavaConstants.ReferenceGeneProduct, "Q00001", targetSpecies);
+			SimpleInstance reaction = fx.reaction("PROT1 => PROT2")
+				.input(fx.ewas("PROT1", "P00001")).output(fx.ewas("PROT2", "P00002")).build();
+
+			SimpleInstance inferredInput = single(infer(reaction), ReactomeJavaConstants.input);
+
+			assertThat(single(inferredInput, ReactomeJavaConstants.referenceEntity).getDbId(), is(existingRgp.getDbId()));
+		}
+
+		@Test
+		void lowestDbIdIsPreferredAmongEquallyGoodMatches() throws Exception {
+			SimpleInstance firstRgp =
+				fx.existingReferenceGeneProduct(ReactomeJavaConstants.ReferenceGeneProduct, "Q00001", targetSpecies);
+			fx.existingReferenceGeneProduct(ReactomeJavaConstants.ReferenceGeneProduct, "Q00001", targetSpecies);
+			SimpleInstance reaction = fx.reaction("PROT1 => PROT2")
+				.input(fx.ewas("PROT1", "P00001")).output(fx.ewas("PROT2", "P00002")).build();
+
+			SimpleInstance inferredInput = single(infer(reaction), ReactomeJavaConstants.input);
+
+			assertThat(single(inferredInput, ReactomeJavaConstants.referenceEntity).getDbId(), is(firstRgp.getDbId()));
+		}
+	}
+
+	@Nested
+	@DisplayName("Protein counts of nested sets and complexes")
+	class NestedProteinCounts {
+
+		@Test
+		void candidateSetOfOnlyCandidatesIsInferredWithItsMappedCandidates() throws Exception {
+			SimpleInstance prot1 = fx.ewas("PROT1", "P00001");
+			SimpleInstance prot99 = fx.ewas("PROT99", "P00099");
+			SimpleInstance set = fx.candidateSet("PROT1 or PROT99", HumanFixtures.none(), Arrays.asList(prot1, prot99));
+			SimpleInstance reaction = fx.reaction("set => PROT3").input(set).output(fx.ewas("PROT3", "P00003")).build();
+
+			SimpleInstance inferredSet = single(infer(reaction), ReactomeJavaConstants.input);
+
+			assertThat(inferredSet.getSchemaClassName(), is(ReactomeJavaConstants.CandidateSet));
+			assertThat(referenceIdentifier(single(inferredSet, ReactomeJavaConstants.hasCandidate)), is("Q00001"));
+			assertThat(values(inferredSet, ReactomeJavaConstants.hasMember), is(empty()));
+		}
+
+		@Test
+		void candidateSetOfOnlyUnmappedCandidatesStopsInference() throws Exception {
+			SimpleInstance set = fx.candidateSet("PROT98 or PROT99", HumanFixtures.none(),
+				Arrays.asList(fx.ewas("PROT98", "P00098"), fx.ewas("PROT99", "P00099")));
+			SimpleInstance reaction = fx.reaction("set => PROT3").input(set).output(fx.ewas("PROT3", "P00003")).build();
+
+			assertNotInferred(reaction, true);
+		}
+
+		/**
+		 * Pins existing behaviour rather than endorsing it. ProteinCountUtility.getCandidateProteinCounts emulates the
+		 * Perl version: candidates are counted in dbId order, and if the first one counted has no homologue the whole
+		 * CandidateSet counts as having no inferrable protein -- even though a later candidate is mapped. The same set
+		 * with its candidates' dbIds the other way round is inferred (see
+		 * candidateSetOfOnlyCandidatesIsInferredWithItsMappedCandidates). If this ordering quirk is fixed, this test
+		 * should change with it.
+		 */
+		@Test
+		void candidateSetIsRejectedWhenItsLowestDbIdCandidateIsUnmapped() throws Exception {
+			SimpleInstance prot99 = fx.ewas("PROT99", "P00099"); // created first, so its reference has the lower dbId
+			SimpleInstance prot1 = fx.ewas("PROT1", "P00001");
+			SimpleInstance set = fx.candidateSet("PROT1 or PROT99", HumanFixtures.none(), Arrays.asList(prot1, prot99));
+			SimpleInstance reaction = fx.reaction("set => PROT3").input(set).output(fx.ewas("PROT3", "P00003")).build();
+
+			assertNotInferred(reaction, true);
+		}
+
+		@Test
+		void definedSetOfComplexesKeepsTheComplexesThatPassTheThreshold() throws Exception {
+			SimpleInstance complex12 = fx.complex("PROT1:PROT2", fx.ewas("PROT1", "P00001"), fx.ewas("PROT2", "P00002"));
+			SimpleInstance complex34 = fx.complex("PROT3:PROT4", fx.ewas("PROT3", "P00003"), fx.ewas("PROT4", "P00004"));
+			SimpleInstance complex9899 =
+				fx.complex("PROT98:PROT99", fx.ewas("PROT98", "P00098"), fx.ewas("PROT99", "P00099"));
+			SimpleInstance set = fx.definedSet("dimers", complex12, complex34, complex9899);
+			SimpleInstance reaction = fx.reaction("dimers => PROT5").input(set).output(fx.ewas("PROT5", "P00005")).build();
+
+			SimpleInstance inferredSet = single(infer(reaction), ReactomeJavaConstants.input);
+
+			assertThat(inferredSet.getSchemaClassName(), is(ReactomeJavaConstants.DefinedSet));
+			List<SimpleInstance> members = inflated(inferredSet, ReactomeJavaConstants.hasMember);
+			assertThat(members.stream().map(SimpleInstance::getSchemaClassName).collect(Collectors.toList()),
+				contains(ReactomeJavaConstants.Complex, ReactomeJavaConstants.Complex));
+			assertThat(members.stream().map(member -> dbIds(values(member, ReactomeJavaConstants.inferredFrom)))
+					.collect(Collectors.toList()),
+				contains(contains(complex12.getDbId()), contains(complex34.getDbId())));
+		}
+
+		// Counted protein by protein, PROT1, PROT2 and PROT99 would be 2 of 3 (66%) and fail the 75% threshold; the
+		// set counts as one protein, which is inferrable, so the complex is 2 of 2.
+		@Test
+		void setInsideAComplexCountsAsOneProteinTowardTheThreshold() throws Exception {
+			SimpleInstance set = fx.definedSet("PROT2 or PROT99", fx.ewas("PROT2", "P00002"), fx.ewas("PROT99", "P00099"));
+			SimpleInstance complex = fx.complex("PROT1:set", fx.ewas("PROT1", "P00001"), set);
+			SimpleInstance reaction = fx.reaction("complex binds ATP")
+				.input(complex, fx.simpleEntity("ATP")).output(fx.simpleEntity("ADP")).build();
+
+			SimpleInstance inferredComplex = inputOfClass(infer(reaction), ReactomeJavaConstants.Complex);
+
+			// The set inferred only PROT2's homologue, so that homologue stands in for it.
+			assertThat(inflated(inferredComplex, ReactomeJavaConstants.hasComponent).stream()
+				.map(ReactionInferenceScenarioTest.this::referenceIdentifier).collect(Collectors.toList()),
+				contains("Q00001", "Q00002"));
+		}
+	}
+
+	@Nested
+	@DisplayName("Other kinds of physical entity")
+	class OtherEntityKinds {
+
+		@Test
+		void polymerIsInferredWithItsRepeatedUnit() throws Exception {
+			SimpleInstance polymer = fx.polymer("PROT1 polymer", fx.ewas("PROT1", "P00001"));
+			SimpleInstance reaction = fx.reaction("polymer => PROT2").input(polymer).output(fx.ewas("PROT2", "P00002")).build();
+
+			SimpleInstance inferredPolymer = single(infer(reaction), ReactomeJavaConstants.input);
+
+			assertThat(inferredPolymer.getSchemaClassName(), is(ReactomeJavaConstants.Polymer));
+			assertThat(inferredPolymer.getDisplayName(), is(polymer.getDisplayName()));
+			assertThat(dbIds(values(inferredPolymer, ReactomeJavaConstants.inferredFrom)), contains(polymer.getDbId()));
+			assertThat(referenceIdentifier(single(inferredPolymer, ReactomeJavaConstants.repeatedUnit)), is("Q00001"));
+			assertThat((String) single(inferredPolymer, ReactomeJavaConstants.summation).getAttribute(ReactomeJavaConstants.text),
+				startsWith("This complex/polymer has been computationally inferred"));
+		}
+
+		@Test
+		void drugAndOtherEntityAreUsedAsTheyAre() throws Exception {
+			SimpleInstance drug = fx.chemicalDrug("aspirin");
+			SimpleInstance photon = fx.otherEntity("photon");
+			SimpleInstance reaction = fx.reaction("PROT1 => PROT2")
+				.input(drug, photon, fx.ewas("PROT1", "P00001")).output(fx.ewas("PROT2", "P00002")).build();
+
+			SimpleInstance inferred = infer(reaction);
+
+			assertThat(dbIds(values(inferred, ReactomeJavaConstants.input)), hasItems(drug.getDbId(), photon.getDbId()));
+		}
+
+		@Test
+		void genomeEncodedEntityOnItsOwnStopsInference() throws Exception {
+			SimpleInstance reaction = fx.reaction("PROTX => PROT2")
+				.input(fx.genomeEncodedEntity("PROTX")).output(fx.ewas("PROT2", "P00002")).build();
+
+			assertNotInferred(reaction, true);
+		}
+
+		@Test
+		void genomeEncodedEntityInAComplexBecomesAGhost() throws Exception {
+			SimpleInstance protX = fx.genomeEncodedEntity("PROTX");
+			SimpleInstance complex = fx.complex("PROT1:PROT2:PROT3:PROTX",
+				fx.ewas("PROT1", "P00001"), fx.ewas("PROT2", "P00002"), fx.ewas("PROT3", "P00003"), protX);
+			SimpleInstance reaction = fx.reaction("complex binds ATP")
+				.input(complex, fx.simpleEntity("ATP")).output(fx.simpleEntity("ADP")).build();
+
+			List<SimpleInstance> components =
+				inflated(inputOfClass(infer(reaction), ReactomeJavaConstants.Complex), ReactomeJavaConstants.hasComponent);
+
+			assertGhostOf(components.get(3), protX);
+		}
+
+		/**
+		 * Pins existing behaviour: a set is inferred only if it has a species of its own, so a set without one is used
+		 * as it is -- the human set, in the inferred reaction -- even though its members could be inferred.
+		 */
+		@Test
+		void setWithoutItsOwnSpeciesIsUsedAsItIs() throws Exception {
+			SimpleInstance set = fx.definedSet("PROT1 or PROT2", fx.ewas("PROT1", "P00001"), fx.ewas("PROT2", "P00002"));
+			set.setAttribute(ReactomeJavaConstants.species, null);
+			api.add(set);
+			SimpleInstance reaction = fx.reaction("set => PROT3").input(set).output(fx.ewas("PROT3", "P00003")).build();
+
+			assertThat(single(infer(reaction), ReactomeJavaConstants.input).getDbId(), is(set.getDbId()));
+		}
+
+		@Test
+		void complexOfSmallMoleculesIsUsedAsItIs() throws Exception {
+			SimpleInstance atpMg = fx.complex("ATP:Mg2+", fx.simpleEntity("ATP"), fx.simpleEntity("Mg2+"));
+			SimpleInstance reaction = fx.reaction("PROT1 binds ATP:Mg2+")
+				.input(atpMg, fx.ewas("PROT1", "P00001")).output(fx.ewas("PROT2", "P00002")).build();
+
+			assertThat(dbIds(values(infer(reaction), ReactomeJavaConstants.input)), hasItem(atpMg.getDbId()));
+		}
+	}
+
+	@Nested
+	@DisplayName("Ghosts and override caches inside complexes")
+	class InsideComplexes {
+
+		@Test
+		void candidateSetInferringNothingInsideAComplexBecomesAGhost() throws Exception {
+			SimpleInstance set = fx.candidateSet("PROT99 candidates", HumanFixtures.none(),
+				Collections.singletonList(fx.ewas("PROT99", "P00099")));
+			SimpleInstance complex = fx.complex("PROT1:PROT2:PROT3:set",
+				fx.ewas("PROT1", "P00001"), fx.ewas("PROT2", "P00002"), fx.ewas("PROT3", "P00003"), set);
+			SimpleInstance reaction = fx.reaction("complex binds ATP")
+				.input(complex, fx.simpleEntity("ATP")).output(fx.simpleEntity("ADP")).build();
+
+			List<SimpleInstance> components =
+				inflated(inputOfClass(infer(reaction), ReactomeJavaConstants.Complex), ReactomeJavaConstants.hasComponent);
+
+			assertGhostOf(components.get(3), set);
+		}
+
+		@Test
+		void definedSetInferringNothingInsideAComplexBecomesAGhost() throws Exception {
+			SimpleInstance set = fx.definedSet("PROT99 set", fx.ewas("PROT99", "P00099"));
+			SimpleInstance complex = fx.complex("PROT1:PROT2:PROT3:set",
+				fx.ewas("PROT1", "P00001"), fx.ewas("PROT2", "P00002"), fx.ewas("PROT3", "P00003"), set);
+			SimpleInstance reaction = fx.reaction("complex binds ATP")
+				.input(complex, fx.simpleEntity("ATP")).output(fx.simpleEntity("ADP")).build();
+
+			List<SimpleInstance> components =
+				inflated(inputOfClass(infer(reaction), ReactomeJavaConstants.Complex), ReactomeJavaConstants.hasComponent);
+
+			assertGhostOf(components.get(3), set);
+		}
+
+		@Test
+		void complexListedTwiceInAComplexIsInferredOnce() throws Exception {
+			SimpleInstance dimer = fx.complex("PROT1:PROT2", fx.ewas("PROT1", "P00001"), fx.ewas("PROT2", "P00002"));
+			SimpleInstance tetramer = fx.complex("(PROT1:PROT2)2", dimer, dimer);
+			SimpleInstance reaction = fx.reaction("tetramer binds ATP")
+				.input(tetramer, fx.simpleEntity("ATP")).output(fx.simpleEntity("ADP")).build();
+
+			List<SimpleInstance> components = values(inputOfClass(infer(reaction), ReactomeJavaConstants.Complex),
+				ReactomeJavaConstants.hasComponent);
+
+			assertThat(components, hasSize(2));
+			assertThat(components.get(1).getDbId(), is(components.get(0).getDbId()));
+			assertThat(api.committedInstancesOfClass(ReactomeJavaConstants.Complex), hasSize(2));
+		}
+
+		@Test
+		void setListedTwiceInAComplexBecomesTheSameGhost() throws Exception {
+			SimpleInstance set = fx.definedSet("PROT99 set", fx.ewas("PROT99", "P00099"));
+			SimpleInstance complex = fx.complex("set:set:PROT1:PROT2:PROT3",
+				set, set, fx.ewas("PROT1", "P00001"), fx.ewas("PROT2", "P00002"), fx.ewas("PROT3", "P00003"));
+			SimpleInstance reaction = fx.reaction("complex binds ATP")
+				.input(complex, fx.simpleEntity("ATP")).output(fx.simpleEntity("ADP")).build();
+
+			List<SimpleInstance> components =
+				inflated(inputOfClass(infer(reaction), ReactomeJavaConstants.Complex), ReactomeJavaConstants.hasComponent);
+
+			assertGhostOf(components.get(0), set);
+			assertThat(components.get(1).getDbId(), is(components.get(0).getDbId()));
+		}
+
+		// Inside a complex, a component is inferred regardless of the threshold (with a ghost for what has no
+		// homologue). That result is cached apart, so the same complex met on its own is still held to the threshold.
+		@Test
+		void complexInferredInsideALargerComplexIsStillRejectedOnItsOwn() throws Exception {
+			SimpleInstance prot99 = fx.ewas("PROT99", "P00099");
+			SimpleInstance halfMapped = fx.complex("PROT1:PROT99", fx.ewas("PROT1", "P00001"), prot99);
+			SimpleInstance large = fx.complex("large", halfMapped,
+				fx.ewas("PROT2", "P00002"), fx.ewas("PROT3", "P00003"), fx.ewas("PROT4", "P00004"));
+			SimpleInstance largeReaction = fx.reaction("large complex binds ATP")
+				.input(large, fx.simpleEntity("ATP")).output(fx.simpleEntity("ADP")).build();
+			SimpleInstance halfMappedReaction = fx.reaction("PROT1:PROT99 binds ATP")
+				.input(halfMapped, fx.simpleEntity("ATP")).output(fx.simpleEntity("ADP")).build();
+
+			SimpleInstance inferredLarge = inputOfClass(infer(largeReaction), ReactomeJavaConstants.Complex);
+			SimpleInstance inferredHalfMapped = inflated(inferredLarge, ReactomeJavaConstants.hasComponent).get(0);
+			List<SimpleInstance> halfMappedComponents = inflated(inferredHalfMapped, ReactomeJavaConstants.hasComponent);
+			assertThat(referenceIdentifier(halfMappedComponents.get(0)), is("Q00001"));
+			assertGhostOf(halfMappedComponents.get(1), prot99);
+
+			assertThat(infer(halfMappedReaction), is(nullValue()));
+			assertThat(reactionInferrer.getEligibleCount(), is(2));
+			assertThat(reactionInferrer.getInferredCount(), is(1));
+		}
+	}
+
+	@Nested
+	@DisplayName("EWAS details")
+	class EwasDetails {
+
+		@Test
+		void homologueWithoutEnsemblGeneIsLeftOut() throws Exception {
+			// P00020 has two homologues, but only Q00020 has an Ensembl gene, so no DefinedSet is made.
+			SimpleInstance reaction = fx.reaction("PROT20 => PROT1")
+				.input(fx.ewas("PROT20", "P00020")).output(fx.ewas("PROT1", "P00001")).build();
+
+			SimpleInstance inferredInput = single(infer(reaction), ReactomeJavaConstants.input);
+
+			assertThat(inferredInput.getSchemaClassName(), is(ReactomeJavaConstants.EntityWithAccessionedSequence));
+			assertThat(referenceIdentifier(inferredInput), is("Q00020"));
+		}
+
+		@Test
+		void ewasWhoseOnlyHomologueHasNoEnsemblGeneStopsInference() throws Exception {
+			SimpleInstance reaction = fx.reaction("PROT22 => PROT1")
+				.input(fx.ewas("PROT22", "P00022")).output(fx.ewas("PROT1", "P00001")).build();
+
+			assertNotInferred(reaction, true);
+		}
+
+		@Test
+		void coordinatesAreCopiedAndAddTheSourceNameToTheNames() throws Exception {
+			SimpleInstance reaction = fx.reaction("PROT1 fragment => PROT2")
+				.input(fx.ewasWithCoordinates("PROT1", "P00001", 10, 200)).output(fx.ewas("PROT2", "P00002")).build();
+
+			SimpleInstance inferredInput = single(infer(reaction), ReactomeJavaConstants.input);
+
+			assertThat(inferredInput.getAttribute(ReactomeJavaConstants.startCoordinate), is(10));
+			assertThat(inferredInput.getAttribute(ReactomeJavaConstants.endCoordinate), is(200));
+			assertThat(inferredInput.getAttribute(ReactomeJavaConstants.name), is(Arrays.asList("Tst1", "PROT1", "Q00001")));
+		}
+
+		@Test
+		void interChainCrosslinkIsInferredOntoTheHomologue() throws Exception {
+			SimpleInstance ubiquitin = fx.simpleEntity("ubiquitin");
+			SimpleInstance ubiquitinReference = fx.referenceGeneProduct("P0CG48");
+			SimpleInstance crosslink = fx.interChainCrosslink(ubiquitin, ubiquitinReference);
+			SimpleInstance reaction = fx.reaction("Ub-PROT1 => PROT2")
+				.input(fx.ewas("Ub-PROT1", "P00001", crosslink)).output(fx.ewas("PROT2", "P00002")).build();
+
+			SimpleInstance inferredInput = single(infer(reaction), ReactomeJavaConstants.input);
+			SimpleInstance inferredCrosslink = single(inferredInput, ReactomeJavaConstants.hasModifiedResidue);
+
+			assertThat(inferredCrosslink.getSchemaClassName(), is(ReactomeJavaConstants.InterChainCrosslinkedResidue));
+			assertThat(single(inferredCrosslink, ReactomeJavaConstants.referenceSequence).getDbId(),
+				is(single(inferredInput, ReactomeJavaConstants.referenceEntity).getDbId()));
+			assertThat(single(inferredCrosslink, ReactomeJavaConstants.modification).getDbId(), is(ubiquitin.getDbId()));
+			assertThat(single(inferredCrosslink, ReactomeJavaConstants.psiMod).getDbId(),
+				is(single(crosslink, ReactomeJavaConstants.psiMod).getDbId()));
+			assertThat(dbIds(values(inferredCrosslink, ReactomeJavaConstants.secondReferenceSequence)),
+				contains(ubiquitinReference.getDbId()));
+			// With no coordinate, it is named after what it links.
+			assertThat(inferredCrosslink.getDisplayName(), is("UniProt:Q00001 ubiquitin [cytosol] N6-glycyl-L-lysine"));
+		}
+
+		@Test
+		void alternateReferenceDatabaseAddsASecondGeneReference() throws Exception {
+			wire("{\"dbname\": [\"TestBase\"], \"url\": \"https://testbase.example\", " +
+				"\"access\": \"https://testbase.example/###ID###\", \"alt_id\": \"ENSTSTG\"}");
+			SimpleInstance reaction = fx.reaction("PROT1 => PROT2")
+				.input(fx.ewas("PROT1", "P00001")).output(fx.ewas("PROT2", "P00002")).build();
+
+			SimpleInstance inferredInput = single(infer(reaction), ReactomeJavaConstants.input);
+			List<SimpleInstance> genes =
+				inflated(single(inferredInput, ReactomeJavaConstants.referenceEntity), ReactomeJavaConstants.referenceGene);
+
+			assertThat(genes.stream().map(gene -> gene.getAttribute(ReactomeJavaConstants.identifier))
+				.collect(Collectors.toList()), contains("ENSTSTG00001", "00001"));
+			SimpleInstance alternateGene = genes.get(1);
+			assertThat(alternateGene.getDisplayName(), is("TestBase:ENSTSTG00001"));
+			assertThat(single(alternateGene, ReactomeJavaConstants.referenceDatabase).getDisplayName(), is("TestBase"));
+			assertThat(dbIds(values(alternateGene, ReactomeJavaConstants.species)), contains(targetSpecies.getDbId()));
+		}
+	}
+
 	// ---- Helpers ------------------------------------------------------------------------------------------------
+
+	private SimpleInstance inputOfClass(SimpleInstance inferredReaction, String schemaClass) {
+		return inflated(inferredReaction, ReactomeJavaConstants.input).stream()
+			.filter(input -> input.getSchemaClassName().equals(schemaClass))
+			.findFirst()
+			.orElseThrow(() -> new AssertionError("No " + schemaClass + " input in " + inferredReaction));
+	}
+
+	private void assertGhostOf(SimpleInstance ghost, SimpleInstance humanEntity) {
+		assertThat(ghost.getSchemaClassName(), is(ReactomeJavaConstants.GenomeEncodedEntity));
+		assertThat(ghost.getDisplayName(), is("Ghost homologue of " + humanEntity.getDisplayName()));
+		assertThat(dbIds(values(ghost, ReactomeJavaConstants.species)), contains(targetSpecies.getDbId()));
+		assertThat(dbIds(values(ghost, ReactomeJavaConstants.inferredFrom)), hasItem(humanEntity.getDbId()));
+	}
+
+	// The number of instances of the class this run created whose reference sequence (or own identifier) is the one
+	// given.
+	private long newInstancesFor(String schemaClass, String identifier) {
+		return api.committedInstancesOfClass(schemaClass).stream()
+			.filter(instance -> identifier.equals(instance.getAttribute(ReactomeJavaConstants.identifier)) ||
+				(instance.getAttribute(ReactomeJavaConstants.referenceEntity) != null &&
+					identifier.equals(referenceIdentifier(instance))))
+			.count();
+	}
+
 
 	// Infers the reaction and returns the inferred reaction as stored, or null if none was inferred.
 	private SimpleInstance infer(SimpleInstance reaction) throws Exception {
@@ -576,22 +1010,28 @@ class ReactionInferenceScenarioTest {
 
 	// ---- Fixtures -----------------------------------------------------------------------------------------------
 
-	private ConfigProperties.OrthoinferenceProps writeConfigFixtures() throws Exception {
+	private ConfigProperties.OrthoinferenceProps writeConfigFixtures(String alternateReferenceDatabaseJson)
+		throws Exception {
 		Path speciesConfig = tempDir.resolve("Species.json");
 		Files.write(speciesConfig, Collections.singletonList(
 			"{\"" + TARGET_SPECIES_CODE + "\": {\"name\": [\"" + TARGET_SPECIES_NAME + "\"], " +
-				"\"abbreviation\": \"" + TARGET_ABBREVIATION + "\"}}"));
+				"\"abbreviation\": \"" + TARGET_ABBREVIATION + "\"" +
+				(alternateReferenceDatabaseJson != null ? ", \"alt_refdb\": " + alternateReferenceDatabaseJson : "") +
+				"}}"));
 
-		Path orthopairs = Files.createDirectory(tempDir.resolve("orthopairs"));
+		Path orthopairs = Files.createDirectories(tempDir.resolve("orthopairs"));
 		Files.write(orthopairs.resolve("hsap_" + TARGET_SPECIES_CODE + "_mapping.tsv"), Arrays.asList(
 			"P00001\tUniProt:Q00001",
 			"P00002\tUniProt:Q00002",
 			"P00003\tUniProt:Q00003",
 			"P00004\tUniProt:Q00004",
 			"P00005\tUniProt:Q00005",
-			"P00010\tUniProt:Q00010 UniProt:Q00011"));
+			"P00010\tUniProt:Q00010 UniProt:Q00011",
+			"P00020\tUniProt:Q00020 UniProt:Q00021",
+			"P00022\tUniProt:Q00022"));
+		// Q00021 and Q00022 are left out on purpose: a homologue without an Ensembl gene is not inferred.
 		Files.write(orthopairs.resolve(TARGET_SPECIES_CODE + "_gene_protein_mapping.tsv"),
-			Arrays.asList("00001", "00002", "00003", "00004", "00005", "00010", "00011").stream()
+			Arrays.asList("00001", "00002", "00003", "00004", "00005", "00010", "00011", "00020").stream()
 				.map(id -> "ENSTSTG" + id + "\tUniProt:Q" + id)
 				.collect(Collectors.toList()));
 		Files.write(orthopairs.resolve(TARGET_SPECIES_CODE + "_gene_name_mapping.tsv"),
