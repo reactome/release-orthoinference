@@ -274,13 +274,19 @@ public class ReactionInferrer {
 		Collection<SimpleInstance> catalystInstances = getUtils().getInflatedInstances(reactionInst, ReactomeJavaConstants.catalystActivity);
 		logCatalystInfo(catalystInstances);
 
+		// catalystActivity is multi-valued, so every inferred catalyst is collected and set together; setting each in
+		// turn would leave only the last.
+		List<SimpleInstance> infCatalystInstances = new ArrayList<>();
 		for (SimpleInstance catalystInst : catalystInstances) {
 			logger.info("Attempting catalyst inference: " + catalystInst);
 			SimpleInstance infCatalystInst = getOrCreateInferredCatalyst(catalystInst);
 			if (infCatalystInst == null) {
 				return false;
 			}
-			infReactionInst.setAttribute(ReactomeJavaConstants.catalystActivity, infCatalystInst);
+			infCatalystInstances.add(infCatalystInst);
+		}
+		if (!infCatalystInstances.isEmpty()) {
+			infReactionInst.setAttribute(ReactomeJavaConstants.catalystActivity, infCatalystInstances);
 		}
 
 		logger.info("Completed catalyst(s) inference for " + reactionInst);
