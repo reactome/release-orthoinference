@@ -39,6 +39,10 @@ public class InstanceUtilities {
 
 	private SimpleInstance speciesInst;
 	private Map<String,SimpleInstance> mockedIdenticals = new HashMap<>();
+	// The TopLevelPathway dbIds above each event, by the event's dbId. Every reaction's check climbs the same human
+	// hasEvent hierarchy, one getReferrers call per level, and the run never changes that hierarchy -- it only adds
+	// inferred events to inferred pathways -- so each event's are looked up once.
+	private final Map<Long, Set<Long>> eventDbIdToTopLevelPathwayDbIds = new HashMap<>();
 
 	public InstanceUtilities(
 		ConfigProperties configProperties,
@@ -407,6 +411,16 @@ public class InstanceUtilities {
 	 * @throws Exception -- Thrown by MySQLAdaptor.
 	 */
 	private Set<Long> getTopLevelPathwayDbIds(SimpleInstance pathway) throws Exception {
+		Set<Long> cachedTopLevelPathwayDbIds = eventDbIdToTopLevelPathwayDbIds.get(pathway.getDbId());
+		if (cachedTopLevelPathwayDbIds != null) {
+			return cachedTopLevelPathwayDbIds;
+		}
+		Set<Long> topLevelPathwayDbIds = Collections.unmodifiableSet(findTopLevelPathwayDbIds(pathway));
+		eventDbIdToTopLevelPathwayDbIds.put(pathway.getDbId(), topLevelPathwayDbIds);
+		return topLevelPathwayDbIds;
+	}
+
+	private Set<Long> findTopLevelPathwayDbIds(SimpleInstance pathway) throws Exception {
 		List<SimpleInstance> parentPathways = safeList(getCuratorToolAPI().getReferrers(pathway, ReactomeJavaConstants.hasEvent));
 		if (parentPathways.isEmpty()) {
 			return new HashSet<>(Arrays.asList(pathway.getDbId()));
