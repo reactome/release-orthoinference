@@ -87,6 +87,9 @@ public class CuratorToolAPI {
         // Collected before the commit: it replaces the placeholder dbIds of new instances, and the cached copy of the
         // instance names what it referred to before.
         Set<Long> possiblyChangedDbIds = getDbIdsPossiblyChangedByCommit(simpleInstance);
+        // The new instances committed along with this one -- e.g. its new StableIdentifier -- by placeholder dbId.
+        Map<Long, List<SimpleInstance>> placeholderDbIdToNewReferredInstances =
+            getNewReferredInstancesByPlaceholderDbId(simpleInstance);
         SimpleInstance committedInstance;
         try {
             // Orthoinference names each inferred instance's StableIdentifier after its human source
@@ -119,7 +122,73 @@ public class CuratorToolAPI {
             committedDbIds.add(dbId);
             deletedDbIds.remove(dbId);
         }
+        copyAssignedDbIdsToNewReferredInstances(committedInstance, placeholderDbIdToNewReferredInstances);
         return committedInstance;
+    }
+
+    /**
+     * Gives a new instance a placeholder dbId, so that it is stored by the commit of an instance that refers to it
+     * rather than needing a commit of its own (see nextPlaceholderDbId). The commit copies the dbId the database
+     * assigns back onto the instance. An instance that already has a dbId is left as it is.
+     *
+     * @param instance - a new instance, not committed on its own, that a new or stored instance will refer to.
+     */
+    public void assignPlaceholderDbId(SimpleInstance instance) {
+        if (instance.getDbId() == null) {
+            instance.setDbId(nextPlaceholderDbId());
+        }
+    }
+
+    // The new instances (negative placeholder dbId) that the instance refers to, directly or through other new
+    // instances, by placeholder dbId. The instance itself is not included.
+    private Map<Long, List<SimpleInstance>> getNewReferredInstancesByPlaceholderDbId(SimpleInstance instance) {
+        Map<Long, List<SimpleInstance>> placeholderDbIdToInstances = new HashMap<>();
+        Set<SimpleInstance> visitedInstances = Collections.newSetFromMap(new IdentityHashMap<>());
+        visitedInstances.add(instance);
+        Deque<SimpleInstance> instancesToVisit = new ArrayDeque<>(Collections.singletonList(instance));
+        while (!instancesToVisit.isEmpty()) {
+            SimpleInstance visitedInstance = instancesToVisit.pop();
+            if (visitedInstance.getAttributes() == null) {
+                continue;
+            }
+            for (Object value : visitedInstance.getAttributes().values()) {
+                Collection<?> values = value instanceof Collection ? (Collection<?>) value : Collections.singletonList(value);
+                for (Object element : values) {
+                    if (!(element instanceof SimpleInstance)) {
+                        continue;
+                    }
+                    SimpleInstance referredInstance = (SimpleInstance) element;
+                    Long referredDbId = referredInstance.getDbId();
+                    if (referredDbId != null && referredDbId < 0 && visitedInstances.add(referredInstance)) {
+                        placeholderDbIdToInstances.computeIfAbsent(referredDbId, key -> new ArrayList<>()).add(referredInstance);
+                        instancesToVisit.push(referredInstance);
+                    }
+                }
+            }
+        }
+        return placeholderDbIdToInstances;
+    }
+
+    // The commit response maps each new referred instance's placeholder dbId to the dbId the database assigned it.
+    // It is copied onto the caller's instances, as for the committed instance itself, so that none of them is left
+    // with a placeholder that a later commit would store as yet another new instance.
+    private void copyAssignedDbIdsToNewReferredInstances(SimpleInstance committedInstance,
+                                                         Map<Long, List<SimpleInstance>> placeholderDbIdToInstances) {
+        if (placeholderDbIdToInstances.isEmpty()) {
+            return;
+        }
+        Map<Long, Long> placeholderDbIdToDbId = committedInstance.getNewInstOld2NewId() != null ?
+            committedInstance.getNewInstOld2NewId() : Collections.emptyMap();
+        placeholderDbIdToInstances.forEach((placeholderDbId, instances) -> {
+            Long assignedDbId = placeholderDbIdToDbId.get(placeholderDbId);
+            if (assignedDbId == null) {
+                logger.warn("No dbId reported for new instance(s) " + instances + " committed with " + committedInstance);
+                return;
+            }
+            instances.forEach(instance -> instance.setDbId(assignedDbId));
+            committedDbIds.add(assignedDbId);
+            deletedDbIds.remove(assignedDbId);
+        });
     }
 
     /**

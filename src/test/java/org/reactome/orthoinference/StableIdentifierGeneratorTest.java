@@ -54,7 +54,7 @@ public class StableIdentifierGeneratorTest {
     }
 
     @Test
-    public void generateOrthologousStableIdCreatesAndCommitsNewStableIdentifierInst() throws Exception {
+    public void generateOrthologousStableIdCreatesNewStableIdentifierInstWithoutCommittingIt() throws Exception {
         SimpleInstance orthoStableIdentifierInst = stIdGenerator.generateOrthologousStableId(
             new SimpleInstance(), createOriginalInst(createStableIdentifierInst("R-HSA-100002")));
 
@@ -63,7 +63,9 @@ public class StableIdentifierGeneratorTest {
             is(equalTo("R-ABC-100002")));
         assertThat(orthoStableIdentifierInst.getAttribute(ReactomeJavaConstants.identifierVersion), is(equalTo("1")));
         assertThat(orthoStableIdentifierInst.getDisplayName(), is(equalTo("R-ABC-100002.1")));
-        Mockito.verify(mockCuratorToolAPI).commit(orthoStableIdentifierInst);
+        // Stored by the commit of the inferred instance it is set on, so it is given a placeholder dbId instead.
+        Mockito.verify(mockCuratorToolAPI).assignPlaceholderDbId(orthoStableIdentifierInst);
+        Mockito.verify(mockCuratorToolAPI, Mockito.never()).commit(Mockito.any(SimpleInstance.class));
     }
 
     @Test

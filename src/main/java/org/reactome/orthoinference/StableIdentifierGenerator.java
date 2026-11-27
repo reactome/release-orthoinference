@@ -63,7 +63,7 @@ public class StableIdentifierGenerator {
         // Check that the stable identifier instance does not already exist in DB
         SimpleInstance existingStableIdentifier = getCuratorToolAPI().fetchStableIdentifier(targetIdentifier);
         if (existingStableIdentifier == null) {
-            return createAndStoreOrthoStableIdentifier(targetIdentifier);
+            return createOrthoStableIdentifier(targetIdentifier);
         }
         return existingStableIdentifier;
     }
@@ -118,10 +118,13 @@ public class StableIdentifierGenerator {
         return sourceIdentifier;
     }
 
-    private SimpleInstance createAndStoreOrthoStableIdentifier(String targetIdentifier) {
+    // The new StableIdentifier is not committed on its own: it is stored by the commit of the inferred instance that
+    // it is set on, which callers make straight after (or not at all, if the inference fails), saving a commit per
+    // inferred instance. The placeholder dbId is what makes that commit store it, and the commit copies the dbId
+    // the database assigns back onto it.
+    private SimpleInstance createOrthoStableIdentifier(String targetIdentifier) {
         SimpleInstance orthoStableIdentifierInst = createOrthologousStableIdentifierInstance(targetIdentifier);
-        // Commit copies the dbId the database assigns back onto orthoStableIdentifierInst.
-        getCuratorToolAPI().commit(orthoStableIdentifierInst);
+        getCuratorToolAPI().assignPlaceholderDbId(orthoStableIdentifierInst);
 
         return orthoStableIdentifierInst;
     }
