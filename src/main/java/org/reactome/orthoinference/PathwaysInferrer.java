@@ -134,7 +134,9 @@ public class PathwaysInferrer {
 		inferredPathway.setAttribute(ReactomeJavaConstants.goBiologicalProcess,
 			humanPathway.getAttribute(ReactomeJavaConstants.goBiologicalProcess));
 
-		inferredPathway.setAttribute(ReactomeJavaConstants.orthologousEvent, humanPathway);
+		// No orthologousEvent pointing back at the human Pathway: in the graph model an Event's orthologousEvent is an
+		// outgoing inferredTo, so it would add a mouse-to-human inferredTo that inferred Pathways have never had. The
+		// inferredFrom above is the human Pathway's orthologousEvent link to this one.
 
 		inferredPathway.setDisplayName(humanPathway.getDisplayName());
 		sourceInstanceToInferredInstance.put(humanPathway.getDbId(), inferredPathway);
@@ -143,10 +145,11 @@ public class PathwaysInferrer {
 		inferredPathway.setAttribute(ReactomeJavaConstants.stableIdentifier, orthoStableIdentifierInst);
 		inferredPathway = curatorToolAPI.commit(inferredPathway);
 
-		// This was replaced with addAttributeValueIfNecessary due to a bug where a Pathway instance's
-		// 'OrthologousEvent' attribute was being replaced, instead of being added to the existing array when the
-		// script was executed from a jar (rather than from Eclipse) (Justin Cook 2018)
-		getUtils().addOrthologousEventValue(humanPathway, inferredPathway);
+		// The human Pathway's orthologousEvent link to the inferred Pathway is the inferred Pathway's inferredFrom,
+		// stored by the commit above, so the human Pathway is not committed again -- a full rewrite of a Pathway
+		// with all its relationships, which cost about 0.3 s for each of a mouse run's 1821 inferred Pathways. Added
+		// rather than set, so the orthologous events already inferred for other species are kept.
+		getUtils().addValueStoredByInferredFrom(humanPathway, inferredPathway, ReactomeJavaConstants.orthologousEvent);
 
 		//TODO: At this point, sourcePathwayReferralInst is always a Pathway.
 		// Perhaps move to its own data structure? Holdout from Perl...

@@ -243,11 +243,6 @@ public class InstanceUtilities {
 		addAttributeValueIfNecessary(sourceInst, inferredInst, attribute);
 	}
 
-	// Adds the orthologous instance to the event's orthologousEvent attribute and commits the event.
-	public void addOrthologousEventValue(SimpleInstance eventInst, SimpleInstance orthologousEventInst) {
-		addAttributeValueAndCommit(eventInst, orthologousEventInst, ReactomeJavaConstants.orthologousEvent);
-	}
-
 	// An attribute is valid if the graph model class for the instance's schema class has a getter for it
 	public boolean isValidAttribute(SimpleInstance instance, String attributeName) {
 		Class<?> graphModelClass = instance.getGraphModelClass();
