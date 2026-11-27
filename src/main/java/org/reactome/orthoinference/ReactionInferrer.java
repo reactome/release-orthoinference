@@ -211,13 +211,14 @@ public class ReactionInferrer {
 		return curatorToolAPI.commit(infReactionInst);
 	}
 
-	// Links the inferred reaction, which is not stored yet, to its source reaction through inferredFrom and
-	// orthologousEvent.
+	// Links the inferred reaction, which is not stored yet, to its source reaction through inferredFrom. That is also
+	// the source reaction's orthologousEvent link to it. There is no orthologousEvent pointing back at the source
+	// reaction: in the graph model an Event's orthologousEvent is an outgoing inferredTo, so it would add a
+	// relationship from the inferred reaction to the human one that inferred reactions have never had.
 	private void addLinksToSourceReaction(SimpleInstance infReactionInst, SimpleInstance reactionInst) {
 		if (getUtils().isValidAttribute(infReactionInst, ReactomeJavaConstants.inferredFrom)) {
 			getUtils().addAttributeValueIfNecessary(infReactionInst, reactionInst, ReactomeJavaConstants.inferredFrom);
 		}
-		getUtils().addAttributeValueIfNecessary(infReactionInst, reactionInst, ReactomeJavaConstants.orthologousEvent);
 	}
 
 	// Stores the inferred regulations (or finds identical stored ones) and adds them to the regulatedBy attribute of
