@@ -192,6 +192,22 @@ public class InMemoryCuratorToolAPI extends CuratorToolAPI {
 		return findShell(ReactomeJavaConstants.StableIdentifier, ReactomeJavaConstants.identifier, identifier);
 	}
 
+	// As curator-tool-ws does, the class matches its subclasses, the species is matched on its display name, and the
+	// matches are returned as shells.
+	@Override
+	public List<SimpleInstance> fetchInstancesBySpecies(String className, String speciesName) {
+		SimpleInstance classProbe = new SimpleInstance();
+		classProbe.setSchemaClassName(className);
+		Class<?> modelClass = classProbe.getGraphModelClass();
+		return storedInstances.values().stream()
+			.filter(instance -> modelClass.isAssignableFrom(instance.getGraphModelClass()))
+			.filter(instance -> valuesOf(instance, ReactomeJavaConstants.species).stream()
+				.anyMatch(species -> species instanceof SimpleInstance &&
+					speciesName.equals(((SimpleInstance) species).getDisplayName())))
+			.map(InMemoryCuratorToolAPI::shellOf)
+			.collect(Collectors.toList());
+	}
+
 	@Override
 	public void logCallStats(String header) {
 		// Nothing is timed.

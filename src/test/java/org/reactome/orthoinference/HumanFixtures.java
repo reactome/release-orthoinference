@@ -201,12 +201,59 @@ class HumanFixtures {
 		return new ReactionBuilder(name);
 	}
 
+	// A pathway with a fixed dbId, e.g. the Disease TopLevelPathway the inference checks for by dbId.
 	SimpleInstance pathway(long dbId, String name, SimpleInstance... events) {
-		SimpleInstance pathway = instance(ReactomeJavaConstants.Pathway, name);
+		SimpleInstance pathway = pathwayInstance(ReactomeJavaConstants.Pathway, name, events);
 		pathway.setDbId(dbId);
+		return storeWithStableId(pathway);
+	}
+
+	// A Pathway or TopLevelPathway.
+	SimpleInstance pathway(String schemaClass, String name, SimpleInstance... events) {
+		return storeWithStableId(pathwayInstance(schemaClass, name, events));
+	}
+
+	private SimpleInstance pathwayInstance(String schemaClass, String name, SimpleInstance... events) {
+		SimpleInstance pathway = instance(schemaClass, name);
+		pathway.setAttribute(ReactomeJavaConstants.name, list(name));
 		pathway.setAttribute(ReactomeJavaConstants.species, list(humanSpecies));
 		pathway.setAttribute(ReactomeJavaConstants.hasEvent, list(events));
-		return api.add(pathway);
+		return pathway;
+	}
+
+	SimpleInstance species(String name) {
+		SimpleInstance species = instance(ReactomeJavaConstants.Species, name);
+		species.setAttribute(ReactomeJavaConstants.name, list(name));
+		return store(species);
+	}
+
+	// A reaction of another species already in the database, e.g. one inferred by a previous release or curated by
+	// hand. Its other attributes (evidenceType, disease, ...) are set with set().
+	SimpleInstance existingReaction(String name, SimpleInstance species) {
+		SimpleInstance reaction = instance(ReactomeJavaConstants.Reaction, name);
+		reaction.setAttribute(ReactomeJavaConstants.name, list(name));
+		reaction.setAttribute(ReactomeJavaConstants.species, list(species));
+		return store(reaction);
+	}
+
+	/**
+	 * Sets an attribute of an instance that is already stored, and stores it again.
+	 *
+	 * @return the instance as now stored.
+	 */
+	SimpleInstance set(SimpleInstance instance, String attribute, Object value) {
+		SimpleInstance stored = api.stored(instance.getDbId());
+		stored.setAttribute(attribute, value instanceof SimpleInstance ? list(value) : value);
+		api.add(stored);
+		return api.stored(instance.getDbId());
+	}
+
+	// Sets a single-valued attribute of a stored instance (e.g. evidenceType), which is held as the instance itself.
+	SimpleInstance setSingle(SimpleInstance instance, String attribute, Object value) {
+		SimpleInstance stored = api.stored(instance.getDbId());
+		stored.setAttribute(attribute, value);
+		api.add(stored);
+		return api.stored(instance.getDbId());
 	}
 
 	SimpleInstance disease(String name) {
