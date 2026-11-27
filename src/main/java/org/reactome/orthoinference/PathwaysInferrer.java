@@ -6,8 +6,6 @@ import java.util.stream.Collectors;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import static org.reactome.util.general.CollectionUtils.safeList;
-
 import org.gk.model.ReactomeJavaConstants;
 import org.reactome.curation.model.SimpleInstance;
 import org.springframework.stereotype.Component;
@@ -87,8 +85,7 @@ public class PathwaysInferrer {
 	// This generates the inferred Pathway of an inferred RlE. It iterates, inferring parent Pathways until reaching
 	// the TopLevelPathway.  Inferred Reactions are not added to the Pathway at this step.
 	private void createInferredPathwayHierarchy(SimpleInstance humanEvent) throws Exception {
-		List<SimpleInstance> humanPathwayReferralInstances =
-			safeList(curatorToolAPI.getReferrers(humanEvent, ReactomeJavaConstants.hasEvent));
+		List<SimpleInstance> humanPathwayReferralInstances = getUtils().getParentPathways(humanEvent);
 
 		if (humanPathwayReferralInstances.isEmpty()) {
 			logger.info("Top Level Pathway inferred: " + humanEvent);

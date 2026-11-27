@@ -40,9 +40,12 @@ public class InstanceUtilities {
 	private SimpleInstance speciesInst;
 	private Map<String,SimpleInstance> mockedIdenticals = new HashMap<>();
 	// The TopLevelPathway dbIds above each event, by the event's dbId. Every reaction's check climbs the same human
-	// hasEvent hierarchy, one getReferrers call per level, and the run never changes that hierarchy -- it only adds
-	// inferred events to inferred pathways -- so each event's are looked up once.
+	// hasEvent hierarchy, and the run never changes that hierarchy -- it only adds inferred events to inferred
+	// pathways -- so each event's are worked out once.
 	private final Map<Long, Set<Long>> eventDbIdToTopLevelPathwayDbIds = new HashMap<>();
+	// The human Pathways that have each event in their hasEvent, as shells, by the event's dbId; built on first use
+	// by getParentPathways.
+	private Map<Long, List<SimpleInstance>> eventDbIdToParentPathways;
 
 	public InstanceUtilities(
 		ConfigProperties configProperties,
@@ -416,7 +419,7 @@ public class InstanceUtilities {
 	}
 
 	private Set<Long> findTopLevelPathwayDbIds(SimpleInstance pathway) throws Exception {
-		List<SimpleInstance> parentPathways = safeList(getCuratorToolAPI().getReferrers(pathway, ReactomeJavaConstants.hasEvent));
+		List<SimpleInstance> parentPathways = getParentPathways(pathway);
 		if (parentPathways.isEmpty()) {
 			return new HashSet<>(Arrays.asList(pathway.getDbId()));
 		}
@@ -427,6 +430,60 @@ public class InstanceUtilities {
 		}
 
 		return topLevelPathwayDbIds;
+	}
+
+	/**
+	 * Returns the human Pathways whose hasEvent holds the event, as shells -- dbId, displayName and schemaClass only
+	 * -- in ascending dbId order, or an empty list if there are none (a TopLevelPathway, or an event in no Pathway).
+	 *
+	 * <p>
+	 * Asking curator-tool-ws for an event's referrers costs a call each time, and the run asks for the parents of
+	 * every human reaction and every Pathway above it (about 70k calls, 17 minutes of a mouse run). Instead every
+	 * human Pathway is read once, on first use, and the hasEvent values are turned round into a map from each
+	 * event to the Pathways that hold it. The run never changes a human Pathway's hasEvent, so the map stays
+	 * correct. Only Pathways whose species is Homo sapiens are read: a human event is only ever in human Pathways.
+	 *
+	 * @param event - a human Event.
+	 * @return the Pathways that have the event in their hasEvent.
+	 */
+	public List<SimpleInstance> getParentPathways(SimpleInstance event) {
+		if (eventDbIdToParentPathways == null) {
+			eventDbIdToParentPathways = buildEventDbIdToParentPathways();
+		}
+		return eventDbIdToParentPathways.getOrDefault(event.getDbId(), Collections.emptyList());
+	}
+
+	private Map<Long, List<SimpleInstance>> buildEventDbIdToParentPathways() {
+		List<SimpleInstance> humanPathwayShells =
+			getCuratorToolAPI().fetchInstancesBySpecies(ReactomeJavaConstants.Pathway, "Homo sapiens");
+		// curator-tool-ws reports a failed search as an empty result rather than an error, so nothing found may
+		// mean the search failed -- every reaction would then look like a TopLevelPathway of its own, and no
+		// Pathway would be inferred.
+		if (humanPathwayShells.isEmpty()) {
+			logger.warn("Could not find any Homo sapiens Pathway instances -- no event will have a parent Pathway");
+		}
+
+		Map<Long, List<SimpleInstance>> parentPathwaysByEventDbId = new HashMap<>();
+		for (SimpleInstance pathwayShell : humanPathwayShells) {
+			SimpleInstance pathway = getCuratorToolAPI().inflate(pathwayShell);
+			if (pathway == null) {
+				throw new IllegalStateException("No Pathway found for db id " + pathwayShell.getDbId() +
+					" (" + pathwayShell.getDisplayName() + ") returned by the human Pathway search");
+			}
+			SimpleInstance pathwayReference = createReference(pathway);
+			for (SimpleInstance childEvent : getAttributeValues(pathway, ReactomeJavaConstants.hasEvent)) {
+				List<SimpleInstance> parentPathways =
+					parentPathwaysByEventDbId.computeIfAbsent(childEvent.getDbId(), dbId -> new ArrayList<>());
+				// A Pathway listing the same event twice is still one parent.
+				if (parentPathways.stream().noneMatch(parent -> parent.getDbId().equals(pathway.getDbId()))) {
+					parentPathways.add(pathwayReference);
+				}
+			}
+		}
+		parentPathwaysByEventDbId.values()
+			.forEach(parentPathways -> parentPathways.sort(Comparator.comparing(SimpleInstance::getDbId)));
+		logger.info("Read the hasEvent of " + humanPathwayShells.size() + " Homo sapiens Pathways");
+		return parentPathwaysByEventDbId;
 	}
 
 	public SimpleInstance getEvidenceType() throws Exception {
