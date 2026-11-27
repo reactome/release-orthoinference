@@ -92,7 +92,11 @@ public class CuratorToolAPI {
             // Orthoinference names each inferred instance's StableIdentifier after its human source
             // (R-MMU-<human dbId>), so curator-tool-ws is told to keep it rather than rename it after the inferred
             // instance's own dbId.
-            committedInstance = timed("commit", () -> controller.commit(simpleInstance, true));
+            // Also counted by the instance's schema class and by whether it is new, to show which commits the
+            // run's time goes to.
+            committedInstance = timed(
+                Arrays.asList("commit", "commit " + (isNewInstance ? "new " : "update ") + simpleInstance.getSchemaClassName()),
+                () -> controller.commit(simpleInstance, true));
         } finally {
             // Also when the commit fails, since it may have written part of what it was given.
             possiblyChangedDbIds.forEach(inflatedInstanceCache::remove);
@@ -611,7 +615,7 @@ public class CuratorToolAPI {
             .forEach(entry -> {
                 CallStats stats = entry.getValue();
                 long totalMillis = stats.totalNanos / 1_000_000;
-                report.append(String.format("%n  %-20s calls=%-9d total=%-9d ms (%5.1f%%) avg=%.2f ms",
+                report.append(String.format("%n  %-40s calls=%-9d total=%-9d ms (%5.1f%%) avg=%.2f ms",
                     entry.getKey(), stats.count, totalMillis,
                     elapsedMillis > 0 ? 100.0 * totalMillis / elapsedMillis : 0.0,
                     stats.count > 0 ? stats.totalNanos / 1_000_000.0 / stats.count : 0.0));
@@ -622,13 +626,21 @@ public class CuratorToolAPI {
     // Runs the call, adding its duration to the figures kept under the label. A call made inside another timed call
     // (e.g. a nested commit) is counted under both labels.
     private <T, E extends Exception> T timed(String label, ThrowingSupplier<T, E> call) throws E {
+        return timed(Collections.singletonList(label), call);
+    }
+
+    // As above, adding the call's duration to the figures kept under each of the labels.
+    private <T, E extends Exception> T timed(List<String> labels, ThrowingSupplier<T, E> call) throws E {
         long start = System.nanoTime();
         try {
             return call.get();
         } finally {
-            CallStats stats = callStats.computeIfAbsent(label, key -> new CallStats());
-            stats.count++;
-            stats.totalNanos += System.nanoTime() - start;
+            long durationNanos = System.nanoTime() - start;
+            for (String label : labels) {
+                CallStats stats = callStats.computeIfAbsent(label, key -> new CallStats());
+                stats.count++;
+                stats.totalNanos += durationNanos;
+            }
         }
     }
 

@@ -60,12 +60,15 @@ public class PathwaysInferrer {
 			}
 		}
 		logger.info("Finished building inferred Pathway hierarchies");
+		// The figures are totals for the whole run so far; the previous log gives this step's share.
+		curatorToolAPI.logCallStats("Pathway hierarchies built");
 
 		// After generating the inferred Pathways hierarchys, the associated inferred Events (RlEs & Pathways) need
 		// to be added to them.
 		logger.info("Populating inferred Pathways with inferred Events");
 		addInferredEventsToInferredPathways();
 		logger.info("Finished populating inferred Pathways with inferred Events");
+		curatorToolAPI.logCallStats("Inferred Pathways populated");
 
 		//TODO: LOG starting HERE
 
@@ -73,6 +76,7 @@ public class PathwaysInferrer {
 		logger.info("Adding preceding events to inferred Events");
 		inferPrecedingEvents();
 		logger.info("Finished adding preceding events to inferred Events");
+		curatorToolAPI.logCallStats("Preceding events added");
 
 		// Any source species Events (Pathway or RlEs) that were modified during Pathway inference are updated with a
 		// 'modified' instance edit.
